@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 from urllib import request
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
