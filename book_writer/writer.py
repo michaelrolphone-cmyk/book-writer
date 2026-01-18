@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 from urllib import request
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 
 
 class LMStudioClient:
-    def __init__(self, base_url: str, model: str) -> None:
+    def __init__(self, base_url: str, model: str, timeout: Optional[float] = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.timeout = timeout
 
     def generate(self, prompt: str) -> str:
         payload = {
@@ -31,7 +32,11 @@ class LMStudioClient:
             data=data,
             headers={"Content-Type": "application/json"},
         )
-        with request.urlopen(req, timeout=60) as response:
+        if self.timeout is None:
+            response_context = request.urlopen(req)
+        else:
+            response_context = request.urlopen(req, timeout=self.timeout)
+        with response_context as response:
             body = response.read().decode("utf-8")
         parsed = json.loads(body)
         return parsed["choices"][0]["message"]["content"].strip()

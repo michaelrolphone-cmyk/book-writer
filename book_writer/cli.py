@@ -31,6 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="local-model",
         help="Model name exposed by LM Studio.",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="Timeout in seconds for the API call. Omit for no timeout.",
+    )
     return parser
 
 
@@ -42,7 +48,7 @@ def main() -> int:
     if not items:
         parser.error("No outline items found in the outline file.")
 
-    client = LMStudioClient(base_url=args.base_url, model=args.model)
+    client = LMStudioClient(base_url=args.base_url, model=args.model, timeout=args.timeout)
     write_book(items=items, output_dir=args.output_dir, client=client)
     return 0
 
