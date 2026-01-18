@@ -48,6 +48,20 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Title: Chapter One", prompt)
         self.assertIn("Protagonist meets the guide.", prompt)
 
+    def test_build_prompt_labels_epilogue(self) -> None:
+        items = [
+            OutlineItem(title="Chapter One", level=1),
+            OutlineItem(title="Epilogue", level=1),
+        ]
+        previous_chapter = ChapterContext(
+            title="Chapter One", content="Protagonist meets the guide."
+        )
+
+        prompt = build_prompt(items, items[1], previous_chapter)
+
+        self.assertIn("Current item: Epilogue (epilogue).", prompt)
+        self.assertIn("Previous chapter context:", prompt)
+
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_creates_numbered_files(self, run_mock: Mock) -> None:
         items = [
@@ -82,6 +96,27 @@ class TestWriter(unittest.TestCase):
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
+    def test_write_book_logs_verbose_steps(self, run_mock: Mock) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            with patch("builtins.print") as print_mock:
+                write_book(items, output_dir, client, verbose=True)
+
+        print_mock.assert_any_call(
+            "[write] Step 1/1: Generating chapter 'Chapter One'."
+        )
+        print_mock.assert_any_call("[write] Generated book.pdf from chapters.")
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
     def test_write_book_includes_previous_chapter_in_next_prompt(
         self, run_mock: Mock
     ) -> None:
@@ -105,6 +140,33 @@ class TestWriter(unittest.TestCase):
         second_prompt = client.generate.call_args_list[2][0][0]
         self.assertIn("Previous chapter context:", second_prompt)
         self.assertIn("Chapter one summary", second_prompt)
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_saves_implementation_details(
+        self, run_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Intro paragraph.\n\n## Implementation Details\n\nUse a cache.\n\n## Wrap-up\n\nDone.",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            files = write_book(items, output_dir, client)
+
+            nextsteps_path = output_dir / "nextsteps.md"
+            self.assertTrue(nextsteps_path.exists())
+            nextsteps_text = nextsteps_path.read_text(encoding="utf-8")
+            self.assertIn("## Implementation Details", nextsteps_text)
+            self.assertIn("Use a cache.", nextsteps_text)
+
+            chapter_text = files[0].read_text(encoding="utf-8")
+            self.assertNotIn("Implementation Details", chapter_text)
+
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
@@ -232,6 +294,29 @@ class TestWriter(unittest.TestCase):
             self.assertIn("Expanded twice.", updated_content)
             self.assertEqual(expanded_files, [chapter_path])
 
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_logs_verbose_steps(self, run_mock: Mock) -> None:
+        client = MagicMock()
+        client.generate.return_value = "Expanded paragraph."
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+
+            with patch("builtins.print") as print_mock:
+                expand_book(output_dir, client, verbose=True)
+
+        print_mock.assert_any_call(
+            f"[expand] Expanding book in {output_dir} with 1 pass(es)."
+        )
+        print_mock.assert_any_call(
+            "[expand] Step 1/1: Expanding 001-chapter-one.md."
+        )
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")

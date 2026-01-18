@@ -18,6 +18,7 @@ def write_books_from_outlines(
     books_dir: Path,
     completed_outlines_dir: Path,
     client: LMStudioClient,
+    verbose: bool = False,
 ) -> list[Path]:
     written_files: list[Path] = []
     outline_files = _outline_files(outlines_dir)
@@ -27,7 +28,12 @@ def write_books_from_outlines(
     completed_outlines_dir.mkdir(parents=True, exist_ok=True)
     books_dir.mkdir(parents=True, exist_ok=True)
 
-    for outline_path in outline_files:
+    for index, outline_path in enumerate(outline_files, start=1):
+        if verbose:
+            print(
+                f"[batch] Step {index}/{len(outline_files)}: "
+                f"Writing book for {outline_path.name}."
+            )
         items = parse_outline(outline_path)
         if not items:
             raise ValueError(f"No outline items found in {outline_path}.")
@@ -35,11 +41,18 @@ def write_books_from_outlines(
         book_short_title = outline_path.stem
         book_output_dir = books_dir / book_short_title
         written_files.extend(
-            write_book(items=items, output_dir=book_output_dir, client=client)
+            write_book(
+                items=items,
+                output_dir=book_output_dir,
+                client=client,
+                verbose=verbose,
+            )
         )
 
         destination = completed_outlines_dir / outline_path.name
         outline_path.replace(destination)
+        if verbose:
+            print(f"[batch] Archived outline to {destination}.")
 
     return written_files
 
@@ -117,6 +130,7 @@ def main() -> int:
             output_dir=args.expand_book,
             client=client,
             passes=args.expand_passes,
+            verbose=True,
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
@@ -127,6 +141,7 @@ def main() -> int:
                 books_dir=args.books_dir,
                 completed_outlines_dir=args.completed_outlines_dir,
                 client=client,
+                verbose=True,
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -135,7 +150,7 @@ def main() -> int:
     items = parse_outline(args.outline)
     if not items:
         parser.error("No outline items found in the outline file.")
-    write_book(items=items, output_dir=args.output_dir, client=client)
+    write_book(items=items, output_dir=args.output_dir, client=client, verbose=True)
     return 0
 
 

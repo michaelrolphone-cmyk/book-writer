@@ -57,6 +57,27 @@ class TestOutlineParsing(unittest.TestCase):
             ],
         )
 
+    def test_parse_outline_accepts_epilogue_headings(self) -> None:
+        content = """
+# Chapter One
+## Section A
+### Epilogue
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            items = parse_outline(outline_path)
+
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(title="Epilogue", level=1),
+            ],
+        )
+
     def test_outline_to_text_formats_items(self) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),

@@ -61,6 +61,8 @@ class TestCliExpandBook(unittest.TestCase):
 
         self.assertEqual(result, 0)
         expand_mock.assert_called_once()
+        _, kwargs = expand_mock.call_args
+        self.assertTrue(kwargs["verbose"])
 
     @patch("book_writer.cli.expand_book")
     def test_main_expands_completed_book_with_passes(
@@ -77,3 +79,4 @@ class TestCliExpandBook(unittest.TestCase):
         expand_mock.assert_called_once()
         _, kwargs = expand_mock.call_args
         self.assertEqual(kwargs["passes"], 3)
+        self.assertTrue(kwargs["verbose"])

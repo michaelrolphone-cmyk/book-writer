@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,6 +130,64 @@ class _MarkdownBlock:
     text: str
 
 
+IMPLEMENTATION_DETAILS_PATTERN = re.compile(r"^implementation details$", re.IGNORECASE)
+
+
+def _strip_markdown(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("**") and stripped.endswith("**"):
+        stripped = stripped[2:-2].strip()
+    if stripped.startswith("*") and stripped.endswith("*"):
+        stripped = stripped[1:-1].strip()
+    return stripped
+
+
+def _is_implementation_details(title: str) -> bool:
+    return IMPLEMENTATION_DETAILS_PATTERN.match(_strip_markdown(title)) is not None
+
+
+def _extract_implementation_sections(content: str) -> tuple[str, list[str]]:
+    lines = content.splitlines()
+    extracted: list[str] = []
+    output_lines: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("#"):
+            level = len(line) - len(line.lstrip("#"))
+            heading_text = _strip_markdown(line.lstrip("#").strip())
+            if _is_implementation_details(heading_text):
+                end_index = index + 1
+                while end_index < len(lines):
+                    next_line = lines[end_index]
+                    if next_line.startswith("#"):
+                        next_level = len(next_line) - len(next_line.lstrip("#"))
+                        if next_level <= level:
+                            break
+                    end_index += 1
+                section = "\n".join(lines[index:end_index]).strip()
+                if section:
+                    extracted.append(section)
+                index = end_index
+                continue
+        output_lines.append(line)
+        index += 1
+    cleaned = "\n".join(output_lines).strip()
+    return cleaned, extracted
+
+
+def _write_nextsteps(output_dir: Path, sections: list[str]) -> None:
+    if not sections:
+        return
+    nextsteps_content = "\n\n".join(
+        section.strip() for section in sections if section.strip()
+    ).strip()
+    if not nextsteps_content:
+        return
+    nextsteps_path = output_dir / "nextsteps.md"
+    nextsteps_path.write_text(nextsteps_content + "\n", encoding="utf-8")
+
+
 def _split_markdown_blocks(content: str) -> List[_MarkdownBlock]:
     blocks: List[_MarkdownBlock] = []
     buffer: List[str] = []
@@ -220,7 +279,7 @@ def _chapter_files(output_dir: Path) -> List[Path]:
         path
         for path in output_dir.iterdir()
         if path.suffix == ".md"
-        and path.name not in {"book.md", "back-cover-synopsis.md"}
+        and path.name not in {"book.md", "back-cover-synopsis.md", "nextsteps.md"}
     )
 
 
@@ -269,6 +328,7 @@ def expand_book(
     output_dir: Path,
     client: LMStudioClient,
     passes: int = 1,
+    verbose: bool = False,
 ) -> List[Path]:
     if passes < 1:
         raise ValueError("Expansion passes must be at least 1.")
@@ -276,11 +336,25 @@ def expand_book(
     if not chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
 
+    if verbose:
+        print(f"[expand] Expanding book in {output_dir} with {passes} pass(es).")
+    nextsteps_sections: list[str] = []
     for _ in range(passes):
-        for chapter_file in chapter_files:
+        if verbose:
+            print(f"[expand] Starting pass {_ + 1}/{passes}.")
+        for index, chapter_file in enumerate(chapter_files, start=1):
+            if verbose:
+                print(
+                    f"[expand] Step {index}/{len(chapter_files)}: "
+                    f"Expanding {chapter_file.name}."
+                )
             content = chapter_file.read_text(encoding="utf-8")
             expanded_content = expand_chapter_content(content, client)
-            chapter_file.write_text(expanded_content.strip() + "\n", encoding="utf-8")
+            cleaned_content, extracted_sections = _extract_implementation_sections(
+                expanded_content
+            )
+            nextsteps_sections.extend(extracted_sections)
+            chapter_file.write_text(cleaned_content.strip() + "\n", encoding="utf-8")
 
     book_metadata = _read_book_metadata(output_dir, chapter_files)
     outline_text = book_metadata.content
@@ -293,6 +367,11 @@ def expand_book(
         outline_text=outline_text,
         chapter_files=chapter_files,
     )
+    if verbose:
+        print("[expand] Generated book.pdf from expanded chapters.")
+    _write_nextsteps(output_dir, nextsteps_sections)
+    if verbose and nextsteps_sections:
+        print("[expand] Wrote nextsteps.md from implementation details.")
     return chapter_files
 
 
@@ -300,27 +379,64 @@ def write_book(
     items: List[OutlineItem],
     output_dir: Path,
     client: LMStudioClient,
+    verbose: bool = False,
 ) -> List[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     written_files: List[Path] = []
     index = 0
     previous_chapter: Optional[ChapterContext] = None
+    nextsteps_sections: list[str] = []
 
     while index < len(items):
         item = items[index]
+        if verbose:
+            print(
+                f"[write] Step {index + 1}/{len(items)}: "
+                f"Generating {item.type_label} '{item.title}'."
+            )
         prompt = build_prompt(items, item, previous_chapter)
         content = client.generate(prompt)
         heading = f"{item.heading_prefix} {item.title}"
-        file_name = f"{index + 1:03d}-{slugify(item.display_title)}.md"
-        file_path = output_dir / file_name
-        file_path.write_text(f"{heading}\n\n{content}\n", encoding="utf-8")
-        written_files.append(file_path)
-        if item.level == 1:
-            context_prompt = build_chapter_context_prompt(item.title, content)
-            context_summary = client.generate(context_prompt)
-            previous_chapter = ChapterContext(title=item.title, content=context_summary)
+        if _is_implementation_details(item.title):
+            section_text = heading
+            content = content.strip()
+            if content:
+                section_text = f"{heading}\n\n{content}"
+            nextsteps_sections.append(section_text)
+            if verbose:
+                print("[write] Captured implementation details for nextsteps.md.")
+        else:
+            cleaned_content, extracted_sections = _extract_implementation_sections(
+                content
+            )
+            nextsteps_sections.extend(extracted_sections)
+            file_name = f"{index + 1:03d}-{slugify(item.display_title)}.md"
+            file_path = output_dir / file_name
+            file_body = cleaned_content.strip()
+            if file_body:
+                file_path.write_text(
+                    f"{heading}\n\n{file_body}\n", encoding="utf-8"
+                )
+            else:
+                file_path.write_text(f"{heading}\n", encoding="utf-8")
+            written_files.append(file_path)
+            if verbose:
+                print(f"[write] Wrote {file_path.name}.")
+            if item.level == 1:
+                context_prompt = build_chapter_context_prompt(
+                    item.title, file_body or content
+                )
+                context_summary = client.generate(context_prompt)
+                previous_chapter = ChapterContext(
+                    title=item.title, content=context_summary
+                )
+                if verbose:
+                    print(f"[write] Generated context summary for {item.title}.")
         index += 1
 
+    _write_nextsteps(output_dir, nextsteps_sections)
+    if verbose and nextsteps_sections:
+        print("[write] Wrote nextsteps.md from implementation details.")
     book_title = items[0].title
     outline_text = outline_to_text(items)
     generate_book_pdf(
@@ -329,6 +445,8 @@ def write_book(
         outline_text=outline_text,
         chapter_files=written_files,
     )
+    if verbose:
+        print("[write] Generated book.pdf from chapters.")
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
@@ -339,5 +457,7 @@ def write_book(
     synopsis = client.generate(synopsis_prompt)
     synopsis_path = output_dir / "back-cover-synopsis.md"
     synopsis_path.write_text(synopsis, encoding="utf-8")
+    if verbose:
+        print("[write] Wrote back-cover-synopsis.md.")
 
     return written_files

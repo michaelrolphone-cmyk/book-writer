@@ -8,6 +8,7 @@ from typing import Iterable, List, Optional
 
 CHAPTER_PATTERN = re.compile(r"^chapter\b", re.IGNORECASE)
 SECTION_PATTERN = re.compile(r"^section\b", re.IGNORECASE)
+EPILOGUE_PATTERN = re.compile(r"^epilogue\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,9 @@ class OutlineItem:
 
     @property
     def type_label(self) -> str:
-        return "chapter" if self.level == 1 else "section"
+        if self.level == 1:
+            return "epilogue" if EPILOGUE_PATTERN.match(self.title) else "chapter"
+        return "section"
 
     @property
     def heading_prefix(self) -> str:
@@ -49,7 +52,8 @@ def parse_outline(path: Path) -> List[OutlineItem]:
     """Parse OUTLINE.md into a list of outline items.
 
     Supported format is Markdown headings with #/## plus headings that start with
-    "Chapter" or "Section" at any heading level (e.g., ### **Chapter 1: ...**).
+    "Chapter", "Section", or "Epilogue" at any heading level
+    (e.g., ### **Chapter 1: ...**).
     """
     items: List[OutlineItem] = []
     current_chapter: Optional[str] = None
@@ -64,7 +68,7 @@ def parse_outline(path: Path) -> List[OutlineItem]:
         if not title:
             continue
 
-        if CHAPTER_PATTERN.match(title):
+        if CHAPTER_PATTERN.match(title) or EPILOGUE_PATTERN.match(title):
             current_chapter = title
             items.append(OutlineItem(title=title, level=1))
             continue
