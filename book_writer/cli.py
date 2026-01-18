@@ -28,6 +28,7 @@ def write_books_from_outlines(
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
     byline: str = "Marissa Bard",
+    tone: str = "instructive self help guide",
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     written_files: list[Path] = []
@@ -60,6 +61,7 @@ def write_books_from_outlines(
                 tts_settings=tts_settings,
                 book_title=book_title,
                 byline=byline,
+                tone=tone,
             )
         )
         reset_supported = client.reset_context()
@@ -168,6 +170,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="Marissa Bard",
         help="Byline shown on the book title page.",
     )
+    parser.add_argument(
+        "--tone",
+        default="instructive self help guide",
+        help="Tone to use for chapter generation and expansion.",
+    )
     parser.set_defaults(tts=True)
     return parser
 
@@ -191,6 +198,7 @@ def main() -> int:
             passes=args.expand_passes,
             verbose=True,
             tts_settings=tts_settings,
+            tone=args.tone,
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
@@ -204,6 +212,7 @@ def main() -> int:
                 verbose=True,
                 tts_settings=tts_settings,
                 byline=args.byline,
+                tone=args.tone,
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -221,6 +230,7 @@ def main() -> int:
         tts_settings=tts_settings,
         book_title=book_title,
         byline=args.byline,
+        tone=args.tone,
     )
     return 0
 

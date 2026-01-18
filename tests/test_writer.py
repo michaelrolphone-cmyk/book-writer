@@ -383,12 +383,28 @@ class TestWriter(unittest.TestCase):
             previous="Previous paragraph.",
             next_paragraph="Next paragraph.",
             section_heading="Section One",
+            tone="instructive self help guide",
         )
 
+        self.assertIn("Write in an instructive self help guide style.", prompt)
         self.assertIn("Section heading: Section One", prompt)
         self.assertIn("Previous section/paragraph:", prompt)
         self.assertIn("Next section/paragraph:", prompt)
         self.assertIn("Current paragraph/section:", prompt)
+
+    def test_build_prompt_includes_tone_preface(self) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        prompt = build_prompt(items, items[0], tone="instructive self help guide")
+
+        self.assertTrue(
+            prompt.startswith("Write in an instructive self help guide style.")
+        )
+
+    def test_build_prompt_raises_for_unknown_tone(self) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+
+        with self.assertRaises(ValueError):
+            build_prompt(items, items[0], tone="unknown-tone")
 
     def test_expand_chapter_content_uses_neighboring_context(self) -> None:
         content = "# Chapter One\n\nFirst paragraph.\n\nSecond paragraph."
@@ -507,6 +523,32 @@ class TestWriter(unittest.TestCase):
         )
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_regenerates_audio_when_existing_audio_found(
+        self, run_mock: Mock, synthesize_mock: Mock
+    ) -> None:
+        client = MagicMock()
+        client.generate.return_value = "Expanded paragraph."
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+            audio_dir = output_dir / "audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            (audio_dir / "001-chapter-one.mp3").write_text("existing", encoding="utf-8")
+
+            expand_book(output_dir, client)
+
+        self.assertTrue(synthesize_mock.called)
+        _, kwargs = synthesize_mock.call_args
+        settings = kwargs["settings"]
+        self.assertTrue(settings.enabled)
+        run_mock.assert_called_once()
+
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_calls_pandoc(self, run_mock: Mock) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -573,7 +615,14 @@ class TestWriter(unittest.TestCase):
 
         self.assertEqual(result, "Draft content")
         urlopen_mock.assert_called_once()
-        _, kwargs = urlopen_mock.call_args
+        request_obj, kwargs = urlopen_mock.call_args
+        payload = json.loads(request_obj[0].data.decode("utf-8"))
+        base_prompt = (Path(__file__).resolve().parents[1] / "PROMPT.md").read_text(
+            encoding="utf-8"
+        ).strip()
+        self.assertTrue(
+            payload["messages"][1]["content"].startswith(f"{base_prompt}\n\nPrompt")
+        )
         self.assertNotIn("timeout", kwargs)
 
     def test_reset_context_uses_fallback_endpoint(self) -> None:

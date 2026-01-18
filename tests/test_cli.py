@@ -91,6 +91,22 @@ class TestCliExpandBook(unittest.TestCase):
         self.assertEqual(kwargs["passes"], 3)
         self.assertTrue(kwargs["verbose"])
 
+    @patch("book_writer.cli.expand_book")
+    def test_main_expands_completed_book_with_tone(
+        self, expand_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            with patch(
+                "sys.argv",
+                ["book-writer", "--expand-book", tmpdir, "--tone", "novel"],
+            ):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+        _, kwargs = expand_mock.call_args
+        self.assertEqual(kwargs["tone"], "novel")
+
 
 class TestCliTtsDefaults(unittest.TestCase):
     @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
@@ -113,6 +129,34 @@ class TestCliTtsDefaults(unittest.TestCase):
 
         _, kwargs = write_mock.call_args
         self.assertTrue(kwargs["tts_settings"].enabled)
+
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_passes_tone_to_write_book(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--outline",
+                        str(outline_path),
+                        "--tone",
+                        "play write",
+                    ],
+                ):
+                    cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        _, kwargs = write_mock.call_args
+        self.assertEqual(kwargs["tone"], "play write")
 
     @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
     @patch("book_writer.cli.write_book")
