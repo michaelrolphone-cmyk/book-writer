@@ -1,17 +1,22 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from book_writer.cli import write_books_from_outlines
 
 
 class TestWriteBooksFromOutlines(unittest.TestCase):
-    def test_writes_books_and_moves_outlines(self) -> None:
+    @patch("book_writer.writer.subprocess.run")
+    def test_writes_books_and_moves_outlines(self, run_mock: MagicMock) -> None:
         client = MagicMock()
         client.generate.side_effect = [
             "Content for book one",
+            "Context for book one",
+            "Synopsis for book one",
             "Content for book two",
+            "Context for book two",
+            "Synopsis for book two",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -43,4 +48,4 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             self.assertFalse((outlines_dir / "beta.md").exists())
             self.assertTrue((completed_dir / "alpha.md").exists())
             self.assertTrue((completed_dir / "beta.md").exists())
-
+            run_mock.assert_called()
