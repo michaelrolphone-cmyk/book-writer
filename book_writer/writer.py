@@ -26,6 +26,7 @@ class LMStudioClient:
         self.timeout = timeout
 
     def generate(self, prompt: str) -> str:
+        prompt = f"{_base_prompt()}\n\n{prompt}".strip()
         payload = {
             "model": self.model,
             "messages": [
@@ -77,10 +78,33 @@ class LMStudioClient:
         return False
 
 
+def _tone_preface(tone: Optional[str]) -> str:
+    if not tone:
+        return ""
+    tones_dir = Path(__file__).parent / "tones"
+    tone_path = tones_dir / f"{tone}.md"
+    if not tone_path.exists():
+        raise ValueError(
+            f"Tone '{tone}' is not available. Add {tone_path.name} to {tones_dir}."
+        )
+    content = tone_path.read_text(encoding="utf-8").strip()
+    if not content:
+        return ""
+    return f"{content}\n\n"
+
+
+def _base_prompt() -> str:
+    prompt_path = Path(__file__).resolve().parents[1] / "PROMPT.md"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Base prompt file not found at {prompt_path}.")
+    return prompt_path.read_text(encoding="utf-8").strip()
+
+
 def build_prompt(
     items: Iterable[OutlineItem],
     current: OutlineItem,
     previous_chapter: Optional[ChapterContext] = None,
+    tone: Optional[str] = None,
 ) -> str:
     outline_text = outline_to_text(items)
     context_parts = []
@@ -97,6 +121,7 @@ def build_prompt(
         )
     context = "\n\n".join(context_parts)
     return (
+        f"{_tone_preface(tone)}"
         "Write the next part of the book based on the outline. "
         "Return only markdown content for the requested item.\n\n"
         f"Outline:\n{outline_text}\n\n"
@@ -165,6 +190,7 @@ def build_expand_paragraph_prompt(
     previous: Optional[str] = None,
     next_paragraph: Optional[str] = None,
     section_heading: Optional[str] = None,
+    tone: Optional[str] = None,
 ) -> str:
     context_parts = []
     if section_heading:
@@ -175,6 +201,7 @@ def build_expand_paragraph_prompt(
         context_parts.append(f"Next section/paragraph:\n{next_paragraph}")
     context = "\n\n".join(context_parts)
     return (
+        f"{_tone_preface(tone)}"
         "Expand the current paragraph or section with more detail. "
         "Use the surrounding context to maintain continuity. "
         "Return only the expanded markdown for the current paragraph or section.\n\n"
@@ -277,7 +304,9 @@ def _split_markdown_blocks(content: str) -> List[_MarkdownBlock]:
     return blocks
 
 
-def expand_chapter_content(content: str, client: LMStudioClient) -> str:
+def expand_chapter_content(
+    content: str, client: LMStudioClient, tone: Optional[str] = None
+) -> str:
     blocks = _split_markdown_blocks(content)
     paragraph_indexes = [i for i, block in enumerate(blocks) if block.type == "paragraph"]
     if not paragraph_indexes:
@@ -305,6 +334,7 @@ def expand_chapter_content(content: str, client: LMStudioClient) -> str:
             previous=previous_paragraph,
             next_paragraph=next_paragraph,
             section_heading=section_heading,
+            tone=tone,
         )
         expanded = client.generate(prompt)
         blocks[block_index].text = expanded.strip()
@@ -427,7 +457,9 @@ def expand_book(
     passes: int = 1,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    tone: Optional[str] = None,
 ) -> List[Path]:
+    auto_tts = tts_settings is None
     tts_settings = tts_settings or TTSSettings()
     if passes < 1:
         raise ValueError("Expansion passes must be at least 1.")
@@ -448,16 +480,27 @@ def expand_book(
                     f"Expanding {chapter_file.name}."
                 )
             content = chapter_file.read_text(encoding="utf-8")
-            expanded_content = expand_chapter_content(content, client)
+            expanded_content = expand_chapter_content(content, client, tone=tone)
             cleaned_content, extracted_sections = _extract_implementation_sections(
                 expanded_content
             )
             nextsteps_sections.extend(extracted_sections)
             chapter_file.write_text(cleaned_content.strip() + "\n", encoding="utf-8")
+            audio_dir = chapter_file.parent / tts_settings.audio_dirname
+            audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+            effective_tts_settings = tts_settings
+            if auto_tts and not tts_settings.enabled and audio_path.exists():
+                effective_tts_settings = TTSSettings(
+                    enabled=True,
+                    voice=tts_settings.voice,
+                    rate=tts_settings.rate,
+                    pitch=tts_settings.pitch,
+                    audio_dirname=tts_settings.audio_dirname,
+                )
             synthesize_chapter_audio(
                 chapter_path=chapter_file,
-                output_dir=chapter_file.parent / tts_settings.audio_dirname,
-                settings=tts_settings,
+                output_dir=audio_dir,
+                settings=effective_tts_settings,
                 verbose=verbose,
             )
 
@@ -489,6 +532,7 @@ def write_book(
     tts_settings: Optional[TTSSettings] = None,
     book_title: Optional[str] = None,
     byline: str = "Marissa Bard",
+    tone: Optional[str] = None,
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -504,7 +548,7 @@ def write_book(
                 f"[write] Step {index + 1}/{len(items)}: "
                 f"Generating {item.type_label} '{item.title}'."
             )
-        prompt = build_prompt(items, item, previous_chapter)
+        prompt = build_prompt(items, item, previous_chapter, tone=tone)
         content = client.generate(prompt)
         heading = f"{item.heading_prefix} {item.title}"
         if _is_implementation_details(item.title):
