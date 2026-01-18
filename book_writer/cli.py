@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+from typing import Optional
 from pathlib import Path
 
 from book_writer.outline import parse_outline
+from book_writer.tts import TTSSettings
 from book_writer.writer import LMStudioClient, expand_book, write_book
 
 
@@ -19,7 +21,9 @@ def write_books_from_outlines(
     completed_outlines_dir: Path,
     client: LMStudioClient,
     verbose: bool = False,
+    tts_settings: Optional[TTSSettings] = None,
 ) -> list[Path]:
+    tts_settings = tts_settings or TTSSettings()
     written_files: list[Path] = []
     outline_files = _outline_files(outlines_dir)
     if not outline_files:
@@ -46,6 +50,7 @@ def write_books_from_outlines(
                 output_dir=book_output_dir,
                 client=client,
                 verbose=verbose,
+                tts_settings=tts_settings,
             )
         )
 
@@ -117,6 +122,31 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Timeout in seconds for the API call. Omit for no timeout.",
     )
+    parser.add_argument(
+        "--tts",
+        action="store_true",
+        help="Generate MP3 narration for each chapter using TTS.",
+    )
+    parser.add_argument(
+        "--tts-voice",
+        default="en-US-JennyNeural",
+        help="Voice name for TTS narration (default: en-US-JennyNeural).",
+    )
+    parser.add_argument(
+        "--tts-rate",
+        default="+0%",
+        help="Rate adjustment for TTS narration (e.g., '+5%').",
+    )
+    parser.add_argument(
+        "--tts-pitch",
+        default="+0Hz",
+        help="Pitch adjustment for TTS narration (e.g., '+2Hz').",
+    )
+    parser.add_argument(
+        "--tts-audio-dir",
+        default="audio",
+        help="Directory name for storing chapter audio files.",
+    )
     return parser
 
 
@@ -125,12 +155,20 @@ def main() -> int:
     args = parser.parse_args()
 
     client = LMStudioClient(base_url=args.base_url, model=args.model, timeout=args.timeout)
+    tts_settings = TTSSettings(
+        enabled=args.tts,
+        voice=args.tts_voice,
+        rate=args.tts_rate,
+        pitch=args.tts_pitch,
+        audio_dirname=args.tts_audio_dir,
+    )
     if args.expand_book:
         expand_book(
             output_dir=args.expand_book,
             client=client,
             passes=args.expand_passes,
             verbose=True,
+            tts_settings=tts_settings,
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
@@ -142,6 +180,7 @@ def main() -> int:
                 completed_outlines_dir=args.completed_outlines_dir,
                 client=client,
                 verbose=True,
+                tts_settings=tts_settings,
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -150,7 +189,13 @@ def main() -> int:
     items = parse_outline(args.outline)
     if not items:
         parser.error("No outline items found in the outline file.")
-    write_book(items=items, output_dir=args.output_dir, client=client, verbose=True)
+    write_book(
+        items=items,
+        output_dir=args.output_dir,
+        client=client,
+        verbose=True,
+        tts_settings=tts_settings,
+    )
     return 0
 
 

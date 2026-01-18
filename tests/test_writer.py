@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, Mock, patch
 
 from book_writer.outline import OutlineItem
+from book_writer.tts import TTSSettings
 from book_writer.writer import (
     ChapterContext,
     LMStudioClient,
@@ -114,6 +115,34 @@ class TestWriter(unittest.TestCase):
             "[write] Step 1/1: Generating chapter 'Chapter One'."
         )
         print_mock.assert_any_call("[write] Generated book.pdf from chapters.")
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_generates_chapter_audio(
+        self, run_mock: Mock, synthesize_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+        tts_settings = TTSSettings(enabled=True)
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            files = write_book(
+                items, output_dir, client, tts_settings=tts_settings
+            )
+
+        synthesize_mock.assert_called_once_with(
+            chapter_path=files[0],
+            output_dir=output_dir / tts_settings.audio_dirname,
+            settings=tts_settings,
+            verbose=False,
+        )
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
@@ -316,6 +345,32 @@ class TestWriter(unittest.TestCase):
         )
         print_mock.assert_any_call(
             "[expand] Step 1/1: Expanding 001-chapter-one.md."
+        )
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_generates_chapter_audio(
+        self, run_mock: Mock, synthesize_mock: Mock
+    ) -> None:
+        client = MagicMock()
+        client.generate.return_value = "Expanded paragraph."
+        tts_settings = TTSSettings(enabled=True)
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+
+            expand_book(output_dir, client, tts_settings=tts_settings)
+
+        synthesize_mock.assert_called_once_with(
+            chapter_path=chapter_path,
+            output_dir=output_dir / tts_settings.audio_dirname,
+            settings=tts_settings,
+            verbose=False,
         )
         run_mock.assert_called_once()
 
