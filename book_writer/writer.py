@@ -269,7 +269,14 @@ def generate_book_pdf(
     pdf_path = output_dir / "book.pdf"
     try:
         subprocess.run(
-            ["pandoc", str(markdown_path), "--from", "markdown", "-o", str(pdf_path)],
+            [
+                "pandoc",
+                str(markdown_path),
+                "--from",
+                "markdown-yaml_metadata_block",
+                "-o",
+                str(pdf_path),
+            ],
             check=True,
         )
     except FileNotFoundError as exc:
