@@ -9,6 +9,7 @@ from typing import Iterable, List, Optional
 CHAPTER_PATTERN = re.compile(r"^chapter\b", re.IGNORECASE)
 SECTION_PATTERN = re.compile(r"^section\b", re.IGNORECASE)
 EPILOGUE_PATTERN = re.compile(r"^epilogue\b", re.IGNORECASE)
+INTRODUCTION_PATTERN = re.compile(r"^introduction\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -20,7 +21,11 @@ class OutlineItem:
     @property
     def type_label(self) -> str:
         if self.level == 1:
-            return "epilogue" if EPILOGUE_PATTERN.match(self.title) else "chapter"
+            if EPILOGUE_PATTERN.match(self.title):
+                return "epilogue"
+            if INTRODUCTION_PATTERN.match(self.title):
+                return "introduction"
+            return "chapter"
         return "section"
 
     @property
@@ -68,7 +73,11 @@ def parse_outline(path: Path) -> List[OutlineItem]:
         if not title:
             continue
 
-        if CHAPTER_PATTERN.match(title) or EPILOGUE_PATTERN.match(title):
+        if (
+            CHAPTER_PATTERN.match(title)
+            or EPILOGUE_PATTERN.match(title)
+            or INTRODUCTION_PATTERN.match(title)
+        ):
             current_chapter = title
             items.append(OutlineItem(title=title, level=1))
             continue

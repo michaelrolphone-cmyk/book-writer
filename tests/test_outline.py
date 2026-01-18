@@ -78,6 +78,34 @@ class TestOutlineParsing(unittest.TestCase):
             ],
         )
 
+    def test_parse_outline_accepts_introduction_headings(self) -> None:
+        content = """
+**Book Title: Example**
+
+---
+
+### **Introduction: The Eternal Call of Service**
+- Bullet one
+
+### **Chapter 1: The Divine Blueprint**
+- Bullet two
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            items = parse_outline(outline_path)
+
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(
+                    title="Introduction: The Eternal Call of Service", level=1
+                ),
+                OutlineItem(title="Chapter 1: The Divine Blueprint", level=1),
+            ],
+        )
+
     def test_outline_to_text_formats_items(self) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),

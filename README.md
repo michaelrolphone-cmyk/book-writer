@@ -6,7 +6,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 
 - Python 3.12+
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
-- [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation).
+- [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
 
 ## Commands
 
@@ -74,5 +74,5 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 
 ## Notes
 
-- `pandoc` must be available on your PATH for PDF generation.
+- `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
