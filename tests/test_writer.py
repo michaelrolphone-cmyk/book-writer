@@ -1,10 +1,11 @@
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 from book_writer.outline import OutlineItem
-from book_writer.writer import build_prompt, write_book
+from book_writer.writer import LMStudioClient, build_prompt, write_book
 
 
 class TestWriter(unittest.TestCase):
@@ -42,6 +43,24 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Chapter content", first_content)
         self.assertIn("## Section A", second_content)
         self.assertIn("Section content", second_content)
+
+    def test_generate_without_timeout_omits_timeout_param(self) -> None:
+        response = Mock()
+        response.read.return_value = json.dumps(
+            {"choices": [{"message": {"content": "Draft content"}}]}
+        ).encode("utf-8")
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        urlopen_mock = Mock(return_value=response)
+
+        with patch("book_writer.writer.request.urlopen", urlopen_mock):
+            client = LMStudioClient(base_url="http://localhost:1234", model="demo-model")
+            result = client.generate("Prompt")
+
+        self.assertEqual(result, "Draft content")
+        urlopen_mock.assert_called_once()
+        _, kwargs = urlopen_mock.call_args
+        self.assertNotIn("timeout", kwargs)
 
 
 if __name__ == "__main__":
