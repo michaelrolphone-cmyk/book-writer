@@ -4,6 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, Mock, call, patch
 
+from urllib.error import HTTPError
+
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSettings
 from book_writer.writer import (
@@ -573,6 +575,58 @@ class TestWriter(unittest.TestCase):
         urlopen_mock.assert_called_once()
         _, kwargs = urlopen_mock.call_args
         self.assertNotIn("timeout", kwargs)
+
+    def test_reset_context_uses_fallback_endpoint(self) -> None:
+        response = Mock()
+        response.read.return_value = b""
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        urlopen_mock = Mock(
+            side_effect=[
+                HTTPError(
+                    "http://localhost:1234/v1/chat/reset",
+                    404,
+                    "Not Found",
+                    None,
+                    None,
+                ),
+                response,
+            ]
+        )
+
+        with patch("book_writer.writer.request.urlopen", urlopen_mock):
+            client = LMStudioClient(base_url="http://localhost:1234", model="demo-model")
+            supported = client.reset_context()
+
+        self.assertTrue(supported)
+        self.assertEqual(urlopen_mock.call_count, 2)
+
+    def test_reset_context_returns_false_when_unsupported(self) -> None:
+        urlopen_mock = Mock(
+            side_effect=[
+                HTTPError(
+                    "http://localhost:1234/v1/chat/reset",
+                    404,
+                    "Not Found",
+                    None,
+                    None,
+                ),
+                HTTPError(
+                    "http://localhost:1234/v1/reset",
+                    404,
+                    "Not Found",
+                    None,
+                    None,
+                ),
+            ]
+        )
+
+        with patch("book_writer.writer.request.urlopen", urlopen_mock):
+            client = LMStudioClient(base_url="http://localhost:1234", model="demo-model")
+            supported = client.reset_context()
+
+        self.assertFalse(supported)
+        self.assertEqual(urlopen_mock.call_count, 2)
 
 
 if __name__ == "__main__":

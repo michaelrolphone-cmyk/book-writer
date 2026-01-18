@@ -125,12 +125,56 @@ class TestOutlineParsing(unittest.TestCase):
 
             title, items = parse_outline_with_title(outline_path)
 
+        self.assertIsNone(title)
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(title="Chapter Two", level=1),
+            ],
+        )
+
+    def test_parse_outline_with_explicit_title_label(self) -> None:
+        content = """
+# Book Title: The Great Book
+## Chapter One
+### Section A
+## Chapter Two
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            title, items = parse_outline_with_title(outline_path)
+
         self.assertEqual(title, "The Great Book")
         self.assertEqual(
             items,
             [
                 OutlineItem(title="Chapter One", level=1),
                 OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(title="Chapter Two", level=1),
+            ],
+        )
+
+    def test_parse_outline_with_outline_container_heading(self) -> None:
+        content = """
+# Outline
+## Chapter One
+## Chapter Two
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            title, items = parse_outline_with_title(outline_path)
+
+        self.assertIsNone(title)
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
                 OutlineItem(title="Chapter Two", level=1),
             ],
         )
