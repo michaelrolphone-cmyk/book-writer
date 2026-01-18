@@ -267,10 +267,18 @@ def generate_book_pdf(
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
-    subprocess.run(
-        ["pandoc", str(markdown_path), "--from", "markdown", "-o", str(pdf_path)],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["pandoc", str(markdown_path), "--from", "markdown", "-o", str(pdf_path)],
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        message = (
+            "pandoc is required to generate PDFs but was not found on your PATH. "
+            "Install pandoc (https://pandoc.org/installing.html) or ensure it is "
+            "available in your PATH."
+        )
+        raise RuntimeError(message) from exc
     return pdf_path
 
 

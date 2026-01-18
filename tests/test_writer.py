@@ -338,6 +338,25 @@ class TestWriter(unittest.TestCase):
 
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.subprocess.run")
+    def test_generate_book_pdf_handles_missing_pandoc(self, run_mock: Mock) -> None:
+        run_mock.side_effect = FileNotFoundError("pandoc")
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nText", encoding="utf-8")
+
+            with self.assertRaises(RuntimeError) as context:
+                generate_book_pdf(
+                    output_dir=output_dir,
+                    title="Chapter One",
+                    outline_text="- Chapter One",
+                    chapter_files=[chapter_path],
+                )
+
+        self.assertIn("pandoc is required to generate PDFs", str(context.exception))
+
     def test_generate_without_timeout_omits_timeout_param(self) -> None:
         response = Mock()
         response.read.return_value = json.dumps(
