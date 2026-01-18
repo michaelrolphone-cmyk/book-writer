@@ -21,12 +21,18 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--base-url`: LM Studio API base URL (default `http://localhost:1234`).
 - `--model`: LM Studio model name (default `local-model`).
 - `--timeout`: Optional request timeout in seconds.
+- `--tts`: Generate MP3 narration for each chapter using TTS.
+- `--tts-voice`: Voice name for TTS narration (default `en-US-JennyNeural`).
+- `--tts-rate`: Rate adjustment for TTS narration (e.g., `+5%`).
+- `--tts-pitch`: Pitch adjustment for TTS narration (e.g., `+2Hz`).
+- `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing the title, outline, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
+- `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 
 ### Generate multiple books from an outlines directory
 
@@ -40,6 +46,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 **Outputs**
 - Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, and `back-cover-synopsis.md`.
 - Processed outline files are moved into `completed_outlines/`.
+- Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
 ### Expand an existing completed book
 
@@ -58,6 +65,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 **Outputs**
 - Updated chapter markdown files written in-place.
 - Updated `book.md` and regenerated `book.pdf`.
+- Regenerated `audio/*.mp3` files when `--tts` is enabled.
 
 ## Outline format
 
@@ -75,4 +83,5 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 ## Notes
 
 - `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
+- Install the `edge-tts` package (`pip install edge-tts`) to enable MP3 narration with the default neural voice.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
