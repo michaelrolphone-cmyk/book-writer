@@ -2,7 +2,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from book_writer.outline import OutlineItem, outline_to_text, parse_outline, slugify
+from book_writer.outline import (
+    OutlineItem,
+    outline_to_text,
+    parse_outline,
+    parse_outline_with_title,
+    slugify,
+)
 
 
 class TestOutlineParsing(unittest.TestCase):
@@ -103,6 +109,29 @@ class TestOutlineParsing(unittest.TestCase):
                     title="Introduction: The Eternal Call of Service", level=1
                 ),
                 OutlineItem(title="Chapter 1: The Divine Blueprint", level=1),
+            ],
+        )
+
+    def test_parse_outline_with_title_promotes_heading_levels(self) -> None:
+        content = """
+# The Great Book
+## Chapter One
+### Section A
+## Chapter Two
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            title, items = parse_outline_with_title(outline_path)
+
+        self.assertEqual(title, "The Great Book")
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(title="Chapter Two", level=1),
             ],
         )
 

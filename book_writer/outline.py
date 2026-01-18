@@ -53,47 +53,91 @@ def _title_from_heading(heading: str) -> str:
     return cleaned
 
 
-def parse_outline(path: Path) -> List[OutlineItem]:
-    """Parse OUTLINE.md into a list of outline items.
-
-    Supported format is Markdown headings with #/## plus headings that start with
-    "Chapter", "Section", or "Epilogue" at any heading level
-    (e.g., ### **Chapter 1: ...**).
-    """
-    items: List[OutlineItem] = []
-    current_chapter: Optional[str] = None
-
+def _outline_headings(path: Path) -> list[tuple[int, str]]:
+    headings: list[tuple[int, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or not line.startswith("#"):
             continue
-
         hashes = len(line) - len(line.lstrip("#"))
         title = _title_from_heading(line.lstrip("#").strip())
-        if not title:
-            continue
+        if title:
+            headings.append((hashes, title))
+    return headings
 
+
+def _is_book_title_candidate(hashes: int, title: str, headings: list[tuple[int, str]]) -> bool:
+    if hashes != 1:
+        return False
+    if (
+        CHAPTER_PATTERN.match(title)
+        or SECTION_PATTERN.match(title)
+        or EPILOGUE_PATTERN.match(title)
+        or INTRODUCTION_PATTERN.match(title)
+    ):
+        return False
+    return not any(level == 1 for level, _ in headings[1:])
+
+
+def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineItem]]:
+    """Parse OUTLINE.md into an optional title plus outline items.
+
+    Supported format is Markdown headings with #/## plus headings that start with
+    "Chapter", "Section", "Epilogue", or "Introduction" at any heading level
+    (e.g., ### **Chapter 1: ...**).
+    """
+    items: List[OutlineItem] = []
+    current_chapter: Optional[str] = None
+    headings = _outline_headings(path)
+    if not headings:
+        return None, items
+
+    first_hashes, first_title = headings[0]
+    title: Optional[str] = None
+    start_index = 0
+    if _is_book_title_candidate(first_hashes, first_title, headings):
+        title = first_title
+        start_index = 1
+
+    for hashes, heading_title in headings[start_index:]:
         if (
-            CHAPTER_PATTERN.match(title)
-            or EPILOGUE_PATTERN.match(title)
-            or INTRODUCTION_PATTERN.match(title)
+            CHAPTER_PATTERN.match(heading_title)
+            or EPILOGUE_PATTERN.match(heading_title)
+            or INTRODUCTION_PATTERN.match(heading_title)
         ):
-            current_chapter = title
-            items.append(OutlineItem(title=title, level=1))
+            current_chapter = heading_title
+            items.append(OutlineItem(title=heading_title, level=1))
             continue
 
-        if SECTION_PATTERN.match(title):
-            items.append(OutlineItem(title=title, level=2, parent_title=current_chapter))
-            continue
-
-        if hashes == 1:
-            current_chapter = title
-            items.append(OutlineItem(title=title, level=1))
-        elif hashes == 2:
+        if SECTION_PATTERN.match(heading_title):
             items.append(
-                OutlineItem(title=title, level=2, parent_title=current_chapter)
+                OutlineItem(
+                    title=heading_title,
+                    level=2,
+                    parent_title=current_chapter,
+                )
+            )
+            continue
+
+        adjusted_hashes = hashes - 1 if title and hashes > 1 else hashes
+        if adjusted_hashes == 1:
+            current_chapter = heading_title
+            items.append(OutlineItem(title=heading_title, level=1))
+        elif adjusted_hashes == 2:
+            items.append(
+                OutlineItem(
+                    title=heading_title,
+                    level=2,
+                    parent_title=current_chapter,
+                )
             )
 
+    return title, items
+
+
+def parse_outline(path: Path) -> List[OutlineItem]:
+    """Parse OUTLINE.md into a list of outline items."""
+    _, items = parse_outline_with_title(path)
     return items
 
 
