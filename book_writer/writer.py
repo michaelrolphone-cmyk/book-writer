@@ -92,11 +92,97 @@ def build_synopsis_prompt(title: str, outline_text: str, content: str) -> str:
     return (
         "Write a back cover synopsis for this book. "
         "Keep it engaging and concise, avoiding spoilers beyond the setup. "
+        "Use the outline to guide the synopsis structure. "
         "Return only the synopsis text.\n\n"
         f"Book title: {title}\n\n"
         f"Outline:\n{outline_text}\n\n"
         f"Book content:\n{content}"
     )
+
+
+def build_expand_paragraph_prompt(
+    current: str,
+    previous: Optional[str] = None,
+    next_paragraph: Optional[str] = None,
+    section_heading: Optional[str] = None,
+) -> str:
+    context_parts = []
+    if section_heading:
+        context_parts.append(f"Section heading: {section_heading}")
+    if previous:
+        context_parts.append(f"Previous section/paragraph:\n{previous}")
+    if next_paragraph:
+        context_parts.append(f"Next section/paragraph:\n{next_paragraph}")
+    context = "\n\n".join(context_parts)
+    return (
+        "Expand the current paragraph or section with more detail. "
+        "Use the surrounding context to maintain continuity. "
+        "Return only the expanded markdown for the current paragraph or section.\n\n"
+        f"{context}\n\n"
+        f"Current paragraph/section:\n{current}"
+    ).strip()
+
+
+@dataclass
+class _MarkdownBlock:
+    type: str
+    text: str
+
+
+def _split_markdown_blocks(content: str) -> List[_MarkdownBlock]:
+    blocks: List[_MarkdownBlock] = []
+    buffer: List[str] = []
+    for line in content.splitlines():
+        if line.startswith("#"):
+            if buffer:
+                blocks.append(_MarkdownBlock(type="paragraph", text="\n".join(buffer)))
+                buffer = []
+            blocks.append(_MarkdownBlock(type="heading", text=line))
+            continue
+        if not line.strip():
+            if buffer:
+                blocks.append(_MarkdownBlock(type="paragraph", text="\n".join(buffer)))
+                buffer = []
+            continue
+        buffer.append(line)
+    if buffer:
+        blocks.append(_MarkdownBlock(type="paragraph", text="\n".join(buffer)))
+    return blocks
+
+
+def expand_chapter_content(content: str, client: LMStudioClient) -> str:
+    blocks = _split_markdown_blocks(content)
+    paragraph_indexes = [i for i, block in enumerate(blocks) if block.type == "paragraph"]
+    if not paragraph_indexes:
+        return content
+
+    heading_for_block: List[Optional[str]] = []
+    current_heading: Optional[str] = None
+    for block in blocks:
+        if block.type == "heading":
+            current_heading = block.text.lstrip("#").strip()
+        heading_for_block.append(current_heading)
+
+    original_paragraphs = {index: blocks[index].text for index in paragraph_indexes}
+
+    for position, block_index in enumerate(paragraph_indexes):
+        previous_paragraph = None
+        next_paragraph = None
+        if position > 0:
+            previous_paragraph = original_paragraphs[paragraph_indexes[position - 1]]
+        if position < len(paragraph_indexes) - 1:
+            next_paragraph = original_paragraphs[paragraph_indexes[position + 1]]
+        section_heading = heading_for_block[block_index]
+        prompt = build_expand_paragraph_prompt(
+            current=blocks[block_index].text,
+            previous=previous_paragraph,
+            next_paragraph=next_paragraph,
+            section_heading=section_heading,
+        )
+        expanded = client.generate(prompt)
+        blocks[block_index].text = expanded.strip()
+
+    return "\n\n".join(block.text for block in blocks)
 
 
 def build_book_markdown(title: str, outline_text: str, chapters: List[str]) -> str:
@@ -127,6 +213,87 @@ def generate_book_pdf(
         check=True,
     )
     return pdf_path
+
+
+def _chapter_files(output_dir: Path) -> List[Path]:
+    return sorted(
+        path
+        for path in output_dir.iterdir()
+        if path.suffix == ".md"
+        and path.name not in {"book.md", "back-cover-synopsis.md"}
+    )
+
+
+def _derive_outline_from_chapters(chapter_files: List[Path]) -> str:
+    items: List[OutlineItem] = []
+    current_chapter: Optional[str] = None
+    for chapter_file in chapter_files:
+        for line in chapter_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip()
+                current_chapter = title
+                items.append(OutlineItem(title=title, level=1))
+            elif line.startswith("## "):
+                title = line[3:].strip()
+                items.append(
+                    OutlineItem(title=title, level=2, parent_title=current_chapter)
+                )
+    return outline_to_text(items)
+
+
+def _read_book_metadata(output_dir: Path, chapter_files: List[Path]) -> ChapterContext:
+    book_md = output_dir / "book.md"
+    if book_md.exists():
+        content = book_md.read_text(encoding="utf-8")
+        title = "Untitled"
+        outline = ""
+        for line in content.splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip()
+                break
+        if "## Outline" in content:
+            outline_section = content.split("## Outline", 1)[1]
+            outline = outline_section.split("\\newpage", 1)[0].strip()
+        return ChapterContext(title=title, content=outline)
+
+    outline = _derive_outline_from_chapters(chapter_files)
+    title = chapter_files[0].stem if chapter_files else output_dir.name
+    for line in chapter_files[0].read_text(encoding="utf-8").splitlines():
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
+    return ChapterContext(title=title, content=outline)
+
+
+def expand_book(
+    output_dir: Path,
+    client: LMStudioClient,
+    passes: int = 1,
+) -> List[Path]:
+    if passes < 1:
+        raise ValueError("Expansion passes must be at least 1.")
+    chapter_files = _chapter_files(output_dir)
+    if not chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+
+    for _ in range(passes):
+        for chapter_file in chapter_files:
+            content = chapter_file.read_text(encoding="utf-8")
+            expanded_content = expand_chapter_content(content, client)
+            chapter_file.write_text(expanded_content.strip() + "\n", encoding="utf-8")
+
+    book_metadata = _read_book_metadata(output_dir, chapter_files)
+    outline_text = book_metadata.content
+    if not outline_text:
+        outline_text = _derive_outline_from_chapters(chapter_files)
+
+    generate_book_pdf(
+        output_dir=output_dir,
+        title=book_metadata.title,
+        outline_text=outline_text,
+        chapter_files=chapter_files,
+    )
+    return chapter_files
 
 
 def write_book(

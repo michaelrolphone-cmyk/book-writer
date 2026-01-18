@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
+from book_writer import cli
 from book_writer.cli import write_books_from_outlines
 
 
@@ -49,3 +50,30 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             self.assertTrue((completed_dir / "alpha.md").exists())
             self.assertTrue((completed_dir / "beta.md").exists())
             run_mock.assert_called()
+
+
+class TestCliExpandBook(unittest.TestCase):
+    @patch("book_writer.cli.expand_book")
+    def test_main_expands_completed_book(self, expand_mock: MagicMock) -> None:
+        with TemporaryDirectory() as tmpdir:
+            with patch("sys.argv", ["book-writer", "--expand-book", tmpdir]):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+
+    @patch("book_writer.cli.expand_book")
+    def test_main_expands_completed_book_with_passes(
+        self, expand_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            with patch(
+                "sys.argv",
+                ["book-writer", "--expand-book", tmpdir, "--expand-passes", "3"],
+            ):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+        _, kwargs = expand_mock.call_args
+        self.assertEqual(kwargs["passes"], 3)

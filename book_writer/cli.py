@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from book_writer.outline import parse_outline
-from book_writer.writer import LMStudioClient, write_book
+from book_writer.writer import LMStudioClient, expand_book, write_book
 
 
 def _outline_files(outlines_dir: Path) -> list[Path]:
@@ -65,6 +65,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to write generated markdown files.",
     )
     parser.add_argument(
+        "--expand-book",
+        type=Path,
+        default=None,
+        help="Path to a completed book directory to expand.",
+    )
+    parser.add_argument(
+        "--expand-passes",
+        type=int,
+        default=1,
+        help="Number of expansion passes to run when expanding a completed book.",
+    )
+    parser.add_argument(
         "--books-dir",
         type=Path,
         default=Path("books"),
@@ -100,6 +112,13 @@ def main() -> int:
     args = parser.parse_args()
 
     client = LMStudioClient(base_url=args.base_url, model=args.model, timeout=args.timeout)
+    if args.expand_book:
+        expand_book(
+            output_dir=args.expand_book,
+            client=client,
+            passes=args.expand_passes,
+        )
+        return 0
     outline_files = _outline_files(args.outlines_dir)
     if outline_files:
         try:
