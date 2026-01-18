@@ -336,7 +336,17 @@ class TestWriter(unittest.TestCase):
             self.assertTrue((output_dir / "book.md").exists())
             self.assertEqual(pdf_path.name, "book.pdf")
 
-        run_mock.assert_called_once()
+        run_mock.assert_called_once_with(
+            [
+                "pandoc",
+                str(output_dir / "book.md"),
+                "--from",
+                "markdown-yaml_metadata_block",
+                "-o",
+                str(output_dir / "book.pdf"),
+            ],
+            check=True,
+        )
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_handles_missing_pandoc(self, run_mock: Mock) -> None:
