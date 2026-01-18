@@ -62,6 +62,12 @@ def write_books_from_outlines(
                 byline=byline,
             )
         )
+        reset_supported = client.reset_context()
+        if verbose:
+            if reset_supported:
+                print("[batch] Reset LM Studio context between books.")
+            else:
+                print("[batch] LM Studio context reset not supported by API.")
 
         destination = completed_outlines_dir / outline_path.name
         outline_path.replace(destination)
@@ -132,9 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Timeout in seconds for the API call. Omit for no timeout.",
     )
     parser.add_argument(
-        "--tts",
-        action="store_true",
-        help="Generate MP3 narration for each chapter using TTS.",
+        "--no-tts",
+        action="store_false",
+        dest="tts",
+        help="Disable MP3 narration for chapters and the synopsis.",
     )
     parser.add_argument(
         "--tts-voice",
@@ -161,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="Marissa Bard",
         help="Byline shown on the book title page.",
     )
+    parser.set_defaults(tts=True)
     return parser
 
 

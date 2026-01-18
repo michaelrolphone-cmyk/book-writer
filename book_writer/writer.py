@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
 from urllib import request
+from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import TTSSettings, synthesize_chapter_audio, synthesize_text_audio
@@ -50,6 +51,30 @@ class LMStudioClient:
             body = response.read().decode("utf-8")
         parsed = json.loads(body)
         return parsed["choices"][0]["message"]["content"].strip()
+
+    def reset_context(self) -> bool:
+        payload = {"model": self.model}
+        data = json.dumps(payload).encode("utf-8")
+        endpoints = ("/v1/chat/reset", "/v1/reset")
+        for endpoint in endpoints:
+            req = request.Request(
+                f"{self.base_url}{endpoint}",
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            try:
+                if self.timeout is None:
+                    response_context = request.urlopen(req)
+                else:
+                    response_context = request.urlopen(req, timeout=self.timeout)
+                with response_context as response:
+                    response.read()
+                return True
+            except HTTPError as exc:
+                if exc.code in {404, 405}:
+                    continue
+                raise
+        return False
 
 
 def build_prompt(

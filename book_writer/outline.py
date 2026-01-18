@@ -14,6 +14,10 @@ PROLOGUE_PATTERN = re.compile(r"^prologue\b", re.IGNORECASE)
 PAGE_PATTERN = re.compile(r"^page\b", re.IGNORECASE)
 ACT_PATTERN = re.compile(r"^act\b", re.IGNORECASE)
 SCENE_PATTERN = re.compile(r"^scene\b", re.IGNORECASE)
+TITLE_LABEL_PATTERN = re.compile(
+    r"^(?:book\s+title|title|book\s+name)\b\s*[:\-–]\s*(.+)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -76,21 +80,12 @@ def _outline_headings(path: Path) -> list[tuple[int, str]]:
     return headings
 
 
-def _is_book_title_candidate(hashes: int, title: str, headings: list[tuple[int, str]]) -> bool:
-    if hashes != 1:
-        return False
-    if (
-        CHAPTER_PATTERN.match(title)
-        or SECTION_PATTERN.match(title)
-        or EPILOGUE_PATTERN.match(title)
-        or INTRODUCTION_PATTERN.match(title)
-        or PROLOGUE_PATTERN.match(title)
-        or ACT_PATTERN.match(title)
-        or PAGE_PATTERN.match(title)
-        or SCENE_PATTERN.match(title)
-    ):
-        return False
-    return not any(level == 1 for level, _ in headings[1:])
+def _explicit_title_from_heading(heading: str) -> Optional[str]:
+    match = TITLE_LABEL_PATTERN.match(heading)
+    if not match:
+        return None
+    title = match.group(1).strip()
+    return title or None
 
 
 def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineItem]]:
@@ -108,13 +103,19 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
         return None, items
 
     first_hashes, first_title = headings[0]
-    title: Optional[str] = None
+    title: Optional[str] = _explicit_title_from_heading(first_title)
     start_index = 0
-    if _is_book_title_candidate(first_hashes, first_title, headings):
-        title = first_title
+    title_hashes: Optional[int] = None
+    if title:
         start_index = 1
+        title_hashes = first_hashes
+    else:
+        min_hash = min(level for level, _ in headings)
+        min_level_headings = [level for level, _ in headings if level == min_hash]
+        if len(min_level_headings) == 1 and len(headings) > 1:
+            start_index = 1
+            title_hashes = min_hash
 
-    title_hashes = first_hashes if title else None
     for hashes, heading_title in headings[start_index:]:
         adjusted_hashes = hashes
         if title_hashes and hashes > title_hashes:

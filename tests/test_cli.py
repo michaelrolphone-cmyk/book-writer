@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -89,3 +90,48 @@ class TestCliExpandBook(unittest.TestCase):
         _, kwargs = expand_mock.call_args
         self.assertEqual(kwargs["passes"], 3)
         self.assertTrue(kwargs["verbose"])
+
+
+class TestCliTtsDefaults(unittest.TestCase):
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_enables_tts_by_default(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch(
+                    "sys.argv", ["book-writer", "--outline", str(outline_path)]
+                ):
+                    cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        _, kwargs = write_mock.call_args
+        self.assertTrue(kwargs["tts_settings"].enabled)
+
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_disables_tts_with_flag(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch(
+                    "sys.argv",
+                    ["book-writer", "--outline", str(outline_path), "--no-tts"],
+                ):
+                    cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        _, kwargs = write_mock.call_args
+        self.assertFalse(kwargs["tts_settings"].enabled)
