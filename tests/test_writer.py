@@ -10,8 +10,11 @@ from book_writer.writer import (
     LMStudioClient,
     build_book_markdown,
     build_chapter_context_prompt,
+    build_expand_paragraph_prompt,
     build_prompt,
     build_synopsis_prompt,
+    expand_book,
+    expand_chapter_content,
     generate_book_pdf,
     write_book,
 )
@@ -104,6 +107,28 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Chapter one summary", second_prompt)
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_synopsis_includes_outline(self, run_mock: Mock) -> None:
+        items = [
+            OutlineItem(title="Chapter One", level=1),
+            OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+        ]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Section content",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            write_book(items, output_dir, client)
+
+        synopsis_prompt = client.generate.call_args_list[-1][0][0]
+        self.assertIn("Outline:\n- Chapter One\n  - Section A", synopsis_prompt)
+        run_mock.assert_called_once()
+
     def test_build_chapter_context_prompt_mentions_chapter(self) -> None:
         prompt = build_chapter_context_prompt("Chapter One", "Some chapter text.")
 
@@ -127,6 +152,87 @@ class TestWriter(unittest.TestCase):
         self.assertIn("# Book Title", markdown)
         self.assertIn("## Outline", markdown)
         self.assertIn("# Chapter One", markdown)
+
+    def test_build_expand_paragraph_prompt_includes_context(self) -> None:
+        prompt = build_expand_paragraph_prompt(
+            current="Current paragraph.",
+            previous="Previous paragraph.",
+            next_paragraph="Next paragraph.",
+            section_heading="Section One",
+        )
+
+        self.assertIn("Section heading: Section One", prompt)
+        self.assertIn("Previous section/paragraph:", prompt)
+        self.assertIn("Next section/paragraph:", prompt)
+        self.assertIn("Current paragraph/section:", prompt)
+
+    def test_expand_chapter_content_uses_neighboring_context(self) -> None:
+        content = "# Chapter One\n\nFirst paragraph.\n\nSecond paragraph."
+        client = MagicMock()
+        client.generate.side_effect = ["Expanded first.", "Expanded second."]
+
+        expanded = expand_chapter_content(content, client)
+
+        self.assertIn("Expanded first.", expanded)
+        self.assertIn("Expanded second.", expanded)
+        first_prompt = client.generate.call_args_list[0][0][0]
+        second_prompt = client.generate.call_args_list[1][0][0]
+        self.assertIn("Next section/paragraph:", first_prompt)
+        self.assertIn("Second paragraph.", first_prompt)
+        self.assertIn("Previous section/paragraph:", second_prompt)
+        self.assertIn("First paragraph.", second_prompt)
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_updates_chapters_and_regenerates_pdf(
+        self, run_mock: Mock
+    ) -> None:
+        client = MagicMock()
+        client.generate.return_value = "Expanded paragraph."
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+            (output_dir / "book.md").write_text(
+                "# Book Title\n\n"
+                "\\newpage\n\n"
+                "## Outline\n"
+                "- Chapter One\n\n"
+                "\\newpage\n\n"
+                "# Chapter One\n\n"
+                "Original paragraph.\n",
+                encoding="utf-8",
+            )
+
+            expanded_files = expand_book(output_dir, client)
+
+            updated_content = chapter_path.read_text(encoding="utf-8")
+            self.assertIn("Expanded paragraph.", updated_content)
+            self.assertEqual(expanded_files, [chapter_path])
+
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_runs_multiple_passes(self, run_mock: Mock) -> None:
+        client = MagicMock()
+        client.generate.side_effect = ["Expanded once.", "Expanded twice."]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+
+            expanded_files = expand_book(output_dir, client, passes=2)
+
+            updated_content = chapter_path.read_text(encoding="utf-8")
+            self.assertIn("Expanded twice.", updated_content)
+            self.assertEqual(expanded_files, [chapter_path])
+
+        run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_calls_pandoc(self, run_mock: Mock) -> None:
