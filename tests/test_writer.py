@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSettings
@@ -10,12 +10,14 @@ from book_writer.writer import (
     ChapterContext,
     LMStudioClient,
     build_book_markdown,
+    build_book_title_prompt,
     build_chapter_context_prompt,
     build_expand_paragraph_prompt,
     build_prompt,
     build_synopsis_prompt,
     expand_book,
     expand_chapter_content,
+    generate_book_title,
     generate_book_pdf,
     write_book,
 )
@@ -117,10 +119,14 @@ class TestWriter(unittest.TestCase):
         print_mock.assert_any_call("[write] Generated book.pdf from chapters.")
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_generates_chapter_audio(
-        self, run_mock: Mock, synthesize_mock: Mock
+        self,
+        run_mock: Mock,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
     ) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
         client = MagicMock()
@@ -137,9 +143,72 @@ class TestWriter(unittest.TestCase):
                 items, output_dir, client, tts_settings=tts_settings
             )
 
-        synthesize_mock.assert_called_once_with(
+        synthesize_chapter_mock.assert_called_once_with(
             chapter_path=files[0],
-            output_dir=output_dir / tts_settings.audio_dirname,
+            output_dir=files[0].parent / tts_settings.audio_dirname,
+            settings=tts_settings,
+            verbose=False,
+        )
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis text",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / "back-cover-synopsis.mp3",
+            settings=tts_settings,
+            verbose=False,
+        )
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_generates_audio_for_each_chapter(
+        self,
+        run_mock: Mock,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        items = [
+            OutlineItem(title="Chapter One", level=1),
+            OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+        ]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Section content",
+            "Synopsis text",
+        ]
+        tts_settings = TTSSettings(enabled=True)
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            files = write_book(
+                items, output_dir, client, tts_settings=tts_settings
+            )
+
+        synthesize_chapter_mock.assert_has_calls(
+            [
+                call(
+                    chapter_path=files[0],
+                    output_dir=files[0].parent / tts_settings.audio_dirname,
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+                call(
+                    chapter_path=files[1],
+                    output_dir=files[1].parent / tts_settings.audio_dirname,
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+            ]
+        )
+        self.assertEqual(synthesize_chapter_mock.call_count, 2)
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis text",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / "back-cover-synopsis.mp3",
             settings=tts_settings,
             verbose=False,
         )
@@ -237,12 +306,74 @@ class TestWriter(unittest.TestCase):
 
     def test_build_book_markdown_includes_title_outline_and_chapters(self) -> None:
         markdown = build_book_markdown(
-            "Book Title", "- Chapter One", ["# Chapter One\n\nText"]
+            "Book Title", "- Chapter One", ["# Chapter One\n\nText"], "Marissa Bard"
         )
 
         self.assertIn("# Book Title", markdown)
+        self.assertIn("### By Marissa Bard", markdown)
         self.assertIn("## Outline", markdown)
         self.assertIn("# Chapter One", markdown)
+
+    def test_build_book_title_prompt_mentions_outline_and_first_chapter(self) -> None:
+        prompt = build_book_title_prompt("- Chapter One", "Chapter One")
+
+        self.assertIn("Outline:", prompt)
+        self.assertIn("First chapter: Chapter One", prompt)
+
+    def test_generate_book_title_avoids_first_chapter_name(self) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = ["Chapter One", "Different Title"]
+
+        title = generate_book_title(items, client)
+
+        self.assertEqual(title, "Different Title")
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_uses_provided_book_title(self, run_mock: Mock) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            write_book(
+                items,
+                output_dir,
+                client,
+                book_title="Custom Title",
+                byline="Custom Byline",
+            )
+
+            book_md = (output_dir / "book.md").read_text(encoding="utf-8")
+
+        self.assertIn("# Custom Title", book_md)
+        self.assertIn("### By Custom Byline", book_md)
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_strips_duplicate_heading(self, run_mock: Mock) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "# Chapter One\n\nBody text.",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            files = write_book(items, output_dir, client)
+
+            chapter_text = files[0].read_text(encoding="utf-8").strip().splitlines()
+
+        self.assertEqual(chapter_text[0], "# Chapter One")
+        self.assertNotEqual(chapter_text[1].strip(), "# Chapter One")
+        run_mock.assert_called_once()
 
     def test_build_expand_paragraph_prompt_includes_context(self) -> None:
         prompt = build_expand_paragraph_prompt(
@@ -368,7 +499,7 @@ class TestWriter(unittest.TestCase):
 
         synthesize_mock.assert_called_once_with(
             chapter_path=chapter_path,
-            output_dir=output_dir / tts_settings.audio_dirname,
+            output_dir=chapter_path.parent / tts_settings.audio_dirname,
             settings=tts_settings,
             verbose=False,
         )
@@ -386,9 +517,11 @@ class TestWriter(unittest.TestCase):
                 title="Chapter One",
                 outline_text="- Chapter One",
                 chapter_files=[chapter_path],
+                byline="Marissa Bard",
             )
 
-            self.assertTrue((output_dir / "book.md").exists())
+            book_md = (output_dir / "book.md").read_text(encoding="utf-8")
+            self.assertIn("### By Marissa Bard", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
 
         run_mock.assert_called_once_with(
@@ -418,6 +551,7 @@ class TestWriter(unittest.TestCase):
                     title="Chapter One",
                     outline_text="- Chapter One",
                     chapter_files=[chapter_path],
+                    byline="Marissa Bard",
                 )
 
         self.assertIn("pandoc is required to generate PDFs", str(context.exception))

@@ -4,9 +4,14 @@ import argparse
 from typing import Optional
 from pathlib import Path
 
-from book_writer.outline import parse_outline
+from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import TTSSettings
-from book_writer.writer import LMStudioClient, expand_book, write_book
+from book_writer.writer import (
+    LMStudioClient,
+    expand_book,
+    generate_book_title,
+    write_book,
+)
 
 
 def _outline_files(outlines_dir: Path) -> list[Path]:
@@ -22,6 +27,7 @@ def write_books_from_outlines(
     client: LMStudioClient,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    byline: str = "Marissa Bard",
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     written_files: list[Path] = []
@@ -38,9 +44,10 @@ def write_books_from_outlines(
                 f"[batch] Step {index}/{len(outline_files)}: "
                 f"Writing book for {outline_path.name}."
             )
-        items = parse_outline(outline_path)
+        outline_title, items = parse_outline_with_title(outline_path)
         if not items:
             raise ValueError(f"No outline items found in {outline_path}.")
+        book_title = outline_title or generate_book_title(items, client)
 
         book_short_title = outline_path.stem
         book_output_dir = books_dir / book_short_title
@@ -51,6 +58,8 @@ def write_books_from_outlines(
                 client=client,
                 verbose=verbose,
                 tts_settings=tts_settings,
+                book_title=book_title,
+                byline=byline,
             )
         )
 
@@ -147,6 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="audio",
         help="Directory name for storing chapter audio files.",
     )
+    parser.add_argument(
+        "--byline",
+        default="Marissa Bard",
+        help="Byline shown on the book title page.",
+    )
     return parser
 
 
@@ -181,20 +195,24 @@ def main() -> int:
                 client=client,
                 verbose=True,
                 tts_settings=tts_settings,
+                byline=args.byline,
             )
         except ValueError as exc:
             parser.error(str(exc))
         return 0
 
-    items = parse_outline(args.outline)
+    outline_title, items = parse_outline_with_title(args.outline)
     if not items:
         parser.error("No outline items found in the outline file.")
+    book_title = outline_title or generate_book_title(items, client)
     write_book(
         items=items,
         output_dir=args.output_dir,
         client=client,
         verbose=True,
         tts_settings=tts_settings,
+        book_title=book_title,
+        byline=args.byline,
     )
     return 0
 

@@ -9,7 +9,7 @@ from typing import Iterable, List, Optional
 from urllib import request
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
-from book_writer.tts import TTSSettings, synthesize_chapter_audio
+from book_writer.tts import TTSSettings, synthesize_chapter_audio, synthesize_text_audio
 
 
 @dataclass(frozen=True)
@@ -102,6 +102,39 @@ def build_synopsis_prompt(title: str, outline_text: str, content: str) -> str:
     )
 
 
+def build_book_title_prompt(outline_text: str, first_chapter_title: str) -> str:
+    return (
+        "Generate a compelling book title based on the outline. "
+        "Do not reuse the first chapter name as the title. "
+        "Return only the title text.\n\n"
+        f"First chapter: {first_chapter_title}\n\n"
+        f"Outline:\n{outline_text}"
+    )
+
+
+def _clean_generated_title(title: str) -> str:
+    cleaned = title.strip()
+    if cleaned.startswith(("\"", "'")) and cleaned.endswith(("\"", "'")):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
+
+def generate_book_title(items: List[OutlineItem], client: LMStudioClient) -> str:
+    outline_text = outline_to_text(items)
+    first_chapter = next((item.title for item in items if item.level == 1), "Untitled")
+    prompt = build_book_title_prompt(outline_text, first_chapter)
+    title = _clean_generated_title(client.generate(prompt))
+    if title.casefold() == first_chapter.casefold():
+        prompt = (
+            build_book_title_prompt(outline_text, first_chapter)
+            + "\n\nReturn a different title than the first chapter name."
+        )
+        title = _clean_generated_title(client.generate(prompt))
+        if title.casefold() == first_chapter.casefold():
+            title = f"{title} (Book)"
+    return title or "Untitled"
+
+
 def build_expand_paragraph_prompt(
     current: str,
     previous: Optional[str] = None,
@@ -177,6 +210,15 @@ def _extract_implementation_sections(content: str) -> tuple[str, list[str]]:
     return cleaned, extracted
 
 
+def _strip_duplicate_heading(heading: str, content: str) -> str:
+    lines = content.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and lines[0].strip() == heading.strip():
+        return "\n".join(lines[1:]).lstrip()
+    return content
+
+
 def _write_nextsteps(output_dir: Path, sections: list[str]) -> None:
     if not sections:
         return
@@ -245,10 +287,16 @@ def expand_chapter_content(content: str, client: LMStudioClient) -> str:
     return "\n\n".join(block.text for block in blocks)
 
 
-def build_book_markdown(title: str, outline_text: str, chapters: List[str]) -> str:
+def build_book_markdown(
+    title: str,
+    outline_text: str,
+    chapters: List[str],
+    byline: str,
+) -> str:
     chapters_text = "\n\n".join(chapters)
     return (
         f"# {title}\n\n"
+        f"### By {byline}\n\n"
         "\\newpage\n\n"
         "## Outline\n"
         f"{outline_text}\n\n"
@@ -262,9 +310,10 @@ def generate_book_pdf(
     title: str,
     outline_text: str,
     chapter_files: List[Path],
+    byline: str,
 ) -> Path:
     chapters = [path.read_text(encoding="utf-8") for path in chapter_files]
-    book_markdown = build_book_markdown(title, outline_text, chapters)
+    book_markdown = build_book_markdown(title, outline_text, chapters, byline)
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
@@ -316,20 +365,27 @@ def _derive_outline_from_chapters(chapter_files: List[Path]) -> str:
     return outline_to_text(items)
 
 
-def _read_book_metadata(output_dir: Path, chapter_files: List[Path]) -> ChapterContext:
+def _read_book_metadata(
+    output_dir: Path, chapter_files: List[Path]
+) -> tuple[ChapterContext, str]:
     book_md = output_dir / "book.md"
     if book_md.exists():
         content = book_md.read_text(encoding="utf-8")
         title = "Untitled"
+        byline = "Marissa Bard"
         outline = ""
         for line in content.splitlines():
             if line.startswith("# "):
                 title = line[2:].strip()
                 break
+        for line in content.splitlines():
+            if line.startswith("### By "):
+                byline = line[len("### By ") :].strip()
+                break
         if "## Outline" in content:
             outline_section = content.split("## Outline", 1)[1]
             outline = outline_section.split("\\newpage", 1)[0].strip()
-        return ChapterContext(title=title, content=outline)
+        return ChapterContext(title=title, content=outline), byline
 
     outline = _derive_outline_from_chapters(chapter_files)
     title = chapter_files[0].stem if chapter_files else output_dir.name
@@ -337,7 +393,7 @@ def _read_book_metadata(output_dir: Path, chapter_files: List[Path]) -> ChapterC
         if line.startswith("# "):
             title = line[2:].strip()
             break
-    return ChapterContext(title=title, content=outline)
+    return ChapterContext(title=title, content=outline), "Marissa Bard"
 
 
 def expand_book(
@@ -375,12 +431,12 @@ def expand_book(
             chapter_file.write_text(cleaned_content.strip() + "\n", encoding="utf-8")
             synthesize_chapter_audio(
                 chapter_path=chapter_file,
-                output_dir=output_dir / tts_settings.audio_dirname,
+                output_dir=chapter_file.parent / tts_settings.audio_dirname,
                 settings=tts_settings,
                 verbose=verbose,
             )
 
-    book_metadata = _read_book_metadata(output_dir, chapter_files)
+    book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
     outline_text = book_metadata.content
     if not outline_text:
         outline_text = _derive_outline_from_chapters(chapter_files)
@@ -390,6 +446,7 @@ def expand_book(
         title=book_metadata.title,
         outline_text=outline_text,
         chapter_files=chapter_files,
+        byline=byline,
     )
     if verbose:
         print("[expand] Generated book.pdf from expanded chapters.")
@@ -405,6 +462,8 @@ def write_book(
     client: LMStudioClient,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    book_title: Optional[str] = None,
+    byline: str = "Marissa Bard",
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -438,7 +497,7 @@ def write_book(
             nextsteps_sections.extend(extracted_sections)
             file_name = f"{index + 1:03d}-{slugify(item.display_title)}.md"
             file_path = output_dir / file_name
-            file_body = cleaned_content.strip()
+            file_body = _strip_duplicate_heading(heading, cleaned_content).strip()
             if file_body:
                 file_path.write_text(
                     f"{heading}\n\n{file_body}\n", encoding="utf-8"
@@ -448,7 +507,7 @@ def write_book(
             written_files.append(file_path)
             synthesize_chapter_audio(
                 chapter_path=file_path,
-                output_dir=output_dir / tts_settings.audio_dirname,
+                output_dir=file_path.parent / tts_settings.audio_dirname,
                 settings=tts_settings,
                 verbose=verbose,
             )
@@ -469,13 +528,14 @@ def write_book(
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[write] Wrote nextsteps.md from implementation details.")
-    book_title = items[0].title
+    book_title = book_title or items[0].title
     outline_text = outline_to_text(items)
     generate_book_pdf(
         output_dir=output_dir,
         title=book_title,
         outline_text=outline_text,
         chapter_files=written_files,
+        byline=byline,
     )
     if verbose:
         print("[write] Generated book.pdf from chapters.")
@@ -489,6 +549,12 @@ def write_book(
     synopsis = client.generate(synopsis_prompt)
     synopsis_path = output_dir / "back-cover-synopsis.md"
     synopsis_path.write_text(synopsis, encoding="utf-8")
+    synthesize_text_audio(
+        text=synopsis,
+        output_path=output_dir / tts_settings.audio_dirname / "back-cover-synopsis.mp3",
+        settings=tts_settings,
+        verbose=verbose,
+    )
     if verbose:
         print("[write] Wrote back-cover-synopsis.md.")
 

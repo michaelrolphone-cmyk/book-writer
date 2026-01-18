@@ -12,9 +12,11 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
     def test_writes_books_and_moves_outlines(self, run_mock: MagicMock) -> None:
         client = MagicMock()
         client.generate.side_effect = [
+            "Title for book one",
             "Content for book one",
             "Context for book one",
             "Synopsis for book one",
+            "Title for book two",
             "Content for book two",
             "Context for book two",
             "Synopsis for book two",
@@ -44,6 +46,13 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             self.assertTrue(beta_output.is_dir())
             self.assertTrue((alpha_output / written_files[0].name).exists())
             self.assertTrue((beta_output / written_files[1].name).exists())
+
+            alpha_book_md = (alpha_output / "book.md").read_text(encoding="utf-8")
+            beta_book_md = (beta_output / "book.md").read_text(encoding="utf-8")
+            self.assertIn("# Title for book one", alpha_book_md)
+            self.assertIn("# Title for book two", beta_book_md)
+            self.assertIn("### By Marissa Bard", alpha_book_md)
+            self.assertIn("### By Marissa Bard", beta_book_md)
 
             self.assertFalse((outlines_dir / "alpha.md").exists())
             self.assertFalse((outlines_dir / "beta.md").exists())

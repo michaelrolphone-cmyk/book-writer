@@ -93,3 +93,23 @@ def synthesize_chapter_audio(
     if verbose:
         print(f"[tts] Wrote {output_path.name}.")
     return output_path
+
+
+def synthesize_text_audio(
+    text: str,
+    output_path: Path,
+    settings: TTSSettings,
+    verbose: bool = False,
+) -> Path | None:
+    if not settings.enabled:
+        return None
+
+    cleaned = sanitize_markdown_for_tts(text)
+    if not cleaned:
+        return None
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _synthesize_with_edge_tts(cleaned, output_path, settings)
+    if verbose:
+        print(f"[tts] Wrote {output_path.name}.")
+    return output_path

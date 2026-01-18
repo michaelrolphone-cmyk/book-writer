@@ -3,7 +3,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from book_writer.tts import TTSSettings, sanitize_markdown_for_tts, synthesize_chapter_audio
+from book_writer.tts import (
+    TTSSettings,
+    sanitize_markdown_for_tts,
+    synthesize_chapter_audio,
+    synthesize_text_audio,
+)
 
 
 class TestTTS(unittest.TestCase):
@@ -53,6 +58,28 @@ class TestTTS(unittest.TestCase):
         called_text = synthesize_mock.call_args[0][0]
         self.assertIn("Chapter One", called_text)
         self.assertIn("This is bold text.", called_text)
+
+    @patch("book_writer.tts._synthesize_with_edge_tts")
+    def test_synthesize_text_audio_writes_mp3(self, synthesize_mock: Mock) -> None:
+        settings = TTSSettings(enabled=True, audio_dirname="audio")
+        text = "# Synopsis\n\nThis is a **synopsis**."
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "audio" / "back-cover-synopsis.mp3"
+
+            audio_path = synthesize_text_audio(
+                text=text,
+                output_path=output_path,
+                settings=settings,
+            )
+
+            self.assertEqual(audio_path, output_path)
+            self.assertTrue(output_path.parent.exists())
+
+        synthesize_mock.assert_called_once()
+        called_text = synthesize_mock.call_args[0][0]
+        self.assertIn("Synopsis", called_text)
+        self.assertIn("This is a synopsis.", called_text)
 
 
 if __name__ == "__main__":

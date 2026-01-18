@@ -26,6 +26,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-rate`: Rate adjustment for TTS narration (e.g., `+5%`).
 - `--tts-pitch`: Pitch adjustment for TTS narration (e.g., `+2Hz`).
 - `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
+- `--byline`: Byline shown on the book title page (default `Marissa Bard`).
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
