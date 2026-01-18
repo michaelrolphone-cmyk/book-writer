@@ -10,6 +10,10 @@ CHAPTER_PATTERN = re.compile(r"^chapter\b", re.IGNORECASE)
 SECTION_PATTERN = re.compile(r"^section\b", re.IGNORECASE)
 EPILOGUE_PATTERN = re.compile(r"^epilogue\b", re.IGNORECASE)
 INTRODUCTION_PATTERN = re.compile(r"^introduction\b", re.IGNORECASE)
+PROLOGUE_PATTERN = re.compile(r"^prologue\b", re.IGNORECASE)
+PAGE_PATTERN = re.compile(r"^page\b", re.IGNORECASE)
+ACT_PATTERN = re.compile(r"^act\b", re.IGNORECASE)
+SCENE_PATTERN = re.compile(r"^scene\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -25,6 +29,12 @@ class OutlineItem:
                 return "epilogue"
             if INTRODUCTION_PATTERN.match(self.title):
                 return "introduction"
+            if PROLOGUE_PATTERN.match(self.title):
+                return "prologue"
+            if ACT_PATTERN.match(self.title):
+                return "act"
+            if PAGE_PATTERN.match(self.title):
+                return "page"
             return "chapter"
         return "section"
 
@@ -74,6 +84,10 @@ def _is_book_title_candidate(hashes: int, title: str, headings: list[tuple[int, 
         or SECTION_PATTERN.match(title)
         or EPILOGUE_PATTERN.match(title)
         or INTRODUCTION_PATTERN.match(title)
+        or PROLOGUE_PATTERN.match(title)
+        or ACT_PATTERN.match(title)
+        or PAGE_PATTERN.match(title)
+        or SCENE_PATTERN.match(title)
     ):
         return False
     return not any(level == 1 for level, _ in headings[1:])
@@ -88,6 +102,7 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
     """
     items: List[OutlineItem] = []
     current_chapter: Optional[str] = None
+    current_level1_depth: Optional[int] = None
     headings = _outline_headings(path)
     if not headings:
         return None, items
@@ -99,31 +114,17 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
         title = first_title
         start_index = 1
 
+    title_hashes = first_hashes if title else None
     for hashes, heading_title in headings[start_index:]:
-        if (
-            CHAPTER_PATTERN.match(heading_title)
-            or EPILOGUE_PATTERN.match(heading_title)
-            or INTRODUCTION_PATTERN.match(heading_title)
-        ):
-            current_chapter = heading_title
-            items.append(OutlineItem(title=heading_title, level=1))
-            continue
+        adjusted_hashes = hashes
+        if title_hashes and hashes > title_hashes:
+            adjusted_hashes = hashes - title_hashes
 
-        if SECTION_PATTERN.match(heading_title):
-            items.append(
-                OutlineItem(
-                    title=heading_title,
-                    level=2,
-                    parent_title=current_chapter,
-                )
-            )
-            continue
-
-        adjusted_hashes = hashes - 1 if title and hashes > 1 else hashes
-        if adjusted_hashes == 1:
+        if current_level1_depth is None or adjusted_hashes <= current_level1_depth:
             current_chapter = heading_title
+            current_level1_depth = adjusted_hashes
             items.append(OutlineItem(title=heading_title, level=1))
-        elif adjusted_hashes == 2:
+        else:
             items.append(
                 OutlineItem(
                     title=heading_title,
