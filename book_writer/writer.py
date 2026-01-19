@@ -264,11 +264,22 @@ def _extract_implementation_sections(content: str) -> tuple[str, list[str]]:
     return cleaned, extracted
 
 
+def _normalize_heading_text(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("#"):
+        stripped = stripped.lstrip("#").strip()
+    stripped = _strip_markdown(stripped)
+    stripped = " ".join(stripped.split())
+    return stripped.casefold()
+
+
 def _strip_duplicate_heading(heading: str, content: str) -> str:
     lines = content.splitlines()
     while lines and not lines[0].strip():
         lines.pop(0)
-    if lines and lines[0].strip() == heading.strip():
+    if not lines:
+        return content
+    if _normalize_heading_text(lines[0]) == _normalize_heading_text(heading):
         return "\n".join(lines[1:]).lstrip()
     return content
 

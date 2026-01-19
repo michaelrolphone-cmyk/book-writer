@@ -19,6 +19,8 @@ def _build_ffmpeg_command(
 ) -> list[str]:
     return [
         "ffmpeg",
+        "-nostdin",
+        "-y",
         "-stream_loop",
         "-1",
         "-i",
