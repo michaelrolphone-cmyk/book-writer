@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,8 @@ UNDERSCORE_PATTERN = re.compile(r"_([^_]+)_")
 NUMBERED_LIST_PATTERN = re.compile(r"^\d+\.\s+")
 BULLET_LIST_PATTERN = re.compile(r"^[-*+]\s+")
 HEADING_PATTERN = re.compile(r"^#+\s*")
+SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
+MAX_TTS_CHARS = 3000
 
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
@@ -58,20 +62,99 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
     return "\n".join(collapsed).strip()
 
 
+def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    if len(cleaned) <= max_chars:
+        return [cleaned]
+
+    chunks: list[str] = []
+    buffer: list[str] = []
+    buffer_len = 0
+    for paragraph in cleaned.splitlines():
+        if not paragraph.strip():
+            if buffer:
+                chunks.append(" ".join(buffer).strip())
+                buffer = []
+                buffer_len = 0
+            continue
+        sentences = SENTENCE_SPLIT_PATTERN.split(paragraph.strip())
+        for sentence in sentences:
+            if not sentence:
+                continue
+            sentence = sentence.strip()
+            sentence_len = len(sentence)
+            if sentence_len > max_chars:
+                if buffer:
+                    chunks.append(" ".join(buffer).strip())
+                    buffer = []
+                    buffer_len = 0
+                for idx in range(0, sentence_len, max_chars):
+                    chunks.append(sentence[idx : idx + max_chars].strip())
+                continue
+            if buffer_len + sentence_len + 1 > max_chars and buffer:
+                chunks.append(" ".join(buffer).strip())
+                buffer = []
+                buffer_len = 0
+            buffer.append(sentence)
+            buffer_len += sentence_len + 1
+        if buffer:
+            chunks.append(" ".join(buffer).strip())
+            buffer = []
+            buffer_len = 0
+
+    if buffer:
+        chunks.append(" ".join(buffer).strip())
+    return [chunk for chunk in chunks if chunk]
+
+
+def _concat_audio_files(parts: Iterable[Path], output_path: Path) -> None:
+    with output_path.open("wb") as output:
+        for part in parts:
+            output.write(part.read_bytes())
+
+
 def _synthesize_with_edge_tts(
     text: str,
     output_path: Path,
     settings: TTSSettings,
 ) -> None:
     import edge_tts
+    chunks = split_text_for_tts(text, MAX_TTS_CHARS)
+    if not chunks:
+        return
+    if len(chunks) == 1:
+        async def _run() -> None:
+            communicate = edge_tts.Communicate(
+                chunks[0],
+                voice=settings.voice,
+                rate=settings.rate,
+                pitch=settings.pitch,
+            )
+            await communicate.save(str(output_path))
 
-    async def _run() -> None:
-        communicate = edge_tts.Communicate(
-            text, voice=settings.voice, rate=settings.rate, pitch=settings.pitch
-        )
-        await communicate.save(str(output_path))
+        asyncio.run(_run())
+        return
 
-    asyncio.run(_run())
+    with tempfile.TemporaryDirectory() as tmpdir:
+        part_paths = []
+        for index, chunk in enumerate(chunks, start=1):
+            part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
+
+            async def _run_part(text_part: str, path: Path) -> None:
+                communicate = edge_tts.Communicate(
+                    text_part,
+                    voice=settings.voice,
+                    rate=settings.rate,
+                    pitch=settings.pitch,
+                )
+                await communicate.save(str(path))
+
+            asyncio.run(_run_part(chunk, part_path))
+            part_paths.append(part_path)
+
+        _concat_audio_files(part_paths, output_path)
 
 
 def synthesize_chapter_audio(

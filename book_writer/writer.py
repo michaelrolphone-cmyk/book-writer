@@ -363,6 +363,14 @@ def build_book_markdown(
     )
 
 
+def build_audiobook_text(title: str, byline: str, chapters: List[str]) -> str:
+    header_parts = [title.strip(), f"By {byline}".strip()]
+    header = "\n".join(part for part in header_parts if part).strip()
+    sections = [header] if header else []
+    sections.extend(chapter.strip() for chapter in chapters if chapter.strip())
+    return "\n\n".join(sections).strip()
+
+
 def _sanitize_markdown_for_latex(text: str) -> str:
     return "".join(
         ch
@@ -529,6 +537,19 @@ def expand_book(
     )
     if verbose:
         print("[expand] Generated book.pdf from expanded chapters.")
+    audiobook_text = build_audiobook_text(
+        book_metadata.title,
+        byline,
+        [path.read_text(encoding="utf-8") for path in chapter_files],
+    )
+    synthesize_text_audio(
+        text=audiobook_text,
+        output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+        settings=tts_settings,
+        verbose=verbose,
+    )
+    if verbose:
+        print("[expand] Wrote book.mp3 for full audiobook.")
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
@@ -619,6 +640,19 @@ def write_book(
     )
     if verbose:
         print("[write] Generated book.pdf from chapters.")
+    audiobook_text = build_audiobook_text(
+        book_title,
+        byline,
+        [path.read_text(encoding="utf-8") for path in written_files],
+    )
+    synthesize_text_audio(
+        text=audiobook_text,
+        output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+        settings=tts_settings,
+        verbose=verbose,
+    )
+    if verbose:
+        print("[write] Wrote book.mp3 for full audiobook.")
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
