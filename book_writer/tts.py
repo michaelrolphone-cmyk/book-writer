@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Iterable
 
 
+class TTSSynthesisError(RuntimeError):
+    """Raised when TTS synthesis fails but should not crash the workflow."""
+
+
 @dataclass(frozen=True)
 class TTSSettings:
     enabled: bool = False
@@ -28,6 +32,7 @@ BULLET_LIST_PATTERN = re.compile(r"^[-*+]\s+")
 HEADING_PATTERN = re.compile(r"^#+\s*")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 MAX_TTS_CHARS = 3000
+MAX_TTS_RETRIES = 2
 
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
@@ -121,6 +126,21 @@ def _synthesize_with_edge_tts(
     settings: TTSSettings,
 ) -> None:
     import edge_tts
+
+    async def _save_with_retries(communicate: edge_tts.Communicate, path: Path) -> None:
+        attempt = 0
+        while True:
+            try:
+                await communicate.save(str(path))
+                return
+            except edge_tts.exceptions.NoAudioReceived as error:
+                if attempt >= MAX_TTS_RETRIES:
+                    raise TTSSynthesisError(
+                        "No audio was received from Edge TTS after retries. "
+                        "Verify the voice, rate, pitch, and network connectivity."
+                    ) from error
+                attempt += 1
+
     chunks = split_text_for_tts(text, MAX_TTS_CHARS)
     if not chunks:
         return
@@ -132,7 +152,10 @@ def _synthesize_with_edge_tts(
                 rate=settings.rate,
                 pitch=settings.pitch,
             )
-            await communicate.save(str(output_path))
+            try:
+                await _save_with_retries(communicate, output_path)
+            except Exception as error:
+                raise error
 
         asyncio.run(_run())
         return
@@ -149,7 +172,10 @@ def _synthesize_with_edge_tts(
                     rate=settings.rate,
                     pitch=settings.pitch,
                 )
-                await communicate.save(str(path))
+                try:
+                    await _save_with_retries(communicate, path)
+                except Exception as error:
+                    raise error
 
             asyncio.run(_run_part(chunk, part_path))
             part_paths.append(part_path)
@@ -172,7 +198,14 @@ def synthesize_chapter_audio(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{chapter_path.stem}.mp3"
-    _synthesize_with_edge_tts(text, output_path, settings)
+    try:
+        _synthesize_with_edge_tts(text, output_path, settings)
+    except TTSSynthesisError as error:
+        if output_path.exists():
+            output_path.unlink()
+        if verbose:
+            print(f"[tts] Skipped {output_path.name}: {error}")
+        return None
     if verbose:
         print(f"[tts] Wrote {output_path.name}.")
     return output_path
@@ -192,7 +225,14 @@ def synthesize_text_audio(
         return None
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _synthesize_with_edge_tts(cleaned, output_path, settings)
+    try:
+        _synthesize_with_edge_tts(cleaned, output_path, settings)
+    except TTSSynthesisError as error:
+        if output_path.exists():
+            output_path.unlink()
+        if verbose:
+            print(f"[tts] Skipped {output_path.name}: {error}")
+        return None
     if verbose:
         print(f"[tts] Wrote {output_path.name}.")
     return output_path
