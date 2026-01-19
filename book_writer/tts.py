@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -64,7 +65,12 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
             collapsed.append(line)
             previous_blank = False
 
-    return "\n".join(collapsed).strip()
+    cleaned_text = "\n".join(collapsed).strip()
+    return "".join(
+        ch
+        for ch in cleaned_text
+        if unicodedata.category(ch) not in {"So", "Cs"} and ord(ch) <= 0xFFFF
+    )
 
 
 def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
