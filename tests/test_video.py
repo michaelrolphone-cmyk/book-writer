@@ -118,7 +118,7 @@ class TestVideo(unittest.TestCase):
         self.assertIn("-vf", command)
         self.assertIn("subtitles=", command_text)
         self.assertIn("captions.srt", command_text)
-        self.assertIn("force_style='", command_text)
+        self.assertIn("force_style=Fontsize=48\\,Alignment=2\\,Outline=2\\,Shadow=1", command_text)
 
     def test_build_ffmpeg_command_escapes_subtitle_path(self) -> None:
         command = _build_ffmpeg_command(
@@ -132,7 +132,7 @@ class TestVideo(unittest.TestCase):
         self.assertEqual(
             command[filter_index],
             "subtitles=chapter\\:1.srt:force_style="
-            "'Fontsize=48,Alignment=2,Outline=2,Shadow=1'",
+            "Fontsize=48\\,Alignment=2\\,Outline=2\\,Shadow=1",
         )
 
     def test_write_word_captions_writes_srt_file(self) -> None:
