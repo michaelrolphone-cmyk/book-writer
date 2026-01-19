@@ -11,6 +11,7 @@ from book_writer.tts import TTSSettings
 from book_writer.writer import (
     ChapterContext,
     LMStudioClient,
+    build_audiobook_text,
     build_book_markdown,
     build_book_title_prompt,
     build_chapter_context_prompt,
@@ -144,6 +145,11 @@ class TestWriter(unittest.TestCase):
             files = write_book(
                 items, output_dir, client, tts_settings=tts_settings
             )
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [files[0].read_text(encoding="utf-8")],
+            )
 
         synthesize_chapter_mock.assert_called_once_with(
             chapter_path=files[0],
@@ -151,14 +157,27 @@ class TestWriter(unittest.TestCase):
             settings=tts_settings,
             verbose=False,
         )
-        synthesize_text_mock.assert_called_once_with(
-            text="Synopsis text",
-            output_path=output_dir
-            / tts_settings.audio_dirname
-            / "back-cover-synopsis.mp3",
-            settings=tts_settings,
-            verbose=False,
+        synthesize_text_mock.assert_has_calls(
+            [
+                call(
+                    text=audiobook_text,
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "book.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+                call(
+                    text="Synopsis text",
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "back-cover-synopsis.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+            ]
         )
+        self.assertEqual(synthesize_text_mock.call_count, 2)
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
@@ -188,6 +207,11 @@ class TestWriter(unittest.TestCase):
             files = write_book(
                 items, output_dir, client, tts_settings=tts_settings
             )
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [path.read_text(encoding="utf-8") for path in files],
+            )
 
         synthesize_chapter_mock.assert_has_calls(
             [
@@ -206,14 +230,27 @@ class TestWriter(unittest.TestCase):
             ]
         )
         self.assertEqual(synthesize_chapter_mock.call_count, 2)
-        synthesize_text_mock.assert_called_once_with(
-            text="Synopsis text",
-            output_path=output_dir
-            / tts_settings.audio_dirname
-            / "back-cover-synopsis.mp3",
-            settings=tts_settings,
-            verbose=False,
+        synthesize_text_mock.assert_has_calls(
+            [
+                call(
+                    text=audiobook_text,
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "book.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+                call(
+                    text="Synopsis text",
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "back-cover-synopsis.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+            ]
         )
+        self.assertEqual(synthesize_text_mock.call_count, 2)
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
@@ -315,6 +352,18 @@ class TestWriter(unittest.TestCase):
         self.assertIn("### By Marissa Bard", markdown)
         self.assertIn("## Outline", markdown)
         self.assertIn("# Chapter One", markdown)
+
+    def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
+        audiobook_text = build_audiobook_text(
+            "Book Title",
+            "Marissa Bard",
+            ["# Chapter One\n\nText", "# Chapter Two\n\nMore text"],
+        )
+
+        self.assertIn("Book Title", audiobook_text)
+        self.assertIn("By Marissa Bard", audiobook_text)
+        self.assertIn("# Chapter One", audiobook_text)
+        self.assertIn("# Chapter Two", audiobook_text)
 
     def test_build_book_markdown_strips_emoji_for_latex(self) -> None:
         markdown = build_book_markdown(
@@ -510,10 +559,14 @@ class TestWriter(unittest.TestCase):
         )
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_generates_chapter_audio(
-        self, run_mock: Mock, synthesize_mock: Mock
+        self,
+        run_mock: Mock,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
     ) -> None:
         client = MagicMock()
         client.generate.return_value = "Expanded paragraph."
@@ -527,10 +580,21 @@ class TestWriter(unittest.TestCase):
             )
 
             expand_book(output_dir, client, tts_settings=tts_settings)
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [chapter_path.read_text(encoding="utf-8")],
+            )
 
-        synthesize_mock.assert_called_once_with(
+        synthesize_chapter_mock.assert_called_once_with(
             chapter_path=chapter_path,
             output_dir=chapter_path.parent / tts_settings.audio_dirname,
+            settings=tts_settings,
+            verbose=False,
+        )
+        synthesize_text_mock.assert_called_once_with(
+            text=audiobook_text,
+            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
             settings=tts_settings,
             verbose=False,
         )
