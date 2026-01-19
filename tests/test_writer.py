@@ -316,6 +316,19 @@ class TestWriter(unittest.TestCase):
         self.assertIn("## Outline", markdown)
         self.assertIn("# Chapter One", markdown)
 
+    def test_build_book_markdown_strips_emoji_for_latex(self) -> None:
+        markdown = build_book_markdown(
+            "Book 🌙 Title",
+            "- Chapter 🌙 One",
+            ["# Chapter One\n\nSecret 🌙 emoji"],
+            "Marissa 🌙 Bard",
+        )
+
+        self.assertNotIn("🌙", markdown)
+        self.assertIn("Book  Title", markdown)
+        self.assertIn("- Chapter  One", markdown)
+        self.assertIn("Secret  emoji", markdown)
+
     def test_build_book_title_prompt_mentions_outline_and_first_chapter(self) -> None:
         prompt = build_book_title_prompt("- Chapter One", "Chapter One")
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -348,15 +349,25 @@ def build_book_markdown(
     chapters: List[str],
     byline: str,
 ) -> str:
-    chapters_text = "\n\n".join(chapters)
+    chapters_text = "\n\n".join(
+        _sanitize_markdown_for_latex(chapter) for chapter in chapters
+    )
     return (
-        f"# {title}\n\n"
-        f"### By {byline}\n\n"
+        f"# {_sanitize_markdown_for_latex(title)}\n\n"
+        f"### By {_sanitize_markdown_for_latex(byline)}\n\n"
         "\\newpage\n\n"
         "## Outline\n"
-        f"{outline_text}\n\n"
+        f"{_sanitize_markdown_for_latex(outline_text)}\n\n"
         "\\newpage\n\n"
         f"{chapters_text}\n"
+    )
+
+
+def _sanitize_markdown_for_latex(text: str) -> str:
+    return "".join(
+        ch
+        for ch in text
+        if unicodedata.category(ch) not in {"So", "Cs"} and ord(ch) <= 0xFFFF
     )
 
 
