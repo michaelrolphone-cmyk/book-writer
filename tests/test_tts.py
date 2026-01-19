@@ -22,6 +22,7 @@ class TestTTS(unittest.TestCase):
             "- Bullet item\n"
             "1. Numbered item\n\n"
             "`inline code` and _italic_ text.\n\n"
+            "Emoji check 😃.\n\n"
             "```python\n"
             "print('code block')\n"
             "```\n"
@@ -34,6 +35,7 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Bullet item", cleaned)
         self.assertIn("Numbered item", cleaned)
         self.assertIn("inline code and italic text.", cleaned)
+        self.assertNotIn("😃", cleaned)
         self.assertNotIn("print('code block')", cleaned)
 
     def test_split_text_for_tts_chunks_long_text(self) -> None:
