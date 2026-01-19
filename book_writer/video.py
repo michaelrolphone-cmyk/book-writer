@@ -100,6 +100,30 @@ def _probe_audio_duration(audio_path: Path) -> float | None:
         return None
 
 
+def _ffmpeg_supports_filter(filter_name: str) -> bool:
+    command = [
+        "ffmpeg",
+        "-filters",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        message = (
+            "ffmpeg is required to generate chapter videos but was not found on your "
+            "PATH. Install ffmpeg (https://ffmpeg.org/download.html) or ensure it is "
+            "available in your PATH."
+        )
+        raise RuntimeError(message) from exc
+    except subprocess.CalledProcessError:
+        return False
+    return re.search(rf"\\b{re.escape(filter_name)}\\b", result.stdout) is not None
+
+
 def _format_srt_timestamp(seconds: float) -> str:
     milliseconds = int(round(seconds * 1000))
     hours = milliseconds // 3_600_000
@@ -168,8 +192,9 @@ def synthesize_chapter_video(
     if settings.overlay_text and text:
         cleaned_text = sanitize_markdown_for_tts(text)
         if cleaned_text:
+            subtitles_supported = _ffmpeg_supports_filter("subtitles")
             duration = _probe_audio_duration(audio_path)
-            if duration:
+            if duration and subtitles_supported:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     subtitle_path = Path(tmpdir) / "captions.srt"
                     if _write_word_captions(
@@ -194,6 +219,8 @@ def synthesize_chapter_video(
                         if verbose:
                             print(f"[video] Wrote {output_path.name}.")
                         return output_path
+            if verbose and not subtitles_supported:
+                print("[video] Skipping subtitle overlay; ffmpeg subtitles filter not available.")
             subtitle_path = None
 
     command = _build_ffmpeg_command(
