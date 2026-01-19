@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import TTSSettings, synthesize_chapter_audio, synthesize_text_audio
+from book_writer.video import VideoSettings, synthesize_chapter_video
 
 
 @dataclass(frozen=True)
@@ -476,10 +477,12 @@ def expand_book(
     passes: int = 1,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    video_settings: Optional[VideoSettings] = None,
     tone: Optional[str] = None,
 ) -> List[Path]:
     auto_tts = tts_settings is None
     tts_settings = tts_settings or TTSSettings()
+    video_settings = video_settings or VideoSettings()
     if passes < 1:
         raise ValueError("Expansion passes must be at least 1.")
     chapter_files = _chapter_files(output_dir)
@@ -516,12 +519,20 @@ def expand_book(
                     pitch=tts_settings.pitch,
                     audio_dirname=tts_settings.audio_dirname,
                 )
-            synthesize_chapter_audio(
+            audio_path = synthesize_chapter_audio(
                 chapter_path=chapter_file,
                 output_dir=audio_dir,
                 settings=effective_tts_settings,
                 verbose=verbose,
             )
+            audio_path = audio_path or audio_dir / f"{chapter_file.stem}.mp3"
+            if audio_path.exists():
+                synthesize_chapter_video(
+                    audio_path=audio_path,
+                    output_dir=chapter_file.parent / video_settings.video_dirname,
+                    settings=video_settings,
+                    verbose=verbose,
+                )
 
     book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
     outline_text = book_metadata.content
@@ -562,11 +573,13 @@ def write_book(
     client: LMStudioClient,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    video_settings: Optional[VideoSettings] = None,
     book_title: Optional[str] = None,
     byline: str = "Marissa Bard",
     tone: Optional[str] = None,
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
+    video_settings = video_settings or VideoSettings()
     output_dir.mkdir(parents=True, exist_ok=True)
     written_files: List[Path] = []
     index = 0
@@ -606,12 +619,22 @@ def write_book(
             else:
                 file_path.write_text(f"{heading}\n", encoding="utf-8")
             written_files.append(file_path)
-            synthesize_chapter_audio(
+            audio_path = synthesize_chapter_audio(
                 chapter_path=file_path,
                 output_dir=file_path.parent / tts_settings.audio_dirname,
                 settings=tts_settings,
                 verbose=verbose,
             )
+            audio_path = audio_path or file_path.parent / tts_settings.audio_dirname / (
+                f"{file_path.stem}.mp3"
+            )
+            if audio_path.exists():
+                synthesize_chapter_video(
+                    audio_path=audio_path,
+                    output_dir=file_path.parent / video_settings.video_dirname,
+                    settings=video_settings,
+                    verbose=verbose,
+                )
             if verbose:
                 print(f"[write] Wrote {file_path.name}.")
             if item.level == 1:
