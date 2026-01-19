@@ -24,6 +24,7 @@ class TestTTS(unittest.TestCase):
             "1. Numbered item\n\n"
             "`inline code` and _italic_ text.\n\n"
             "Emoji check 😃.\n\n"
+            "Bad control \u0007 with zero width \u200b spaces.\n\n"
             "```python\n"
             "print('code block')\n"
             "```\n"
@@ -37,6 +38,8 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Numbered item", cleaned)
         self.assertIn("inline code and italic text.", cleaned)
         self.assertNotIn("😃", cleaned)
+        self.assertNotIn("\u0007", cleaned)
+        self.assertNotIn("\u200b", cleaned)
         self.assertNotIn("print('code block')", cleaned)
 
     def test_split_text_for_tts_chunks_long_text(self) -> None:
@@ -234,6 +237,37 @@ class TestTTS(unittest.TestCase):
 
             self.assertTrue(output_path.exists())
             self.assertEqual(output_path.read_bytes(), b"ok")
+
+    def test_edge_tts_keeps_partial_audio_when_chunk_fails(self) -> None:
+        class FakeChunkError(Exception):
+            pass
+
+        class FakeCommunicate:
+            def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
+                self.text = text
+
+            async def save(self, path: str) -> None:
+                if "BAD" in self.text:
+                    raise FakeChunkError("bad chunk")
+                Path(path).write_bytes(b"part")
+
+        fake_edge_tts = Mock()
+        fake_edge_tts.Communicate = FakeCommunicate
+        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeChunkError)
+
+        long_text = ("A" * MAX_TTS_CHARS) + "BAD" + ("B" * 5)
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
+                _synthesize_with_edge_tts(
+                    text=long_text,
+                    output_path=output_path,
+                    settings=TTSSettings(enabled=True),
+                )
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(output_path.read_bytes(), b"part")
 
 if __name__ == "__main__":
     unittest.main()
