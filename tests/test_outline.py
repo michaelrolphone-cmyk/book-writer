@@ -179,6 +179,27 @@ class TestOutlineParsing(unittest.TestCase):
             ],
         )
 
+    def test_parse_outline_with_single_top_level_chapter(self) -> None:
+        content = """
+# Chapter One
+## Section A
+## Section B
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            items = parse_outline(outline_path)
+
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(title="Section B", level=2, parent_title="Chapter One"),
+            ],
+        )
+
     def test_parse_outline_includes_page_headings(self) -> None:
         content = """
 # Lila’s Secret Garden of Joy

@@ -88,6 +88,22 @@ def _explicit_title_from_heading(heading: str) -> Optional[str]:
     return title or None
 
 
+def _looks_like_outline_item(heading: str) -> bool:
+    return any(
+        pattern.match(heading)
+        for pattern in (
+            CHAPTER_PATTERN,
+            SECTION_PATTERN,
+            EPILOGUE_PATTERN,
+            INTRODUCTION_PATTERN,
+            PROLOGUE_PATTERN,
+            PAGE_PATTERN,
+            ACT_PATTERN,
+            SCENE_PATTERN,
+        )
+    )
+
+
 def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineItem]]:
     """Parse OUTLINE.md into an optional title plus outline items.
 
@@ -112,7 +128,11 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
     else:
         min_hash = min(level for level, _ in headings)
         min_level_headings = [level for level, _ in headings if level == min_hash]
-        if len(min_level_headings) == 1 and len(headings) > 1:
+        if (
+            len(min_level_headings) == 1
+            and len(headings) > 1
+            and not _looks_like_outline_item(first_title)
+        ):
             start_index = 1
             title_hashes = min_hash
 
