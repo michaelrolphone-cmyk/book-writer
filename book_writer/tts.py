@@ -38,6 +38,7 @@ MAX_TTS_RETRIES = 2
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
     cleaned = CODE_BLOCK_PATTERN.sub("", markdown)
+    cleaned = unicodedata.normalize("NFKC", cleaned)
     output_lines: list[str] = []
     for line in cleaned.splitlines():
         stripped = line.strip()
@@ -69,7 +70,9 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
     return "".join(
         ch
         for ch in cleaned_text
-        if unicodedata.category(ch) not in {"So", "Cs"} and ord(ch) <= 0xFFFF
+        if unicodedata.category(ch) not in {"Cc", "Cf", "Cn", "Co", "Cs", "So"}
+        and ch != "\uFFFD"
+        and ord(ch) <= 0xFFFF
     )
 
 
@@ -175,7 +178,8 @@ def _synthesize_with_edge_tts(
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            part_paths = []
+            part_paths: list[Path] = []
+            chunk_error: TTSSynthesisError | None = None
             for index, chunk in enumerate(chunks, start=1):
                 part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
 
@@ -185,10 +189,22 @@ def _synthesize_with_edge_tts(
                     except Exception as error:
                         raise error
 
-                asyncio.run(_run_part(chunk, part_path))
+                try:
+                    asyncio.run(_run_part(chunk, part_path))
+                except TTSSynthesisError as error:
+                    chunk_error = error
+                    break
+                except Exception as error:
+                    chunk_error = TTSSynthesisError(str(error))
+                    break
                 part_paths.append(part_path)
 
-            _concat_audio_files(part_paths, output_path)
+            if part_paths:
+                _concat_audio_files(part_paths, output_path)
+                return
+            if chunk_error is None:
+                return
+            raise chunk_error
     except TTSSynthesisError as error:
         async def _fallback() -> None:
             try:
