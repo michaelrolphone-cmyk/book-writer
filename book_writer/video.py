@@ -86,8 +86,18 @@ def _escape_filter_path(path: Path) -> str:
 
 
 def _escape_force_style(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-    return f"'{escaped}'"
+    replacements = {
+        "\\": "\\\\",
+        ":": "\\:",
+        "'": "\\'",
+        ",": "\\,",
+        "[": "\\[",
+        "]": "\\]",
+        " ": "\\ ",
+    }
+    for original, replacement in replacements.items():
+        value = value.replace(original, replacement)
+    return value
 
 
 def _probe_audio_duration(audio_path: Path) -> float | None:
