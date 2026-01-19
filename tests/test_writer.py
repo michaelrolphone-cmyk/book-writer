@@ -294,7 +294,7 @@ class TestWriter(unittest.TestCase):
 
             synthesize_chapter_mock.side_effect = _create_audio
 
-            write_book(
+            written_files = write_book(
                 items,
                 output_dir,
                 client,
@@ -303,6 +303,12 @@ class TestWriter(unittest.TestCase):
             )
 
         synthesize_video_mock.assert_called_once()
+        video_kwargs = synthesize_video_mock.call_args.kwargs
+        self.assertIn("# Chapter One", video_kwargs["text"])
+        self.assertEqual(video_kwargs["audio_path"].name, "001-chapter-one.mp3")
+        self.assertEqual(
+            video_kwargs["output_dir"], written_files[0].parent / "video"
+        )
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")

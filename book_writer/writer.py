@@ -543,6 +543,7 @@ def expand_book(
                     output_dir=chapter_file.parent / video_settings.video_dirname,
                     settings=video_settings,
                     verbose=verbose,
+                    text=chapter_file.read_text(encoding="utf-8"),
                 )
 
     book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
@@ -645,6 +646,7 @@ def write_book(
                     output_dir=file_path.parent / video_settings.video_dirname,
                     settings=video_settings,
                     verbose=verbose,
+                    text=file_path.read_text(encoding="utf-8"),
                 )
             if verbose:
                 print(f"[write] Wrote {file_path.name}.")
