@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from book_writer.tts import (
+    MAX_TTS_CHARS,
     TTSSynthesisError,
     TTSSettings,
     _synthesize_with_edge_tts,
@@ -202,6 +203,37 @@ class TestTTS(unittest.TestCase):
                     )
 
             self.assertFalse(output_path.exists())
+
+    def test_edge_tts_falls_back_to_single_request_on_chunk_failure(self) -> None:
+        class FakeNoAudioReceived(Exception):
+            pass
+
+        class FakeCommunicate:
+            def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
+                self.text = text
+
+            async def save(self, path: str) -> None:
+                if len(self.text) <= MAX_TTS_CHARS:
+                    raise FakeNoAudioReceived("no audio")
+                Path(path).write_bytes(b"ok")
+
+        fake_edge_tts = Mock()
+        fake_edge_tts.Communicate = FakeCommunicate
+        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
+
+        long_text = "A" * (MAX_TTS_CHARS + 1)
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
+                _synthesize_with_edge_tts(
+                    text=long_text,
+                    output_path=output_path,
+                    settings=TTSSettings(enabled=True),
+                )
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(output_path.read_bytes(), b"ok")
 
 if __name__ == "__main__":
     unittest.main()
