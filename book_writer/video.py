@@ -33,12 +33,12 @@ def _build_ffmpeg_command(
         str(audio_path),
     ]
     if subtitle_path is not None:
-        escaped_subtitle_path = _escape_filter_path(subtitle_path)
+        quoted_subtitle_path = _quote_filter_value(str(subtitle_path))
         subtitle_filter = (
             "subtitles="
-            f"{escaped_subtitle_path}"
+            f"filename={quoted_subtitle_path}"
             ":force_style="
-            f"{_escape_force_style('Fontsize=48,Alignment=2,Outline=2,Shadow=1')}"
+            f"{_quote_filter_value('Fontsize=48,Alignment=2,Outline=2,Shadow=1')}"
         )
         command.extend(
             [
@@ -69,35 +69,9 @@ def _build_ffmpeg_command(
     return command
 
 
-def _escape_filter_path(path: Path) -> str:
-    value = str(path)
-    replacements = {
-        "\\": "\\\\",
-        ":": "\\:",
-        "'": "\\'",
-        ",": "\\,",
-        "[": "\\[",
-        "]": "\\]",
-        " ": "\\ ",
-    }
-    for original, replacement in replacements.items():
-        value = value.replace(original, replacement)
-    return value
-
-
-def _escape_force_style(value: str) -> str:
-    replacements = {
-        "\\": "\\\\",
-        ":": "\\:",
-        "'": "\\'",
-        ",": "\\,",
-        "[": "\\[",
-        "]": "\\]",
-        " ": "\\ ",
-    }
-    for original, replacement in replacements.items():
-        value = value.replace(original, replacement)
-    return value
+def _quote_filter_value(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+    return f"'{escaped}'"
 
 
 def _probe_audio_duration(audio_path: Path) -> float | None:
