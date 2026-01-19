@@ -38,7 +38,7 @@ def _build_ffmpeg_command(
             "subtitles="
             f"{escaped_subtitle_path}"
             ":force_style="
-            "Fontsize=48,Alignment=2,Outline=2,Shadow=1"
+            f"{_escape_filter_value('Fontsize=48,Alignment=2,Outline=2,Shadow=1')}"
         )
         command.extend(
             [
@@ -83,6 +83,11 @@ def _escape_filter_path(path: Path) -> str:
     for original, replacement in replacements.items():
         value = value.replace(original, replacement)
     return value
+
+
+def _escape_filter_value(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace(",", "\\,")
+    return escaped
 
 
 def _probe_audio_duration(audio_path: Path) -> float | None:
