@@ -6,6 +6,7 @@ from pathlib import Path
 
 from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import TTSSettings
+from book_writer.video import VideoSettings
 from book_writer.writer import (
     LMStudioClient,
     expand_book,
@@ -27,10 +28,12 @@ def write_books_from_outlines(
     client: LMStudioClient,
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
+    video_settings: Optional[VideoSettings] = None,
     byline: str = "Marissa Bard",
     tone: str = "instructive self help guide",
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
+    video_settings = video_settings or VideoSettings()
     written_files: list[Path] = []
     outline_files = _outline_files(outlines_dir)
     if not outline_files:
@@ -59,6 +62,7 @@ def write_books_from_outlines(
                 client=client,
                 verbose=verbose,
                 tts_settings=tts_settings,
+                video_settings=video_settings,
                 book_title=book_title,
                 byline=byline,
                 tone=tone,
@@ -166,6 +170,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory name for storing chapter audio files.",
     )
     parser.add_argument(
+        "--video",
+        action="store_true",
+        help="Enable MP4 chapter videos using a background video and chapter audio.",
+    )
+    parser.add_argument(
+        "--background-video",
+        type=Path,
+        default=None,
+        help="Path to a local MP4 used as the looping background video.",
+    )
+    parser.add_argument(
+        "--video-dir",
+        default="video",
+        help="Directory name for storing chapter video files.",
+    )
+    parser.add_argument(
         "--byline",
         default="Marissa Bard",
         help="Byline shown on the book title page.",
@@ -191,6 +211,11 @@ def main() -> int:
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
     )
+    video_settings = VideoSettings(
+        enabled=args.video,
+        background_video=args.background_video,
+        video_dirname=args.video_dir,
+    )
     if args.expand_book:
         expand_book(
             output_dir=args.expand_book,
@@ -198,6 +223,7 @@ def main() -> int:
             passes=args.expand_passes,
             verbose=True,
             tts_settings=tts_settings,
+            video_settings=video_settings,
             tone=args.tone,
         )
         return 0
@@ -211,6 +237,7 @@ def main() -> int:
                 client=client,
                 verbose=True,
                 tts_settings=tts_settings,
+                video_settings=video_settings,
                 byline=args.byline,
                 tone=args.tone,
             )
@@ -228,6 +255,7 @@ def main() -> int:
         client=client,
         verbose=True,
         tts_settings=tts_settings,
+        video_settings=video_settings,
         book_title=book_title,
         byline=args.byline,
         tone=args.tone,

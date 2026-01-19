@@ -7,6 +7,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - Python 3.12+
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
 - [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
+- [`ffmpeg`](https://ffmpeg.org/) for generating chapter MP4 videos when `--video` is enabled.
 
 ## Commands
 
@@ -26,6 +27,9 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-rate`: Rate adjustment for TTS narration (e.g., `+5%`).
 - `--tts-pitch`: Pitch adjustment for TTS narration (e.g., `+2Hz`).
 - `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
+- `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
+- `--background-video`: Path to a local MP4 file used as the looping video background.
+- `--video-dir`: Directory name for storing chapter video files (default `video`).
 - `--byline`: Byline shown on the book title page (default `Marissa Bard`).
 
 **Outputs** (written under `output/`)
@@ -34,6 +38,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
+- `video/*.mp4`: Chapter video files (when `--video` is enabled).
 
 ### Generate multiple books from an outlines directory
 
@@ -67,6 +72,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 - Updated chapter markdown files written in-place.
 - Updated `book.md` and regenerated `book.pdf`.
 - Regenerated `audio/*.mp3` files when `--tts` is enabled.
+- Regenerated `video/*.mp4` files when `--video` is enabled.
 
 ## Outline format
 

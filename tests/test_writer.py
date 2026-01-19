@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSettings
+from book_writer.video import VideoSettings
 from book_writer.writer import (
     ChapterContext,
     LMStudioClient,
@@ -123,12 +124,14 @@ class TestWriter(unittest.TestCase):
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_generates_chapter_audio(
         self,
         run_mock: Mock,
         synthesize_chapter_mock: Mock,
+        synthesize_video_mock: Mock,
         synthesize_text_mock: Mock,
     ) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
@@ -139,6 +142,7 @@ class TestWriter(unittest.TestCase):
             "Synopsis text",
         ]
         tts_settings = TTSSettings(enabled=True)
+        synthesize_chapter_mock.return_value = None
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -178,15 +182,18 @@ class TestWriter(unittest.TestCase):
             ]
         )
         self.assertEqual(synthesize_text_mock.call_count, 2)
+        synthesize_video_mock.assert_not_called()
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_generates_audio_for_each_chapter(
         self,
         run_mock: Mock,
         synthesize_chapter_mock: Mock,
+        synthesize_video_mock: Mock,
         synthesize_text_mock: Mock,
     ) -> None:
         items = [
@@ -201,6 +208,7 @@ class TestWriter(unittest.TestCase):
             "Synopsis text",
         ]
         tts_settings = TTSSettings(enabled=True)
+        synthesize_chapter_mock.return_value = None
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -251,6 +259,50 @@ class TestWriter(unittest.TestCase):
             ]
         )
         self.assertEqual(synthesize_text_mock.call_count, 2)
+        synthesize_video_mock.assert_not_called()
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_video")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_generates_chapter_video_when_audio_exists(
+        self,
+        run_mock: Mock,
+        synthesize_chapter_mock: Mock,
+        synthesize_video_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+        video_settings = VideoSettings(enabled=True, background_video=Path("bg.mp4"))
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+
+            def _create_audio(*_args: object, **kwargs: object) -> Path:
+                audio_dir = kwargs["output_dir"]
+                audio_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = audio_dir / "001-chapter-one.mp3"
+                audio_path.write_bytes(b"audio")
+                return audio_path
+
+            synthesize_chapter_mock.side_effect = _create_audio
+
+            write_book(
+                items,
+                output_dir,
+                client,
+                tts_settings=TTSSettings(enabled=True),
+                video_settings=video_settings,
+            )
+
+        synthesize_video_mock.assert_called_once()
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
