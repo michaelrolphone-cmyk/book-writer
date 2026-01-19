@@ -58,6 +58,8 @@ class TestVideo(unittest.TestCase):
 
         run_mock.assert_called_once()
         command = run_mock.call_args[0][0]
+        self.assertIn("-nostdin", command)
+        self.assertIn("-y", command)
         self.assertIn(str(background_video), command)
         self.assertIn(str(audio_path), command)
 

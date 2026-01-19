@@ -491,6 +491,27 @@ class TestWriter(unittest.TestCase):
         self.assertNotEqual(chapter_text[1].strip(), "# Chapter One")
         run_mock.assert_called_once()
 
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_strips_duplicate_bold_heading(self, run_mock: Mock) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "**Chapter One**\n\nBody text.",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            files = write_book(items, output_dir, client)
+
+            chapter_text = files[0].read_text(encoding="utf-8").strip().splitlines()
+
+        self.assertEqual(chapter_text[0], "# Chapter One")
+        self.assertEqual(chapter_text[1].strip(), "")
+        self.assertNotEqual(chapter_text[2].strip(), "Chapter One")
+        run_mock.assert_called_once()
+
     def test_build_expand_paragraph_prompt_includes_context(self) -> None:
         prompt = build_expand_paragraph_prompt(
             current="Current paragraph.",
