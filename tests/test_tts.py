@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from book_writer.tts import (
+    MAX_TTS_CHARS,
     TTSSynthesisError,
     TTSSettings,
     _synthesize_with_edge_tts,
@@ -22,6 +23,7 @@ class TestTTS(unittest.TestCase):
             "- Bullet item\n"
             "1. Numbered item\n\n"
             "`inline code` and _italic_ text.\n\n"
+            "Emoji check 😃.\n\n"
             "```python\n"
             "print('code block')\n"
             "```\n"
@@ -34,6 +36,7 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Bullet item", cleaned)
         self.assertIn("Numbered item", cleaned)
         self.assertIn("inline code and italic text.", cleaned)
+        self.assertNotIn("😃", cleaned)
         self.assertNotIn("print('code block')", cleaned)
 
     def test_split_text_for_tts_chunks_long_text(self) -> None:
@@ -200,6 +203,37 @@ class TestTTS(unittest.TestCase):
                     )
 
             self.assertFalse(output_path.exists())
+
+    def test_edge_tts_falls_back_to_single_request_on_chunk_failure(self) -> None:
+        class FakeNoAudioReceived(Exception):
+            pass
+
+        class FakeCommunicate:
+            def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
+                self.text = text
+
+            async def save(self, path: str) -> None:
+                if len(self.text) <= MAX_TTS_CHARS:
+                    raise FakeNoAudioReceived("no audio")
+                Path(path).write_bytes(b"ok")
+
+        fake_edge_tts = Mock()
+        fake_edge_tts.Communicate = FakeCommunicate
+        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
+
+        long_text = "A" * (MAX_TTS_CHARS + 1)
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
+                _synthesize_with_edge_tts(
+                    text=long_text,
+                    output_path=output_path,
+                    settings=TTSSettings(enabled=True),
+                )
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(output_path.read_bytes(), b"ok")
 
 if __name__ == "__main__":
     unittest.main()

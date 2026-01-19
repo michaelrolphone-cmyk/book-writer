@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -64,7 +65,12 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
             collapsed.append(line)
             previous_blank = False
 
-    return "\n".join(collapsed).strip()
+    cleaned_text = "\n".join(collapsed).strip()
+    return "".join(
+        ch
+        for ch in cleaned_text
+        if unicodedata.category(ch) not in {"So", "Cs"} and ord(ch) <= 0xFFFF
+    )
 
 
 def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
@@ -143,50 +149,57 @@ def _synthesize_with_edge_tts(
                         "Verify the voice, rate, pitch, and network connectivity."
                     ) from error
 
+    async def _save_text(text_part: str, path: Path) -> None:
+        await _save_with_retries(
+            lambda: edge_tts.Communicate(
+                text_part,
+                voice=settings.voice,
+                rate=settings.rate,
+                pitch=settings.pitch,
+            ),
+            path,
+        )
+
     chunks = split_text_for_tts(text, MAX_TTS_CHARS)
     if not chunks:
         return
     if len(chunks) == 1:
         async def _run() -> None:
             try:
-                await _save_with_retries(
-                    lambda: edge_tts.Communicate(
-                        chunks[0],
-                        voice=settings.voice,
-                        rate=settings.rate,
-                        pitch=settings.pitch,
-                    ),
-                    output_path,
-                )
+                await _save_text(chunks[0], output_path)
             except Exception as error:
                 raise error
 
         asyncio.run(_run())
         return
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        part_paths = []
-        for index, chunk in enumerate(chunks, start=1):
-            part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            part_paths = []
+            for index, chunk in enumerate(chunks, start=1):
+                part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
 
-            async def _run_part(text_part: str, path: Path) -> None:
-                try:
-                    await _save_with_retries(
-                        lambda: edge_tts.Communicate(
-                            text_part,
-                            voice=settings.voice,
-                            rate=settings.rate,
-                            pitch=settings.pitch,
-                        ),
-                        path,
-                    )
-                except Exception as error:
-                    raise error
+                async def _run_part(text_part: str, path: Path) -> None:
+                    try:
+                        await _save_text(text_part, path)
+                    except Exception as error:
+                        raise error
 
-            asyncio.run(_run_part(chunk, part_path))
-            part_paths.append(part_path)
+                asyncio.run(_run_part(chunk, part_path))
+                part_paths.append(part_path)
 
-        _concat_audio_files(part_paths, output_path)
+            _concat_audio_files(part_paths, output_path)
+    except TTSSynthesisError as error:
+        async def _fallback() -> None:
+            try:
+                await _save_text(text, output_path)
+            except Exception as fallback_error:
+                raise fallback_error
+
+        try:
+            asyncio.run(_fallback())
+        except TTSSynthesisError:
+            raise error
 
 
 def synthesize_chapter_audio(
