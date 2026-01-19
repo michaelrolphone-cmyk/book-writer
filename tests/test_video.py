@@ -97,20 +97,21 @@ class TestVideo(unittest.TestCase):
         self, duration_mock: Mock, run_mock: Mock
     ) -> None:
         duration_mock.return_value = 3.0
-        with TemporaryDirectory() as tmpdir:
-            background_video = Path(tmpdir) / "background.mp4"
-            background_video.write_bytes(b"video")
-            audio_path = Path(tmpdir) / "chapter.mp3"
-            audio_path.write_bytes(b"audio")
-            output_dir = Path(tmpdir) / "video"
-            settings = VideoSettings(enabled=True, background_video=background_video)
+        with patch("book_writer.video._ffmpeg_supports_filter", return_value=True):
+            with TemporaryDirectory() as tmpdir:
+                background_video = Path(tmpdir) / "background.mp4"
+                background_video.write_bytes(b"video")
+                audio_path = Path(tmpdir) / "chapter.mp3"
+                audio_path.write_bytes(b"audio")
+                output_dir = Path(tmpdir) / "video"
+                settings = VideoSettings(enabled=True, background_video=background_video)
 
-            synthesize_chapter_video(
-                audio_path=audio_path,
-                output_dir=output_dir,
-                settings=settings,
-                text="Hello world",
-            )
+                synthesize_chapter_video(
+                    audio_path=audio_path,
+                    output_dir=output_dir,
+                    settings=settings,
+                    text="Hello world",
+                )
 
         run_mock.assert_called_once()
         command = run_mock.call_args[0][0]
@@ -122,6 +123,32 @@ class TestVideo(unittest.TestCase):
             "force_style='Fontsize=48,Alignment=2,Outline=2,Shadow=1'",
             command_text,
         )
+
+    @patch("book_writer.video.subprocess.run")
+    @patch("book_writer.video._probe_audio_duration")
+    def test_synthesize_chapter_video_skips_captions_when_filter_missing(
+        self, duration_mock: Mock, run_mock: Mock
+    ) -> None:
+        duration_mock.return_value = 3.0
+        with patch("book_writer.video._ffmpeg_supports_filter", return_value=False):
+            with TemporaryDirectory() as tmpdir:
+                background_video = Path(tmpdir) / "background.mp4"
+                background_video.write_bytes(b"video")
+                audio_path = Path(tmpdir) / "chapter.mp3"
+                audio_path.write_bytes(b"audio")
+                output_dir = Path(tmpdir) / "video"
+                settings = VideoSettings(enabled=True, background_video=background_video)
+
+                synthesize_chapter_video(
+                    audio_path=audio_path,
+                    output_dir=output_dir,
+                    settings=settings,
+                    text="Hello world",
+                )
+
+        run_mock.assert_called_once()
+        command = run_mock.call_args[0][0]
+        self.assertNotIn("-vf", command)
 
     def test_build_ffmpeg_command_quotes_subtitle_path(self) -> None:
         command = _build_ffmpeg_command(
