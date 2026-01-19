@@ -145,12 +145,15 @@ class TestTTS(unittest.TestCase):
             pass
 
         class FakeCommunicate:
+            created = 0
+            save_calls = 0
+
             def __init__(self, *_args: object, **_kwargs: object) -> None:
-                self.calls = 0
+                FakeCommunicate.created += 1
 
             async def save(self, path: str) -> None:
-                self.calls += 1
-                if self.calls == 1:
+                FakeCommunicate.save_calls += 1
+                if FakeCommunicate.save_calls == 1:
                     raise FakeNoAudioReceived("no audio")
                 Path(path).write_bytes(b"ok")
 
@@ -169,6 +172,7 @@ class TestTTS(unittest.TestCase):
 
             self.assertTrue(output_path.exists())
             self.assertEqual(output_path.read_bytes(), b"ok")
+            self.assertGreaterEqual(FakeCommunicate.created, 2)
 
     def test_edge_tts_raises_after_retries(self) -> None:
         class FakeNoAudioReceived(Exception):
@@ -176,10 +180,9 @@ class TestTTS(unittest.TestCase):
 
         class FakeCommunicate:
             def __init__(self, *_args: object, **_kwargs: object) -> None:
-                self.calls = 0
+                pass
 
             async def save(self, _path: str) -> None:
-                self.calls += 1
                 raise FakeNoAudioReceived("no audio")
 
         fake_edge_tts = Mock()

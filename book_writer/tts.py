@@ -5,7 +5,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 class TTSSynthesisError(RuntimeError):
@@ -127,9 +127,12 @@ def _synthesize_with_edge_tts(
 ) -> None:
     import edge_tts
 
-    async def _save_with_retries(communicate: edge_tts.Communicate, path: Path) -> None:
-        attempt = 0
-        while True:
+    async def _save_with_retries(
+        communicate_factory: Callable[[], edge_tts.Communicate],
+        path: Path,
+    ) -> None:
+        for attempt in range(MAX_TTS_RETRIES + 1):
+            communicate = communicate_factory()
             try:
                 await communicate.save(str(path))
                 return
@@ -139,21 +142,22 @@ def _synthesize_with_edge_tts(
                         "No audio was received from Edge TTS after retries. "
                         "Verify the voice, rate, pitch, and network connectivity."
                     ) from error
-                attempt += 1
 
     chunks = split_text_for_tts(text, MAX_TTS_CHARS)
     if not chunks:
         return
     if len(chunks) == 1:
         async def _run() -> None:
-            communicate = edge_tts.Communicate(
-                chunks[0],
-                voice=settings.voice,
-                rate=settings.rate,
-                pitch=settings.pitch,
-            )
             try:
-                await _save_with_retries(communicate, output_path)
+                await _save_with_retries(
+                    lambda: edge_tts.Communicate(
+                        chunks[0],
+                        voice=settings.voice,
+                        rate=settings.rate,
+                        pitch=settings.pitch,
+                    ),
+                    output_path,
+                )
             except Exception as error:
                 raise error
 
@@ -166,14 +170,16 @@ def _synthesize_with_edge_tts(
             part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
 
             async def _run_part(text_part: str, path: Path) -> None:
-                communicate = edge_tts.Communicate(
-                    text_part,
-                    voice=settings.voice,
-                    rate=settings.rate,
-                    pitch=settings.pitch,
-                )
                 try:
-                    await _save_with_retries(communicate, path)
+                    await _save_with_retries(
+                        lambda: edge_tts.Communicate(
+                            text_part,
+                            voice=settings.voice,
+                            rate=settings.rate,
+                            pitch=settings.pitch,
+                        ),
+                        path,
+                    )
                 except Exception as error:
                     raise error
 
