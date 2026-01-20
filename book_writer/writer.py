@@ -384,11 +384,81 @@ def build_audiobook_text(title: str, byline: str, chapters: List[str]) -> str:
 
 
 def _sanitize_markdown_for_latex(text: str) -> str:
-    return "".join(
+    cleaned = "".join(
         ch
         for ch in text
         if unicodedata.category(ch) not in {"So", "Cs"} and ord(ch) <= 0xFFFF
     )
+    return _escape_latex_commands_outside_math(cleaned)
+
+
+def _escape_latex_commands_outside_math(text: str) -> str:
+    output: list[str] = []
+    in_code_block = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            output.append(line)
+            continue
+        if in_code_block:
+            output.append(line)
+            continue
+        output.append(_escape_latex_line_outside_math(line))
+    return "".join(output)
+
+
+def _escape_latex_line_outside_math(line: str) -> str:
+    result: list[str] = []
+    index = 0
+    while index < len(line):
+        if line[index] == "`":
+            closing = line.find("`", index + 1)
+            if closing != -1:
+                result.append(line[index : closing + 1])
+                index = closing + 1
+                continue
+        if line.startswith("$$", index):
+            closing = line.find("$$", index + 2)
+            if closing != -1:
+                result.append(line[index : closing + 2])
+                index = closing + 2
+                continue
+            result.append("\\$\\$")
+            index += 2
+            continue
+        if line[index] == "$":
+            closing = line.find("$", index + 1)
+            if closing != -1:
+                result.append(line[index : closing + 1])
+                index = closing + 1
+                continue
+            result.append("\\$")
+            index += 1
+            continue
+        if line.startswith("\\(", index):
+            closing = line.find("\\)", index + 2)
+            if closing != -1:
+                result.append(line[index : closing + 2])
+                index = closing + 2
+                continue
+        if line.startswith("\\[", index):
+            closing = line.find("\\]", index + 2)
+            if closing != -1:
+                result.append(line[index : closing + 2])
+                index = closing + 2
+                continue
+        if (
+            line[index] == "\\"
+            and index + 1 < len(line)
+            and line[index + 1].isalpha()
+        ):
+            result.append("\\\\")
+            index += 1
+            continue
+        result.append(line[index])
+        index += 1
+    return "".join(result)
 
 
 def generate_book_pdf(

@@ -19,6 +19,7 @@ from book_writer.writer import (
     build_expand_paragraph_prompt,
     build_prompt,
     build_synopsis_prompt,
+    _sanitize_markdown_for_latex,
     expand_book,
     expand_chapter_content,
     generate_book_title,
@@ -68,6 +69,21 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn("Current item: Epilogue (epilogue).", prompt)
         self.assertIn("Previous chapter context:", prompt)
+
+    def test_sanitize_markdown_for_latex_escapes_commands_outside_math(self) -> None:
+        text = "We measure \\frac{d\\Psi}{dt} over time."
+        cleaned = _sanitize_markdown_for_latex(text)
+        self.assertIn("\\\\frac{d\\\\Psi}{dt}", cleaned)
+
+    def test_sanitize_markdown_for_latex_preserves_math_blocks(self) -> None:
+        text = "Energy $\\frac{d\\Psi}{dt}$ is steady."
+        cleaned = _sanitize_markdown_for_latex(text)
+        self.assertIn("$\\frac{d\\Psi}{dt}$", cleaned)
+
+    def test_sanitize_markdown_for_latex_escapes_unbalanced_dollar(self) -> None:
+        text = "The price is $5 for admission."
+        cleaned = _sanitize_markdown_for_latex(text)
+        self.assertIn("\\$5", cleaned)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_creates_numbered_files(self, run_mock: Mock) -> None:
