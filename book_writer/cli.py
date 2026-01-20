@@ -357,10 +357,13 @@ def _prompt_for_expand_only(
         questionary.Choice(f"{index:03d}. {path.name}", value=path)
         for index, path in enumerate(chapter_files, start=1)
     ]
+    default_values = default_selection or None
+    checkbox_kwargs = {"choices": choices}
+    if default_values:
+        checkbox_kwargs["default"] = default_values
     selected = questionary.checkbox(
         "Select chapters to expand (leave blank for all):",
-        choices=choices,
-        default=default_selection,
+        **checkbox_kwargs,
     ).ask()
     if not selected:
         return chapter_files
