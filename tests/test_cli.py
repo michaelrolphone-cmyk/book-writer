@@ -1,12 +1,58 @@
 import os
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from book_writer import cli
 from book_writer.cli import write_books_from_outlines
 from book_writer.writer import save_book_progress
+
+
+@dataclass
+class _FakeChoice:
+    title: str
+    value: Any
+    checked: bool = False
+
+
+class _FakePrompt:
+    def __init__(self, value: Any) -> None:
+        self._value = value
+
+    def ask(self) -> Any:
+        return self._value
+
+
+class _QuestionaryStub:
+    Choice = _FakeChoice
+
+    def __init__(self, responses: list[Any]) -> None:
+        self._responses = list(responses)
+
+    def _next(self) -> Any:
+        if not self._responses:
+            raise AssertionError("No more prompt responses configured.")
+        return self._responses.pop(0)
+
+    def _resolve(self, response: Any, **kwargs: Any) -> Any:
+        if callable(response):
+            return response(**kwargs)
+        return response
+
+    def confirm(self, *args: Any, **kwargs: Any) -> _FakePrompt:
+        return _FakePrompt(self._next())
+
+    def text(self, *args: Any, **kwargs: Any) -> _FakePrompt:
+        return _FakePrompt(self._next())
+
+    def select(self, *args: Any, **kwargs: Any) -> _FakePrompt:
+        return _FakePrompt(self._resolve(self._next(), **kwargs))
+
+    def checkbox(self, *args: Any, **kwargs: Any) -> _FakePrompt:
+        return _FakePrompt(self._resolve(self._next(), **kwargs))
 
 
 class TestWriteBooksFromOutlines(unittest.TestCase):
@@ -208,7 +254,8 @@ class TestCliResumeFlow(unittest.TestCase):
             current_dir = os.getcwd()
             os.chdir(tmpdir)
             try:
-                with patch("builtins.input", return_value="c"):
+                questionary_stub = _QuestionaryStub([True])
+                with patch("book_writer.cli._questionary", return_value=questionary_stub):
                     with patch(
                         "sys.argv",
                         ["book-writer", "--outline", str(outline_path)],
@@ -233,18 +280,18 @@ class TestCliPromptFlow(unittest.TestCase):
             (outlines_dir / "alpha.md").write_text("# Chapter Alpha\n", encoding="utf-8")
             (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
 
-            prompt_inputs = [
-                "c",
-                "",
-                "1,2",
-                "1",
-                "novel",
-                "y",
-                "",
-                "n",
-                "n",
-            ]
-            with patch("builtins.input", side_effect=prompt_inputs):
+            questionary_stub = _QuestionaryStub(
+                [
+                    "create",
+                    [],
+                    lambda choices: [choice.value for choice in choices],
+                    "childrensbook",
+                    "novel",
+                    ["text"],
+                    "",
+                ]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch(
                     "sys.argv",
                     [
@@ -285,20 +332,23 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                 "# Chapter One\n", encoding="utf-8"
             )
 
-            prompt_inputs = [
-                "m",
-                "1",
-                "y",
-                "2",
-                "y",
-                "",
-                "",
-                "",
-                "",
-                "n",
-                "y",
-            ]
-            with patch("builtins.input", side_effect=prompt_inputs):
+            questionary_stub = _QuestionaryStub(
+                [
+                    "modify",
+                    lambda choices: [choices[0].value],
+                    lambda choices: [
+                        choice.value
+                        for choice in choices
+                        if choice.value in {"expand", "compile", "audio"}
+                    ],
+                    "2",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch(
                     "sys.argv",
                     [
@@ -338,18 +388,18 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
             (outlines_dir / "alpha.md").write_text("# Chapter Alpha\n", encoding="utf-8")
             (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
 
-            prompt_inputs = [
-                "c",
-                "",
-                "all",
-                "1",
-                "",
-                "y",
-                "",
-                "n",
-                "n",
-            ]
-            with patch("builtins.input", side_effect=prompt_inputs):
+            questionary_stub = _QuestionaryStub(
+                [
+                    "create",
+                    [],
+                    lambda choices: [choice.value for choice in choices],
+                    "instructive self help guide",
+                    "instructive self help guide",
+                    ["text"],
+                    "",
+                ]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch(
                     "sys.argv",
                     [

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from dataclasses import dataclass
 from typing import Callable, Optional
 from pathlib import Path
@@ -33,74 +34,51 @@ def _tone_files(tones_dir: Path) -> list[Path]:
     return sorted(path for path in tones_dir.iterdir() if path.suffix == ".md")
 
 
+def _questionary():
+    return importlib.import_module("questionary")
+
+
 def _prompt_yes_no(prompt: str, default: bool) -> bool:
-    suffix = "Y/n" if default else "y/N"
-    while True:
-        response = input(f"{prompt} [{suffix}]: ").strip().lower()
-        if not response:
-            return default
-        if response in {"y", "yes"}:
-            return True
-        if response in {"n", "no"}:
-            return False
-        print("Please enter 'y' or 'n'.")
-
-
-def _parse_number_list(response: str, max_value: int) -> list[int]:
-    if not response:
-        return []
-    if response.lower() == "all":
-        return list(range(1, max_value + 1))
-    selected: list[int] = []
-    for part in response.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if not part.isdigit():
-            raise ValueError("Selection must be a comma-separated list of numbers.")
-        value = int(part)
-        if value < 1 or value > max_value:
-            raise ValueError("Selection is out of range.")
-        if value not in selected:
-            selected.append(value)
-    return selected
+    questionary = _questionary()
+    response = questionary.confirm(prompt, default=default).ask()
+    if response is None:
+        return default
+    return response
 
 
 def _prompt_for_outline_selection(outline_info: list["OutlineInfo"]) -> list["OutlineInfo"]:
     if not outline_info:
         return []
-    print("Available outlines:")
-    for index, info in enumerate(outline_info, start=1):
-        title = info.title or "(title will be generated)"
-        print(f"  {index}. {info.path.name} — {title}")
-    preview_response = input(
-        "Enter outline numbers to preview (comma-separated), or press Enter to continue: "
-    ).strip()
-    if preview_response:
-        try:
-            preview_indices = _parse_number_list(preview_response, len(outline_info))
-        except ValueError as error:
-            print(error)
-        else:
-            for index in preview_indices:
-                info = outline_info[index - 1]
-                print(f"\nPreview for {info.path.name}:")
-                print(info.preview_text)
+    questionary = _questionary()
+    choices = [
+        questionary.Choice(
+            title=f"{info.path.name} — {info.title or '(title will be generated)'}",
+            value=info,
+        )
+        for info in outline_info
+    ]
+    preview_selection = questionary.checkbox(
+        "Select outlines to preview (optional):",
+        choices=choices,
+    ).ask()
+    if preview_selection:
+        for info in preview_selection:
+            print(f"\nPreview for {info.path.name}:")
+            print(info.preview_text)
 
-    while True:
-        selection_response = input(
-            "Select outlines to generate (comma-separated numbers or 'all') [all]: "
-        ).strip()
-        if not selection_response:
-            selection_response = "all"
-        try:
-            selection_indices = _parse_number_list(
-                selection_response, len(outline_info)
-            )
-        except ValueError as error:
-            print(error)
-            continue
-        return [outline_info[index - 1] for index in selection_indices]
+    selection_choices = [
+        questionary.Choice(
+            title=f"{info.path.name} — {info.title or '(title will be generated)'}",
+            value=info,
+            checked=True,
+        )
+        for info in outline_info
+    ]
+    selected = questionary.checkbox(
+        "Select outlines to generate:",
+        choices=selection_choices,
+    ).ask()
+    return selected or []
 
 
 def _prompt_for_tone(
@@ -110,35 +88,63 @@ def _prompt_for_tone(
 ) -> str:
     if not tone_options:
         return default
-    print(f"Available tones for {outline_name}:")
-    for index, tone in enumerate(tone_options, start=1):
-        print(f"  {index}. {tone}")
-    while True:
-        response = input(f"Select a tone [default: {default}]: ").strip()
-        if not response:
-            return default
-        if response.isdigit():
-            index = int(response)
-            if 1 <= index <= len(tone_options):
-                return tone_options[index - 1]
-            print("Selection is out of range.")
-            continue
-        if response in tone_options:
-            return response
-        print("Please enter a number from the list or a tone name.")
+    questionary = _questionary()
+    choices = [
+        questionary.Choice(title=tone, value=tone) for tone in tone_options
+    ]
+    choices.append(questionary.Choice(title="Custom tone...", value="__custom__"))
+    selected = questionary.select(
+        f"Select a tone for {outline_name}:",
+        choices=choices,
+        default=default,
+    ).ask()
+    if selected == "__custom__":
+        custom = questionary.text(
+            "Enter a custom tone description:",
+            default=default,
+        ).ask()
+        return custom or default
+    return selected or default
 
 
 def _prompt_for_task_settings(
     args: argparse.Namespace,
 ) -> tuple[bool, str, TTSSettings, VideoSettings]:
-    text_enabled = _prompt_yes_no("Generate text content", True)
+    questionary = _questionary()
+    task_choices = [
+        questionary.Choice(
+            title="Generate text content",
+            value="text",
+            checked=True,
+        ),
+        questionary.Choice(
+            title="Generate audio narration",
+            value="audio",
+            checked=args.tts,
+        ),
+        questionary.Choice(
+            title="Generate videos",
+            value="video",
+            checked=args.video,
+        ),
+    ]
+    selected_tasks = questionary.checkbox(
+        "Select content to generate:",
+        choices=task_choices,
+    ).ask()
+    selected = set(selected_tasks or [])
+    text_enabled = "text" in selected
     byline = args.byline
     if text_enabled:
-        byline_response = input(f"Byline [default: {args.byline}]: ").strip()
-        if byline_response:
-            byline = byline_response
+        byline = (
+            questionary.text(
+                "Byline:",
+                default=args.byline,
+            ).ask()
+            or args.byline
+        )
 
-    audio_enabled = _prompt_yes_no("Generate audio narration", args.tts)
+    audio_enabled = "audio" in selected
     tts_settings = TTSSettings(
         enabled=audio_enabled,
         voice=args.tts_voice,
@@ -147,12 +153,22 @@ def _prompt_for_task_settings(
         audio_dirname=args.tts_audio_dir,
     )
     if audio_enabled:
-        voice = input(f"TTS voice [default: {args.tts_voice}]: ").strip()
-        rate = input(f"TTS rate [default: {args.tts_rate}]: ").strip()
-        pitch = input(f"TTS pitch [default: {args.tts_pitch}]: ").strip()
-        audio_dir = input(
-            f"Audio output directory [default: {args.tts_audio_dir}]: "
-        ).strip()
+        voice = questionary.text(
+            "TTS voice:",
+            default=args.tts_voice,
+        ).ask()
+        rate = questionary.text(
+            "TTS rate:",
+            default=args.tts_rate,
+        ).ask()
+        pitch = questionary.text(
+            "TTS pitch:",
+            default=args.tts_pitch,
+        ).ask()
+        audio_dir = questionary.text(
+            "Audio output directory:",
+            default=args.tts_audio_dir,
+        ).ask()
         tts_settings = TTSSettings(
             enabled=True,
             voice=voice or args.tts_voice,
@@ -161,18 +177,19 @@ def _prompt_for_task_settings(
             audio_dirname=audio_dir or args.tts_audio_dir,
         )
 
-    video_enabled = _prompt_yes_no("Generate videos", args.video)
+    video_enabled = "video" in selected
     background_video = args.background_video
     video_dirname = args.video_dir
     if video_enabled:
-        background_response = input(
-            "Background video path (leave blank for none): "
-        ).strip()
+        background_response = questionary.text(
+            "Background video path (leave blank for none):",
+        ).ask()
         if background_response:
             background_video = Path(background_response)
-        video_dir_response = input(
-            f"Video output directory [default: {args.video_dir}]: "
-        ).strip()
+        video_dir_response = questionary.text(
+            "Video output directory:",
+            default=args.video_dir,
+        ).ask()
         if video_dir_response:
             video_dirname = video_dir_response
     video_settings = VideoSettings(
@@ -299,31 +316,41 @@ def _format_book_status(book_info: BookInfo) -> str:
 def _prompt_for_book_selection(book_info: list[BookInfo]) -> list[BookInfo]:
     if not book_info:
         return []
-    print("Generated books:")
-    for index, info in enumerate(book_info, start=1):
-        status = _format_book_status(info)
-        print(f"  {index}. {info.path.name} — {info.title} ({status})")
-    while True:
-        response = input(
-            "Select books to manage (comma-separated numbers or 'all'), or press Enter to skip: "
-        ).strip()
-        if not response:
-            return []
-        try:
-            selection_indices = _parse_number_list(response, len(book_info))
-        except ValueError as error:
-            print(error)
-            continue
-        return [book_info[index - 1] for index in selection_indices]
+    questionary = _questionary()
+    choices = [
+        questionary.Choice(
+            title=(
+                f"{info.path.name} — {info.title} ({_format_book_status(info)})"
+            ),
+            value=info,
+        )
+        for info in book_info
+    ]
+    selected = questionary.checkbox(
+        "Select books to manage (optional):",
+        choices=choices,
+    ).ask()
+    return selected or []
 
 
 def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
-    voice = input(f"TTS voice [default: {args.tts_voice}]: ").strip()
-    rate = input(f"TTS rate [default: {args.tts_rate}]: ").strip()
-    pitch = input(f"TTS pitch [default: {args.tts_pitch}]: ").strip()
-    audio_dir = input(
-        f"Audio output directory [default: {args.tts_audio_dir}]: "
-    ).strip()
+    questionary = _questionary()
+    voice = questionary.text(
+        "TTS voice:",
+        default=args.tts_voice,
+    ).ask()
+    rate = questionary.text(
+        "TTS rate:",
+        default=args.tts_rate,
+    ).ask()
+    pitch = questionary.text(
+        "TTS pitch:",
+        default=args.tts_pitch,
+    ).ask()
+    audio_dir = questionary.text(
+        "Audio output directory:",
+        default=args.tts_audio_dir,
+    ).ask()
     return TTSSettings(
         enabled=True,
         voice=voice or args.tts_voice,
@@ -334,16 +361,18 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
 
 
 def _prompt_for_video_settings(args: argparse.Namespace) -> VideoSettings:
+    questionary = _questionary()
     background_video = args.background_video
     video_dirname = args.video_dir
-    background_response = input(
-        "Background video path (leave blank for none): "
-    ).strip()
+    background_response = questionary.text(
+        "Background video path (leave blank for none):",
+    ).ask()
     if background_response:
         background_video = Path(background_response)
-    video_dir_response = input(
-        f"Video output directory [default: {args.video_dir}]: "
-    ).strip()
+    video_dir_response = questionary.text(
+        "Video output directory:",
+        default=args.video_dir,
+    ).ask()
     if video_dir_response:
         video_dirname = video_dir_response
     return VideoSettings(
@@ -354,19 +383,32 @@ def _prompt_for_video_settings(args: argparse.Namespace) -> VideoSettings:
 
 
 def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
-    expand = _prompt_yes_no("Expand selected books", False)
+    questionary = _questionary()
+    task_choices = [
+        questionary.Choice("Expand selected books", value="expand"),
+        questionary.Choice("Generate compiled book.pdf", value="compile"),
+        questionary.Choice("Generate audio narration", value="audio"),
+        questionary.Choice("Generate videos", value="video"),
+    ]
+    selected = questionary.checkbox(
+        "Select tasks for the selected books:",
+        choices=task_choices,
+    ).ask()
+    selected_tasks = set(selected or [])
+    expand = "expand" in selected_tasks
     expand_passes = args.expand_passes
     if expand:
-        passes_response = input(
-            f"Expansion passes [default: {args.expand_passes}]: "
-        ).strip()
+        passes_response = questionary.text(
+            "Expansion passes:",
+            default=str(args.expand_passes),
+        ).ask()
         if passes_response:
             try:
                 expand_passes = int(passes_response)
             except ValueError:
                 print("Expansion passes must be a whole number.")
                 expand_passes = args.expand_passes
-    generate_audio = _prompt_yes_no("Generate audio narration", False)
+    generate_audio = "audio" in selected_tasks
     tts_settings = TTSSettings(
         enabled=False,
         voice=args.tts_voice,
@@ -377,7 +419,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
 
-    generate_video = _prompt_yes_no("Generate videos", False)
+    generate_video = "video" in selected_tasks
     video_settings = VideoSettings(
         enabled=False,
         background_video=args.background_video,
@@ -386,7 +428,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     if generate_video:
         video_settings = _prompt_for_video_settings(args)
 
-    compile_book_assets = _prompt_yes_no("Generate compiled book.pdf", False)
+    compile_book_assets = "compile" in selected_tasks
     return BookTaskSelection(
         expand=expand,
         expand_passes=expand_passes,
@@ -407,14 +449,15 @@ def _prompt_for_outline_generation(
 
 
 def _prompt_for_primary_action() -> str:
-    print("Would you like to create new books or modify existing books?")
-    while True:
-        response = input("Enter 'c' to create or 'm' to modify: ").strip().lower()
-        if response in {"c", "create"}:
-            return "create"
-        if response in {"m", "modify"}:
-            return "modify"
-        print("Please enter 'c' to create or 'm' to modify.")
+    questionary = _questionary()
+    response = questionary.select(
+        "Would you like to create new books or modify existing books?",
+        choices=[
+            questionary.Choice("Create new books", value="create"),
+            questionary.Choice("Modify existing books", value="modify"),
+        ],
+    ).ask()
+    return response or "create"
 
 
 def write_books_from_outlines(
@@ -620,18 +663,20 @@ def build_parser() -> argparse.ArgumentParser:
 def _prompt_for_resume(output_dir: Path, progress: dict) -> bool:
     completed_steps = progress.get("completed_steps", 0)
     total_steps = progress.get("total_steps", "unknown")
-    prompt = (
-        f"Found in-progress book generation in {output_dir} "
-        f"(step {completed_steps}/{total_steps}). "
-        "Continue from the last saved step? [c]ontinue/[r]estart: "
-    )
-    while True:
-        response = input(prompt).strip().lower()
-        if response in {"c", "continue", "y", "yes"}:
-            return True
-        if response in {"r", "restart", "n", "no"}:
-            return False
-        print("Please enter 'c' to continue or 'r' to restart.")
+    questionary = _questionary()
+    response = questionary.select(
+        (
+            f"Found in-progress book generation in {output_dir} "
+            f"(step {completed_steps}/{total_steps}). Continue from the last saved step?"
+        ),
+        choices=[
+            questionary.Choice("Continue", value=True),
+            questionary.Choice("Restart", value=False),
+        ],
+    ).ask()
+    if response is None:
+        return False
+    return response
 
 
 def main() -> int:
