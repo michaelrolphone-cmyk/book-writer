@@ -261,3 +261,57 @@ class TestCliPromptFlow(unittest.TestCase):
         tone_decider = kwargs["tone_decider"]
         self.assertEqual(tone_decider(outline_files[0]), "childrensbook")
         self.assertEqual(tone_decider(outline_files[1]), "novel")
+
+
+class TestCliBookManagementPrompt(unittest.TestCase):
+    @patch("book_writer.cli.generate_book_videos")
+    @patch("book_writer.cli.generate_book_audio")
+    @patch("book_writer.cli.compile_book")
+    @patch("book_writer.cli.expand_book")
+    def test_prompt_manages_existing_books(
+        self,
+        expand_mock: MagicMock,
+        compile_mock: MagicMock,
+        audio_mock: MagicMock,
+        video_mock: MagicMock,
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            books_dir = base_dir / "books"
+            book_dir = books_dir / "alpha"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+
+            prompt_inputs = [
+                "1",
+                "y",
+                "2",
+                "y",
+                "",
+                "",
+                "",
+                "",
+                "n",
+                "y",
+            ]
+            with patch("builtins.input", side_effect=prompt_inputs):
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--prompt",
+                        "--books-dir",
+                        str(books_dir),
+                    ],
+                ):
+                    result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+        _, expand_kwargs = expand_mock.call_args
+        self.assertEqual(expand_kwargs["passes"], 2)
+        compile_mock.assert_called_once_with(book_dir)
+        audio_mock.assert_called_once()
+        video_mock.assert_not_called()

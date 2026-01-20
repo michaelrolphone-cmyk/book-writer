@@ -11,8 +11,11 @@ from book_writer.video import VideoSettings
 from book_writer.writer import (
     LMStudioClient,
     clear_book_progress,
+    compile_book,
     expand_book,
+    generate_book_audio,
     generate_book_title,
+    generate_book_videos,
     load_book_progress,
     write_book,
 )
@@ -201,6 +204,198 @@ class OutlineInfo:
     title: Optional[str]
     items: list
     preview_text: str
+
+
+@dataclass(frozen=True)
+class BookInfo:
+    path: Path
+    title: str
+    has_text: bool
+    has_audio: bool
+    has_video: bool
+    has_compilation: bool
+
+
+@dataclass(frozen=True)
+class BookTaskSelection:
+    expand: bool
+    expand_passes: int
+    compile: bool
+    tts_settings: TTSSettings
+    video_settings: VideoSettings
+    generate_audio: bool
+    generate_video: bool
+
+
+def _book_chapter_files(book_dir: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in book_dir.iterdir()
+        if path.suffix == ".md"
+        and path.name not in {"book.md", "back-cover-synopsis.md", "nextsteps.md"}
+    )
+
+
+def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
+    book_md = book_dir / "book.md"
+    if book_md.exists():
+        for line in book_md.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+    for chapter in chapter_files:
+        for line in chapter.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+    return book_dir.name
+
+
+def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -> BookInfo:
+    chapter_files = _book_chapter_files(book_dir)
+    has_text = bool(chapter_files)
+    title = _book_title(book_dir, chapter_files)
+    audio_dir = book_dir / tts_audio_dir
+    has_audio = audio_dir.exists() and any(
+        path.suffix == ".mp3" for path in audio_dir.iterdir()
+    )
+    video_dir_path = book_dir / video_dir
+    has_video = video_dir_path.exists() and any(
+        path.suffix == ".mp4" for path in video_dir_path.iterdir()
+    )
+    has_compilation = (book_dir / "book.pdf").exists()
+    return BookInfo(
+        path=book_dir,
+        title=title,
+        has_text=has_text,
+        has_audio=has_audio,
+        has_video=has_video,
+        has_compilation=has_compilation,
+    )
+
+
+def _book_directories(books_dir: Path, tts_audio_dir: str, video_dir: str) -> list[BookInfo]:
+    if not books_dir.exists():
+        return []
+    book_dirs = sorted(path for path in books_dir.iterdir() if path.is_dir())
+    return [
+        _summarize_book_status(book_dir, tts_audio_dir, video_dir)
+        for book_dir in book_dirs
+    ]
+
+
+def _format_book_status(book_info: BookInfo) -> str:
+    def flag(label: str, active: bool) -> str:
+        return f"{label}:{'yes' if active else 'no'}"
+
+    return ", ".join(
+        [
+            flag("text", book_info.has_text),
+            flag("audio", book_info.has_audio),
+            flag("video", book_info.has_video),
+            flag("compiled", book_info.has_compilation),
+        ]
+    )
+
+
+def _prompt_for_book_selection(book_info: list[BookInfo]) -> list[BookInfo]:
+    if not book_info:
+        return []
+    print("Generated books:")
+    for index, info in enumerate(book_info, start=1):
+        status = _format_book_status(info)
+        print(f"  {index}. {info.path.name} — {info.title} ({status})")
+    while True:
+        response = input(
+            "Select books to manage (comma-separated numbers or 'all'), or press Enter to skip: "
+        ).strip()
+        if not response:
+            return []
+        try:
+            selection_indices = _parse_number_list(response, len(book_info))
+        except ValueError as error:
+            print(error)
+            continue
+        return [book_info[index - 1] for index in selection_indices]
+
+
+def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
+    voice = input(f"TTS voice [default: {args.tts_voice}]: ").strip()
+    rate = input(f"TTS rate [default: {args.tts_rate}]: ").strip()
+    pitch = input(f"TTS pitch [default: {args.tts_pitch}]: ").strip()
+    audio_dir = input(
+        f"Audio output directory [default: {args.tts_audio_dir}]: "
+    ).strip()
+    return TTSSettings(
+        enabled=True,
+        voice=voice or args.tts_voice,
+        rate=rate or args.tts_rate,
+        pitch=pitch or args.tts_pitch,
+        audio_dirname=audio_dir or args.tts_audio_dir,
+    )
+
+
+def _prompt_for_video_settings(args: argparse.Namespace) -> VideoSettings:
+    background_video = args.background_video
+    video_dirname = args.video_dir
+    background_response = input(
+        "Background video path (leave blank for none): "
+    ).strip()
+    if background_response:
+        background_video = Path(background_response)
+    video_dir_response = input(
+        f"Video output directory [default: {args.video_dir}]: "
+    ).strip()
+    if video_dir_response:
+        video_dirname = video_dir_response
+    return VideoSettings(
+        enabled=True,
+        background_video=background_video,
+        video_dirname=video_dirname,
+    )
+
+
+def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
+    expand = _prompt_yes_no("Expand selected books", False)
+    expand_passes = args.expand_passes
+    if expand:
+        passes_response = input(
+            f"Expansion passes [default: {args.expand_passes}]: "
+        ).strip()
+        if passes_response:
+            try:
+                expand_passes = int(passes_response)
+            except ValueError:
+                print("Expansion passes must be a whole number.")
+                expand_passes = args.expand_passes
+    generate_audio = _prompt_yes_no("Generate audio narration", False)
+    tts_settings = TTSSettings(
+        enabled=False,
+        voice=args.tts_voice,
+        rate=args.tts_rate,
+        pitch=args.tts_pitch,
+        audio_dirname=args.tts_audio_dir,
+    )
+    if generate_audio:
+        tts_settings = _prompt_for_audio_settings(args)
+
+    generate_video = _prompt_yes_no("Generate videos", False)
+    video_settings = VideoSettings(
+        enabled=False,
+        background_video=args.background_video,
+        video_dirname=args.video_dir,
+    )
+    if generate_video:
+        video_settings = _prompt_for_video_settings(args)
+
+    compile_book_assets = _prompt_yes_no("Generate compiled book.pdf", False)
+    return BookTaskSelection(
+        expand=expand,
+        expand_passes=expand_passes,
+        compile=compile_book_assets,
+        tts_settings=tts_settings,
+        video_settings=video_settings,
+        generate_audio=generate_audio,
+        generate_video=generate_video,
+    )
 
 
 def write_books_from_outlines(
@@ -450,6 +645,38 @@ def main() -> int:
         return 0
     outline_files = _outline_files(args.outlines_dir)
     if args.prompt:
+        book_info = _book_directories(
+            args.books_dir, args.tts_audio_dir, args.video_dir
+        )
+        selected_books = _prompt_for_book_selection(book_info)
+        if selected_books:
+            task_selection = _prompt_for_book_tasks(args)
+            for book in selected_books:
+                if task_selection.expand:
+                    expand_book(
+                        output_dir=book.path,
+                        client=client,
+                        passes=task_selection.expand_passes,
+                        verbose=True,
+                        tts_settings=task_selection.tts_settings,
+                        video_settings=task_selection.video_settings,
+                        tone=args.tone,
+                    )
+                if task_selection.compile:
+                    compile_book(book.path)
+                if task_selection.generate_audio:
+                    generate_book_audio(
+                        output_dir=book.path,
+                        tts_settings=task_selection.tts_settings,
+                        verbose=True,
+                    )
+                if task_selection.generate_video:
+                    generate_book_videos(
+                        output_dir=book.path,
+                        video_settings=task_selection.video_settings,
+                        audio_dirname=task_selection.tts_settings.audio_dirname,
+                        verbose=True,
+                    )
         tones_dir = Path(__file__).parent / "tones"
         tone_options = [tone.stem for tone in _tone_files(tones_dir)]
         if outline_files:
@@ -499,6 +726,8 @@ def main() -> int:
                 )
             except ValueError as exc:
                 parser.error(str(exc))
+            return 0
+        if selected_books and not args.outline.exists():
             return 0
         outline_title, items = parse_outline_with_title(args.outline)
         if not items:

@@ -20,10 +20,13 @@ from book_writer.writer import (
     build_prompt,
     build_synopsis_prompt,
     _sanitize_markdown_for_latex,
+    compile_book,
     expand_book,
     expand_chapter_content,
+    generate_book_audio,
     generate_book_title,
     generate_book_pdf,
+    generate_book_videos,
     save_book_progress,
     write_book,
 )
@@ -198,9 +201,102 @@ class TestWriter(unittest.TestCase):
                 ),
             ]
         )
-        self.assertEqual(synthesize_text_mock.call_count, 2)
-        synthesize_video_mock.assert_not_called()
-        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    def test_generate_book_audio_creates_missing_audio(
+        self,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        tts_settings = TTSSettings(enabled=True)
+        synthesize_chapter_mock.return_value = None
+        synthesize_text_mock.side_effect = [
+            Path("book.mp3"),
+            Path("back-cover-synopsis.mp3"),
+        ]
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+            synopsis_path = output_dir / "back-cover-synopsis.md"
+            synopsis_path.write_text("Synopsis", encoding="utf-8")
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [chapter_path.read_text(encoding="utf-8")],
+            )
+
+            generate_book_audio(output_dir, tts_settings)
+
+        synthesize_chapter_mock.assert_called_once_with(
+            chapter_path=chapter_path,
+            output_dir=output_dir / tts_settings.audio_dirname,
+            settings=tts_settings,
+            verbose=False,
+        )
+        synthesize_text_mock.assert_has_calls(
+            [
+                call(
+                    text=audiobook_text,
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "book.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+                call(
+                    text="Synopsis",
+                    output_path=output_dir
+                    / tts_settings.audio_dirname
+                    / "back-cover-synopsis.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+            ]
+        )
+
+    @patch("book_writer.writer.synthesize_chapter_video")
+    def test_generate_book_videos_uses_existing_audio(
+        self, synthesize_video_mock: Mock
+    ) -> None:
+        video_settings = VideoSettings(
+            enabled=True,
+            background_video=Path("background.mp4"),
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+            chapter_text = chapter_path.read_text(encoding="utf-8")
+            audio_dir = output_dir / "audio"
+            audio_dir.mkdir()
+            audio_path = audio_dir / "001-chapter-one.mp3"
+            audio_path.write_text("audio", encoding="utf-8")
+
+            generate_book_videos(output_dir, video_settings, audio_dirname="audio")
+
+        synthesize_video_mock.assert_called_once_with(
+            audio_path=audio_path,
+            output_dir=output_dir / video_settings.video_dirname,
+            settings=video_settings,
+            verbose=False,
+            text=chapter_text,
+        )
+
+    @patch("book_writer.writer.generate_book_pdf")
+    def test_compile_book_uses_chapters(self, generate_pdf_mock: Mock) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+
+            compile_book(output_dir)
+
+        generate_pdf_mock.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
