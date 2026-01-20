@@ -291,6 +291,35 @@ def get_gui_html() -> str:
         cursor: pointer;
       }
 
+      .media-panel {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .media-block {
+        background: #dde3ec;
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .media-block.hidden {
+        display: none;
+      }
+
+      .media-block label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .media-block audio,
+      .media-block video {
+        width: 100%;
+        border-radius: 10px;
+      }
+
       .progress {
         height: 8px;
         border-radius: 999px;
@@ -500,6 +529,16 @@ def get_gui_html() -> str:
                 <button class="close-reader" id="closeReader">Close</button>
               </div>
               <div class="reader-body" id="readerBody"></div>
+              <div class="media-panel" id="mediaPanel">
+                <div class="media-block hidden" id="audioBlock">
+                  <label>Audio narration</label>
+                  <audio controls id="chapterAudio"></audio>
+                </div>
+                <div class="media-block hidden" id="videoBlock">
+                  <label>Chapter video</label>
+                  <video controls id="chapterVideo"></video>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -697,6 +736,10 @@ def get_gui_html() -> str:
       const readerTitle = document.getElementById('readerTitle');
       const readerBody = document.getElementById('readerBody');
       const closeReader = document.getElementById('closeReader');
+      const audioBlock = document.getElementById('audioBlock');
+      const videoBlock = document.getElementById('videoBlock');
+      const chapterAudio = document.getElementById('chapterAudio');
+      const chapterVideo = document.getElementById('chapterVideo');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -740,6 +783,21 @@ def get_gui_html() -> str:
       const closeReaderPanel = () => {
         readerPanel.classList.remove('active');
         readerBody.innerHTML = '';
+        chapterAudio.removeAttribute('src');
+        chapterVideo.removeAttribute('src');
+        audioBlock.classList.add('hidden');
+        videoBlock.classList.add('hidden');
+      };
+
+      const setMediaSource = (block, element, url) => {
+        if (!url) {
+          block.classList.add('hidden');
+          element.removeAttribute('src');
+          return;
+        }
+        block.classList.remove('hidden');
+        element.src = url;
+        element.load();
       };
 
       const loadCatalog = async () => {
@@ -964,11 +1022,19 @@ def get_gui_html() -> str:
         const chapter = chapterSelect.value;
         if (!bookDir || !chapter) return;
         try {
+          const audioDir = document.getElementById('audioDir').value || 'audio';
+          const videoDir = document.getElementById('videoDir').value || 'video';
           const result = await fetchJson(
-            `/api/chapter-content?book_dir=${encodeURIComponent(bookDir)}&chapter=${encodeURIComponent(chapter)}`,
+            `/api/chapter-content?book_dir=${encodeURIComponent(
+              bookDir,
+            )}&chapter=${encodeURIComponent(chapter)}&audio_dirname=${encodeURIComponent(
+              audioDir,
+            )}&video_dirname=${encodeURIComponent(videoDir)}`,
           );
           readerTitle.textContent = result.title || 'Chapter preview';
           readerBody.innerHTML = renderMarkdown(result.content || '');
+          setMediaSource(audioBlock, chapterAudio, result.audio_url);
+          setMediaSource(videoBlock, chapterVideo, result.video_url);
           readerPanel.classList.add('active');
         } catch (error) {
           log(`Reader failed: ${error.message}`);

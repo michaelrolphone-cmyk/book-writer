@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from book_writer.cli import (
     _book_chapter_files,
@@ -172,10 +173,26 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     chapter_file = _find_chapter_file(book_dir, str(chapter_value))
     content = chapter_file.read_text(encoding="utf-8")
     title = _chapter_title_from_content(content, chapter_file.stem)
+    audio_dirname = payload.get("audio_dirname", "audio")
+    video_dirname = payload.get("video_dirname", "video")
+    audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+    video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
+    audio_url = (
+        _build_media_url(book_dir, audio_path.relative_to(book_dir))
+        if audio_path.exists()
+        else None
+    )
+    video_url = (
+        _build_media_url(book_dir, video_path.relative_to(book_dir))
+        if video_path.exists()
+        else None
+    )
     return {
         "chapter": chapter_file.name,
         "title": title,
         "content": content,
+        "audio_url": audio_url,
+        "video_url": video_url,
     }
 
 
@@ -304,9 +321,38 @@ def _send_html(handler: BaseHTTPRequestHandler, html: str) -> None:
     handler.wfile.write(body)
 
 
+def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
+    body = path.read_bytes()
+    content_type, _ = mimetypes.guess_type(path.name)
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", content_type or "application/octet-stream")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _parse_query(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     query = parse_qs(urlparse(handler.path).query)
     return {key: values[0] for key, values in query.items() if values}
+
+
+def _build_media_url(book_dir: Path, relative_path: Path) -> str:
+    return (
+        "/media?book_dir="
+        + quote(str(book_dir))
+        + "&path="
+        + quote(str(relative_path))
+    )
+
+
+def _resolve_media_path(book_dir: Path, relative_path: str) -> Path:
+    candidate = (book_dir / relative_path).resolve()
+    book_root = book_dir.resolve()
+    if book_root not in candidate.parents and candidate != book_root:
+        raise ApiError("Invalid media path.")
+    if not candidate.is_file():
+        raise ApiError("Media file not found.")
+    return candidate
 
 
 def _handle_api(handler: BaseHTTPRequestHandler) -> None:
@@ -353,12 +399,28 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
         _send_json(handler, {"error": "Invalid JSON payload."}, HTTPStatus.BAD_REQUEST)
 
 
+def _handle_media(handler: BaseHTTPRequestHandler) -> None:
+    try:
+        query = _parse_query(handler)
+        book_dir_value = query.get("book_dir")
+        relative_path = query.get("path")
+        if not book_dir_value or not relative_path:
+            raise ApiError("book_dir and path are required.")
+        media_path = _resolve_media_path(Path(book_dir_value), relative_path)
+        _send_file(handler, media_path)
+    except ApiError as exc:
+        _send_json(handler, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+
+
 class BookWriterRequestHandler(BaseHTTPRequestHandler):
     """Serve the GUI and CLI-equivalent API endpoints."""
 
     def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
         if self.path.startswith("/api/"):
             _handle_api(self)
+            return
+        if self.path.startswith("/media"):
+            _handle_media(self)
             return
         _send_html(self, get_gui_html())
 
