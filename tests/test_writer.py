@@ -896,6 +896,7 @@ class TestWriter(unittest.TestCase):
                 str(output_dir / "book.md"),
                 "--from",
                 "markdown-yaml_metadata_block",
+                "--pdf-engine=xelatex",
                 "-o",
                 str(output_dir / "book.pdf"),
             ],
