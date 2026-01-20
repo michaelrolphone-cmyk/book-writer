@@ -716,15 +716,36 @@ def expand_book(
     tts_settings: Optional[TTSSettings] = None,
     video_settings: Optional[VideoSettings] = None,
     tone: Optional[str] = None,
+    chapter_files: Optional[Iterable[Path]] = None,
 ) -> List[Path]:
     auto_tts = tts_settings is None
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
     if passes < 1:
         raise ValueError("Expansion passes must be at least 1.")
-    chapter_files = _chapter_files(output_dir)
-    if not chapter_files:
+    all_chapter_files = _chapter_files(output_dir)
+    if not all_chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    if chapter_files is None:
+        selected_chapters = list(all_chapter_files)
+    else:
+        resolved_all = {path.resolve() for path in all_chapter_files}
+        resolved_selected = {path.resolve() for path in chapter_files}
+        missing = [
+            path for path in resolved_selected if path not in resolved_all
+        ]
+        if missing:
+            missing_names = ", ".join(sorted(path.name for path in missing))
+            raise ValueError(
+                f"Expand-only selection did not match chapter files: {missing_names}"
+            )
+        selected_chapters = [
+            path
+            for path in all_chapter_files
+            if path.resolve() in resolved_selected
+        ]
+        if not selected_chapters:
+            raise ValueError("Expand-only selection did not match any chapter files.")
 
     if verbose:
         print(f"[expand] Expanding book in {output_dir} with {passes} pass(es).")
@@ -732,10 +753,10 @@ def expand_book(
     for _ in range(passes):
         if verbose:
             print(f"[expand] Starting pass {_ + 1}/{passes}.")
-        for index, chapter_file in enumerate(chapter_files, start=1):
+        for index, chapter_file in enumerate(selected_chapters, start=1):
             if verbose:
                 print(
-                    f"[expand] Step {index}/{len(chapter_files)}: "
+                    f"[expand] Step {index}/{len(selected_chapters)}: "
                     f"Expanding {chapter_file.name}."
                 )
             content = chapter_file.read_text(encoding="utf-8")
@@ -772,16 +793,16 @@ def expand_book(
                     text=chapter_file.read_text(encoding="utf-8"),
                 )
 
-    book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
+    book_metadata, byline = _read_book_metadata(output_dir, all_chapter_files)
     outline_text = book_metadata.content
     if not outline_text:
-        outline_text = _derive_outline_from_chapters(chapter_files)
+        outline_text = _derive_outline_from_chapters(all_chapter_files)
 
     generate_book_pdf(
         output_dir=output_dir,
         title=book_metadata.title,
         outline_text=outline_text,
-        chapter_files=chapter_files,
+        chapter_files=all_chapter_files,
         byline=byline,
     )
     if verbose:
@@ -789,7 +810,7 @@ def expand_book(
     audiobook_text = build_audiobook_text(
         book_metadata.title,
         byline,
-        [path.read_text(encoding="utf-8") for path in chapter_files],
+        [path.read_text(encoding="utf-8") for path in all_chapter_files],
     )
     synthesize_text_audio(
         text=audiobook_text,
@@ -802,7 +823,7 @@ def expand_book(
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
-    return chapter_files
+    return selected_chapters
 
 
 def write_book(

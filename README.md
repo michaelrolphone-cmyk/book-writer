@@ -65,6 +65,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 **Inputs**
 - `--expand-book`: Path to a completed book directory containing chapter markdown files.
 - `--expand-passes`: Number of expansion passes to run across the entire book (default `1`).
+- `--expand-only`: Comma-separated list of chapter numbers, ranges, or filenames to expand (for example: `1,3-4,002-chapter-two.md`).
 
 **Behavior**
 - Each paragraph/section in every chapter is expanded using the previous and next paragraph context.
@@ -95,3 +96,16 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 - `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
 - Install the `edge-tts` package (`pip install edge-tts`) to enable MP3 narration with the default neural voice.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
+
+## Future ideas
+
+- Add a project config file for storing defaults like model settings, TTS options, and output paths.
+- Introduce resume/retry checkpoints for long-running generation tasks.
+- Build an outline linter to validate headings and chapter structure before generation.
+- Support per-chapter metadata (tone, length targets, keywords) in outlines.
+- Add more output formats (EPUB, DOCX) alongside PDF.
+- Create a prompt template library with versioning for author personas.
+- Track per-chapter generation metrics like token usage and timing.
+- Allow expand-only subsets of chapters for targeted revisions.
+- Add an interactive outline builder for non-technical authors.
+- Expand audio/video controls with presets and normalization options.

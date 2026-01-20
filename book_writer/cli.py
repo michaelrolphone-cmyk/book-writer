@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 from pathlib import Path
@@ -294,6 +295,53 @@ def _book_chapter_files(book_dir: Path) -> list[Path]:
         if path.suffix == ".md"
         and path.name not in {"book.md", "back-cover-synopsis.md", "nextsteps.md"}
     )
+
+
+def _select_chapter_files(
+    chapter_files: list[Path], expand_only: Optional[str]
+) -> list[Path]:
+    if not expand_only:
+        return chapter_files
+    tokens = [token.strip() for token in expand_only.split(",") if token.strip()]
+    if not tokens:
+        raise ValueError("Expand-only selection was empty.")
+    total = len(chapter_files)
+    selection: set[Path] = set()
+    chapter_by_name = {path.name: path for path in chapter_files}
+    chapter_by_stem = {path.stem: path for path in chapter_files}
+    range_pattern = re.compile(r"^(\d+)\s*-\s*(\d+)$")
+    for token in tokens:
+        range_match = range_pattern.match(token)
+        if range_match:
+            start = int(range_match.group(1))
+            end = int(range_match.group(2))
+            if start < 1 or end < 1 or start > total or end > total:
+                raise ValueError(
+                    f"Expand-only range '{token}' is out of bounds for {total} chapters."
+                )
+            if start > end:
+                start, end = end, start
+            for index in range(start, end + 1):
+                selection.add(chapter_files[index - 1])
+            continue
+        if token.isdigit():
+            index = int(token)
+            if index < 1 or index > total:
+                raise ValueError(
+                    f"Expand-only selection '{token}' is out of bounds for {total} chapters."
+                )
+            selection.add(chapter_files[index - 1])
+            continue
+        if token in chapter_by_name:
+            selection.add(chapter_by_name[token])
+            continue
+        if token in chapter_by_stem:
+            selection.add(chapter_by_stem[token])
+            continue
+        raise ValueError(
+            f"Expand-only selection '{token}' did not match a chapter file."
+        )
+    return [path for path in chapter_files if path in selection]
 
 
 def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
@@ -618,6 +666,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of expansion passes to run when expanding a completed book.",
     )
     parser.add_argument(
+        "--expand-only",
+        default=None,
+        help=(
+            "Comma-separated list of chapter numbers, ranges, or filenames to expand "
+            "(e.g., '1,3-4,002-chapter-two.md')."
+        ),
+    )
+    parser.add_argument(
         "--books-dir",
         type=Path,
         default=Path("books"),
@@ -764,6 +820,12 @@ def main() -> int:
         selected_tone = _prompt_for_tone(
             args.expand_book.name, tone_options, args.tone
         )
+        try:
+            selected_chapters = _select_chapter_files(
+                _book_chapter_files(args.expand_book), args.expand_only
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
         expand_book(
             output_dir=args.expand_book,
             client=client,
@@ -772,6 +834,7 @@ def main() -> int:
             tts_settings=tts_settings,
             video_settings=video_settings,
             tone=selected_tone,
+            chapter_files=selected_chapters,
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
@@ -794,6 +857,12 @@ def main() -> int:
                     selected_tone = _prompt_for_tone(
                         book.path.name, tone_options, args.tone
                     )
+                    try:
+                        selected_chapters = _select_chapter_files(
+                            _book_chapter_files(book.path), args.expand_only
+                        )
+                    except ValueError as exc:
+                        parser.error(str(exc))
                     expand_book(
                         output_dir=book.path,
                         client=client,
@@ -802,6 +871,7 @@ def main() -> int:
                         tts_settings=task_selection.tts_settings,
                         video_settings=task_selection.video_settings,
                         tone=selected_tone,
+                        chapter_files=selected_chapters,
                     )
                 if task_selection.compile:
                     compile_book(book.path)
