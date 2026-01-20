@@ -572,6 +572,7 @@ def _prompt_for_primary_action() -> str:
         choices=[
             questionary.Choice("Create new books", value="create"),
             questionary.Choice("Modify existing books", value="modify"),
+            questionary.Choice("Launch GUI server", value="gui"),
         ],
     ).ask()
     return response or "create"
@@ -791,6 +792,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use interactive prompts to select outlines, tones, and tasks.",
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the Book Writer GUI server.",
+    )
+    parser.add_argument(
+        "--gui-host",
+        default="127.0.0.1",
+        help="Host interface for the GUI server (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--gui-port",
+        type=int,
+        default=8080,
+        help="Port for the GUI server (default: 8080).",
+    )
     parser.set_defaults(tts=True)
     return parser
 
@@ -817,6 +834,12 @@ def _prompt_for_resume(output_dir: Path, progress: dict) -> bool:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.gui:
+        from book_writer.server import run_server
+
+        run_server(host=args.gui_host, port=args.gui_port)
+        return 0
 
     client = LMStudioClient(
         base_url=args.base_url,
@@ -866,6 +889,11 @@ def main() -> int:
     outline_files = _outline_files(args.outlines_dir)
     if args.prompt:
         primary_action = _prompt_for_primary_action()
+        if primary_action == "gui":
+            from book_writer.server import run_server
+
+            run_server(host=args.gui_host, port=args.gui_port)
+            return 0
         book_info = _book_directories(
             args.books_dir, args.tts_audio_dir, args.video_dir
         )

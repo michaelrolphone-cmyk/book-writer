@@ -544,3 +544,33 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
         _, write_kwargs = write_mock.call_args
         outline_files = write_kwargs["outline_files"]
         self.assertEqual([path.name for path in outline_files], ["alpha.md", "beta.md"])
+
+
+class TestCliGuiLaunch(unittest.TestCase):
+    @patch("book_writer.server.run_server")
+    def test_main_starts_gui_server_with_flag(self, run_server_mock: MagicMock) -> None:
+        with patch(
+            "sys.argv",
+            [
+                "book-writer",
+                "--gui",
+                "--gui-host",
+                "0.0.0.0",
+                "--gui-port",
+                "9090",
+            ],
+        ):
+            result = cli.main()
+
+        self.assertEqual(result, 0)
+        run_server_mock.assert_called_once_with(host="0.0.0.0", port=9090)
+
+    @patch("book_writer.server.run_server")
+    def test_prompt_launches_gui_server(self, run_server_mock: MagicMock) -> None:
+        questionary_stub = _QuestionaryStub(["gui"])
+        with patch("book_writer.cli._questionary", return_value=questionary_stub):
+            with patch("sys.argv", ["book-writer", "--prompt"]):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        run_server_mock.assert_called_once_with(host="127.0.0.1", port=8080)
