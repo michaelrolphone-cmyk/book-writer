@@ -704,6 +704,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Previous section/paragraph:", prompt)
         self.assertIn("Next section/paragraph:", prompt)
         self.assertIn("Current paragraph/section:", prompt)
+        self.assertIn("Do not add chapter titles, headings, or section separators.", prompt)
 
     def test_build_prompt_includes_tone_preface(self) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
