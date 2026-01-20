@@ -204,6 +204,91 @@ def get_gui_html() -> str:
         color: var(--muted);
         font-size: 13px;
         margin: 4px 0 0;
+        white-space: pre-wrap;
+      }
+
+      .meta-line.markdown p {
+        margin: 0 0 6px;
+      }
+
+      .meta-line.markdown p:last-child {
+        margin-bottom: 0;
+      }
+
+      .meta-line.markdown ul,
+      .meta-line.markdown ol {
+        margin: 6px 0 6px 18px;
+        padding: 0;
+      }
+
+      .meta-line.markdown li {
+        margin-bottom: 4px;
+      }
+
+      .meta-line.markdown h1,
+      .meta-line.markdown h2,
+      .meta-line.markdown h3,
+      .meta-line.markdown h4,
+      .meta-line.markdown h5 {
+        margin: 8px 0 4px;
+        font-size: 13px;
+        color: var(--text);
+      }
+
+      .reader-panel {
+        display: none;
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: inset 4px 4px 8px rgba(200, 206, 216, 0.8),
+          inset -4px -4px 8px rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+        color: var(--text);
+      }
+
+      .reader-panel.active {
+        display: block;
+      }
+
+      .reader-panel .reader-body {
+        margin-top: 10px;
+        white-space: normal;
+      }
+
+      .reader-panel .reader-body p {
+        margin: 0 0 10px;
+      }
+
+      .reader-panel .reader-body ul,
+      .reader-panel .reader-body ol {
+        margin: 6px 0 10px 18px;
+        padding: 0;
+      }
+
+      .reader-panel .reader-body li {
+        margin-bottom: 6px;
+      }
+
+      .reader-panel .reader-body pre {
+        background: #dde3ec;
+        padding: 10px;
+        border-radius: 10px;
+        overflow-x: auto;
+      }
+
+      .reader-panel .reader-body code {
+        background: #dde3ec;
+        padding: 2px 4px;
+        border-radius: 6px;
+      }
+
+      .reader-panel .close-reader {
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        cursor: pointer;
       }
 
       .progress {
@@ -369,8 +454,8 @@ def get_gui_html() -> str:
         <aside>
           <div class="panel">
             <h3>Generate from outline</h3>
-            <label>Outline path</label>
-            <input id="outlinePath" placeholder="OUTLINE.md" />
+            <label>Outline</label>
+            <select id="outlineSelect"></select>
             <label>Output directory</label>
             <input id="outputDir" placeholder="output" />
             <div class="row">
@@ -392,8 +477,11 @@ def get_gui_html() -> str:
 
           <div class="panel">
             <h3>Expand or compile</h3>
-            <label>Book directory</label>
-            <input id="bookDir" placeholder="books/my-book" />
+            <label>Book</label>
+            <select id="bookSelect"></select>
+            <label>Chapter selection</label>
+            <select id="chapterSelect" disabled></select>
+            <button class="pill-button" id="openReader" disabled>Open reader</button>
             <div class="row">
               <div>
                 <label>Expand passes</label>
@@ -406,6 +494,13 @@ def get_gui_html() -> str:
             </div>
             <button class="pill-button" id="expandBook">Expand</button>
             <button class="pill-button" id="compileBook">Compile PDF</button>
+            <div class="reader-panel" id="readerPanel">
+              <div class="book-meta">
+                <strong id="readerTitle">Chapter preview</strong>
+                <button class="close-reader" id="closeReader">Close</button>
+              </div>
+              <div class="reader-body" id="readerBody"></div>
+            </div>
           </div>
 
           <div class="panel">
@@ -495,9 +590,9 @@ def get_gui_html() -> str:
         const content = document.createElement('div');
         const heading = document.createElement('h2');
         heading.textContent = status;
-        const meta = document.createElement('p');
-        meta.className = 'meta-line';
-        meta.textContent = detail;
+        const meta = document.createElement('div');
+        meta.className = 'meta-line markdown';
+        meta.innerHTML = renderMarkdown(detail);
         content.appendChild(heading);
         content.appendChild(meta);
 
@@ -534,8 +629,123 @@ def get_gui_html() -> str:
         container.appendChild(empty);
       };
 
+      const escapeHtml = (value) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+      const renderMarkdown = (value) => {
+        if (!value) return '';
+        const safe = escapeHtml(value);
+        const lines = safe.split('\\n');
+        let html = '';
+        let listType = null;
+        const closeList = () => {
+          if (listType) {
+            html += `</${listType}>`;
+            listType = null;
+          }
+        };
+        lines.forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            closeList();
+            html += '<p></p>';
+            return;
+          }
+          const unorderedMatch = /^[-*]\\s+(.+)/.exec(trimmed);
+          const orderedMatch = /^(\\d+)\\.\\s+(.+)/.exec(trimmed);
+          if (unorderedMatch) {
+            if (listType !== 'ul') {
+              closeList();
+              listType = 'ul';
+              html += '<ul>';
+            }
+            html += `<li>${unorderedMatch[1]}</li>`;
+            return;
+          }
+          if (orderedMatch) {
+            if (listType !== 'ol') {
+              closeList();
+              listType = 'ol';
+              html += '<ol>';
+            }
+            html += `<li>${orderedMatch[2]}</li>`;
+            return;
+          }
+          closeList();
+          const headingMatch = /^(#{1,6})\\s+(.+)/.exec(trimmed);
+          if (headingMatch) {
+            const level = headingMatch[1].length;
+            html += `<h${level}>${headingMatch[2]}</h${level}>`;
+            return;
+          }
+          html += `<p>${trimmed}</p>`;
+        });
+        closeList();
+        return html;
+      };
+
+      const outlineSelect = document.getElementById('outlineSelect');
+      const bookSelect = document.getElementById('bookSelect');
+      const chapterSelect = document.getElementById('chapterSelect');
+      const openReader = document.getElementById('openReader');
+      const readerPanel = document.getElementById('readerPanel');
+      const readerTitle = document.getElementById('readerTitle');
+      const readerBody = document.getElementById('readerBody');
+      const closeReader = document.getElementById('closeReader');
+
+      const setSelectOptions = (select, options, placeholder) => {
+        select.innerHTML = '';
+        const placeholderOption = document.createElement('option');
+        placeholderOption.value = '';
+        placeholderOption.textContent = placeholder;
+        select.appendChild(placeholderOption);
+        options.forEach((option) => {
+          const optionEl = document.createElement('option');
+          optionEl.value = option.value;
+          optionEl.textContent = option.label;
+          select.appendChild(optionEl);
+        });
+      };
+
+      const outlineLabel = (outline) =>
+        `${outline.title || outline.path.split('/').pop()} (${outline.item_count || 0} sections)`;
+
+      const bookLabel = (book) =>
+        `${book.title} (${book.chapter_count || 0} chapters)`;
+
+      const loadChapters = async (bookDir) => {
+        chapterSelect.disabled = true;
+        openReader.disabled = true;
+        setSelectOptions(chapterSelect, [], 'Select a chapter');
+        readerPanel.classList.remove('active');
+        if (!bookDir) return;
+        try {
+          const result = await fetchJson(`/api/chapters?book_dir=${encodeURIComponent(bookDir)}`);
+          const chapters = (result.chapters || []).map((chapter) => ({
+            value: String(chapter.index),
+            label: `${chapter.index}. ${chapter.title}`,
+          }));
+          setSelectOptions(chapterSelect, chapters, 'Select a chapter');
+          chapterSelect.disabled = !chapters.length;
+        } catch (error) {
+          log(`Chapter list failed: ${error.message}`);
+        }
+      };
+
+      const closeReaderPanel = () => {
+        readerPanel.classList.remove('active');
+        readerBody.innerHTML = '';
+      };
+
       const loadCatalog = async () => {
         try {
+          const previousOutline = outlineSelect.value;
+          const previousBook = bookSelect.value;
           const [outlineResponse, completedResponse, booksResponse] = await Promise.all([
             fetchJson('/api/outlines'),
             fetchJson('/api/completed-outlines'),
@@ -563,7 +773,8 @@ def get_gui_html() -> str:
           } else {
             outlines.forEach((outline) => {
               const title = outline.title || outline.path.split('/').pop();
-              const detail = `${outline.item_count || 0} sections • ${outline.preview || 'No preview available.'}`;
+              const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
+              const detail = `${outline.item_count || 0} sections${previewText}`;
               outlineShelf.appendChild(
                 createCard(
                   title,
@@ -582,7 +793,8 @@ def get_gui_html() -> str:
           } else {
             completed.forEach((outline) => {
               const title = outline.title || outline.path.split('/').pop();
-              const detail = `${outline.item_count || 0} sections • ${outline.preview || 'No preview available.'}`;
+              const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
+              const detail = `${outline.item_count || 0} sections${previewText}`;
               completedShelf.appendChild(
                 createCard(
                   title,
@@ -606,7 +818,7 @@ def get_gui_html() -> str:
               if (book.has_video) statusFlags.push('Video');
               if (book.has_compilation) statusFlags.push('Compiled');
               const status = book.has_compilation ? 'Compiled' : book.has_text ? 'Drafting' : 'No chapters';
-              const detail = `${book.chapter_count || 0} chapters • ${statusFlags.join(' • ') || 'No media yet'}`;
+              const detail = `${book.chapter_count || 0} chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
               const progress = (statusFlags.length / 4) * 100;
               bookShelf.appendChild(
                 createCard(
@@ -621,6 +833,36 @@ def get_gui_html() -> str:
             });
           }
 
+          setSelectOptions(
+            outlineSelect,
+            outlines.map((outline) => ({
+              value: outline.path,
+              label: outlineLabel(outline),
+            })),
+            'Select an outline',
+          );
+          setSelectOptions(
+            bookSelect,
+            books.map((book) => ({
+              value: book.path,
+              label: bookLabel(book),
+            })),
+            'Select a book',
+          );
+
+          if (previousOutline) {
+            outlineSelect.value = previousOutline;
+          }
+          if (previousBook) {
+            bookSelect.value = previousBook;
+          }
+
+          if (bookSelect.value) {
+            await loadChapters(bookSelect.value);
+          } else {
+            chapterSelect.disabled = true;
+          }
+
           log('Catalog loaded from disk.');
         } catch (error) {
           log(`Catalog load failed: ${error.message}`);
@@ -630,7 +872,7 @@ def get_gui_html() -> str:
       document.getElementById('generateBook').addEventListener('click', async () => {
         try {
           const payload = {
-            outline_path: document.getElementById('outlinePath').value || 'OUTLINE.md',
+            outline_path: outlineSelect.value || 'OUTLINE.md',
             output_dir: document.getElementById('outputDir').value || 'output',
             base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
             model: document.getElementById('modelName').value || 'local-model',
@@ -647,7 +889,7 @@ def get_gui_html() -> str:
       document.getElementById('expandBook').addEventListener('click', async () => {
         try {
           const payload = {
-            expand_book: document.getElementById('bookDir').value,
+            expand_book: bookSelect.value,
             expand_passes: Number(document.getElementById('expandPasses').value || 1),
             expand_only: document.getElementById('expandOnly').value || null,
           };
@@ -661,7 +903,7 @@ def get_gui_html() -> str:
       document.getElementById('compileBook').addEventListener('click', async () => {
         try {
           const payload = {
-            book_dir: document.getElementById('bookDir').value,
+            book_dir: bookSelect.value,
           };
           await postJson('/api/compile-book', payload);
           log('Compilation complete.');
@@ -673,7 +915,7 @@ def get_gui_html() -> str:
       document.getElementById('generateAudio').addEventListener('click', async () => {
         try {
           const payload = {
-            book_dir: document.getElementById('bookDir').value,
+            book_dir: bookSelect.value,
             tts_settings: { audio_dirname: document.getElementById('audioDir').value || 'audio' },
           };
           await postJson('/api/generate-audio', payload);
@@ -686,7 +928,7 @@ def get_gui_html() -> str:
       document.getElementById('generateVideo').addEventListener('click', async () => {
         try {
           const payload = {
-            book_dir: document.getElementById('bookDir').value,
+            book_dir: bookSelect.value,
             audio_dirname: document.getElementById('audioDir').value || 'audio',
             video_settings: {
               video_dirname: document.getElementById('videoDir').value || 'video',
@@ -699,6 +941,42 @@ def get_gui_html() -> str:
         } catch (error) {
           log(`Video failed: ${error.message}`);
         }
+      });
+
+      bookSelect.addEventListener('change', async (event) => {
+        const value = event.target.value;
+        await loadChapters(value);
+        openReader.disabled = true;
+      });
+
+      chapterSelect.addEventListener('change', (event) => {
+        openReader.disabled = !event.target.value;
+        if (event.target.value) {
+          const expandOnlyInput = document.getElementById('expandOnly');
+          if (!expandOnlyInput.value || /^[0-9]+$/.test(expandOnlyInput.value)) {
+            expandOnlyInput.value = event.target.value;
+          }
+        }
+      });
+
+      openReader.addEventListener('click', async () => {
+        const bookDir = bookSelect.value;
+        const chapter = chapterSelect.value;
+        if (!bookDir || !chapter) return;
+        try {
+          const result = await fetchJson(
+            `/api/chapter-content?book_dir=${encodeURIComponent(bookDir)}&chapter=${encodeURIComponent(chapter)}`,
+          );
+          readerTitle.textContent = result.title || 'Chapter preview';
+          readerBody.innerHTML = renderMarkdown(result.content || '');
+          readerPanel.classList.add('active');
+        } catch (error) {
+          log(`Reader failed: ${error.message}`);
+        }
+      });
+
+      closeReader.addEventListener('click', () => {
+        closeReaderPanel();
       });
 
       loadCatalog();
