@@ -70,10 +70,9 @@ def _build_client(payload: dict[str, Any]) -> LMStudioClient:
     )
 
 
-def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
-    outlines_dir = Path(payload.get("outlines_dir", "outlines"))
+def _collect_outlines(outlines_dir: Path) -> list[dict[str, Any]]:
     if not outlines_dir.exists():
-        return {"outlines": []}
+        return []
     outlines = []
     for outline_path in sorted(outlines_dir.iterdir()):
         if outline_path.suffix != ".md":
@@ -85,9 +84,20 @@ def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
                 "path": str(outline_path),
                 "title": title,
                 "preview": preview,
+                "item_count": len(items),
             }
         )
-    return {"outlines": outlines}
+    return outlines
+
+
+def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
+    outlines_dir = Path(payload.get("outlines_dir", "outlines"))
+    return {"outlines": _collect_outlines(outlines_dir)}
+
+
+def list_completed_outlines(payload: dict[str, Any]) -> dict[str, Any]:
+    outlines_dir = Path(payload.get("completed_outlines_dir", "completed_outlines"))
+    return {"outlines": _collect_outlines(outlines_dir)}
 
 
 def list_books(payload: dict[str, Any]) -> dict[str, Any]:
@@ -104,6 +114,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_audio": book.has_audio,
                 "has_video": book.has_video,
                 "has_compilation": book.has_compilation,
+                "chapter_count": len(_book_chapter_files(book.path)),
             }
             for book in books
         ]
@@ -245,6 +256,10 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
     try:
         if path == "/api/outlines":
             response = list_outlines(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/completed-outlines":
+            response = list_completed_outlines(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
         if path == "/api/books":

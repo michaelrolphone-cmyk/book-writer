@@ -127,6 +127,10 @@ def get_gui_html() -> str:
         gap: 16px;
       }
 
+      .shelf-section {
+        margin-bottom: 28px;
+      }
+
       .book-cover {
         border-radius: 18px;
         padding: 20px;
@@ -154,6 +158,52 @@ def get_gui_html() -> str:
         color: var(--accent);
         font-size: 12px;
         font-weight: 600;
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        gap: 16px;
+      }
+
+      .section-header h2 {
+        margin: 0 0 4px;
+        font-size: 20px;
+      }
+
+      .section-header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .count-pill {
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: inset 2px 2px 6px rgba(200, 206, 216, 0.8),
+          inset -2px -2px 6px rgba(255, 255, 255, 0.7);
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: 18px;
+        background: var(--surface);
+        color: var(--muted);
+        text-align: center;
+        box-shadow: inset 4px 4px 8px rgba(200, 206, 216, 0.8),
+          inset -4px -4px 8px rgba(255, 255, 255, 0.7);
+      }
+
+      .meta-line {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 4px 0 0;
       }
 
       .progress {
@@ -280,49 +330,39 @@ def get_gui_html() -> str:
 
       <div class="layout">
         <section>
-          <div class="shelf" id="bookShelf">
-            <article class="book-card">
-              <div class="book-cover">The Moonlit Archive</div>
-              <div>
-                <h2>Drafting</h2>
-                <p>12 chapters • 67% complete</p>
+          <div class="catalog">
+            <section class="shelf-section">
+              <div class="section-header">
+                <div>
+                  <h2>Active outlines</h2>
+                  <p>Ready-to-generate drafts pulled from the outlines directory.</p>
+                </div>
+                <span class="count-pill" id="outlineCount">0 outlines</span>
               </div>
-              <div class="progress"><span style="width: 67%"></span></div>
-              <div class="book-meta">
-                <span class="tag">Fantasy</span>
-                <strong>Next: Chapter 13</strong>
-              </div>
-            </article>
+              <div class="shelf" id="outlineShelf"></div>
+            </section>
 
-            <article class="book-card">
-              <div class="book-cover" style="background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)">
-                Letters to Tomorrow
+            <section class="shelf-section">
+              <div class="section-header">
+                <div>
+                  <h2>Completed outlines</h2>
+                  <p>Archived outlines already moved to completed_outlines.</p>
+                </div>
+                <span class="count-pill" id="completedOutlineCount">0 outlines</span>
               </div>
-              <div>
-                <h2>In Review</h2>
-                <p>8 chapters • 90% complete</p>
-              </div>
-              <div class="progress"><span style="width: 90%"></span></div>
-              <div class="book-meta">
-                <span class="tag">Romance</span>
-                <strong>Next: Final polish</strong>
-              </div>
-            </article>
+              <div class="shelf" id="completedOutlineShelf"></div>
+            </section>
 
-            <article class="book-card">
-              <div class="book-cover" style="background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)">
-                Data & Dreams
+            <section class="shelf-section">
+              <div class="section-header">
+                <div>
+                  <h2>Books</h2>
+                  <p>Books tracked from the books directory, including media outputs.</p>
+                </div>
+                <span class="count-pill" id="bookCount">0 books</span>
               </div>
-              <div>
-                <h2>Published</h2>
-                <p>14 chapters • 100% complete</p>
-              </div>
-              <div class="progress"><span style="width: 100%"></span></div>
-              <div class="book-meta">
-                <span class="tag">Sci-Fi</span>
-                <strong>Exported to PDF</strong>
-              </div>
-            </article>
+              <div class="shelf" id="bookShelf"></div>
+            </section>
           </div>
         </section>
 
@@ -416,6 +456,177 @@ def get_gui_html() -> str:
         return response.json();
       };
 
+      const fetchJson = async (path) => {
+        const response = await fetch(path);
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+        return response.json();
+      };
+
+      const gradients = [
+        ['#f6d365', '#fda085'],
+        ['#a1c4fd', '#c2e9fb'],
+        ['#fbc2eb', '#a6c1ee'],
+        ['#fdcbf1', '#e6dee9'],
+        ['#84fab0', '#8fd3f4'],
+        ['#fccb90', '#d57eeb'],
+      ];
+
+      const gradientFor = (seed) => {
+        let hash = 0;
+        for (let i = 0; i < seed.length; i += 1) {
+          hash = (hash << 5) - hash + seed.charCodeAt(i);
+          hash |= 0;
+        }
+        const [start, end] = gradients[Math.abs(hash) % gradients.length];
+        return `linear-gradient(135deg, ${start} 0%, ${end} 100%)`;
+      };
+
+      const createCard = (title, status, detail, tag, accentLabel, progress) => {
+        const card = document.createElement('article');
+        card.className = 'book-card';
+
+        const cover = document.createElement('div');
+        cover.className = 'book-cover';
+        cover.style.background = gradientFor(title);
+        cover.textContent = title;
+
+        const content = document.createElement('div');
+        const heading = document.createElement('h2');
+        heading.textContent = status;
+        const meta = document.createElement('p');
+        meta.className = 'meta-line';
+        meta.textContent = detail;
+        content.appendChild(heading);
+        content.appendChild(meta);
+
+        card.appendChild(cover);
+        card.appendChild(content);
+
+        if (typeof progress === 'number') {
+          const progressWrap = document.createElement('div');
+          progressWrap.className = 'progress';
+          const progressFill = document.createElement('span');
+          progressFill.style.width = `${Math.min(Math.max(progress, 0), 100)}%`;
+          progressWrap.appendChild(progressFill);
+          card.appendChild(progressWrap);
+        }
+
+        const metaRow = document.createElement('div');
+        metaRow.className = 'book-meta';
+        const tagEl = document.createElement('span');
+        tagEl.className = 'tag';
+        tagEl.textContent = tag;
+        const accent = document.createElement('strong');
+        accent.textContent = accentLabel;
+        metaRow.appendChild(tagEl);
+        metaRow.appendChild(accent);
+        card.appendChild(metaRow);
+
+        return card;
+      };
+
+      const renderEmpty = (container, message) => {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = message;
+        container.appendChild(empty);
+      };
+
+      const loadCatalog = async () => {
+        try {
+          const [outlineResponse, completedResponse, booksResponse] = await Promise.all([
+            fetchJson('/api/outlines'),
+            fetchJson('/api/completed-outlines'),
+            fetchJson('/api/books'),
+          ]);
+
+          const outlines = outlineResponse.outlines || [];
+          const completed = completedResponse.outlines || [];
+          const books = booksResponse.books || [];
+
+          const outlineShelf = document.getElementById('outlineShelf');
+          const completedShelf = document.getElementById('completedOutlineShelf');
+          const bookShelf = document.getElementById('bookShelf');
+
+          outlineShelf.innerHTML = '';
+          completedShelf.innerHTML = '';
+          bookShelf.innerHTML = '';
+
+          document.getElementById('outlineCount').textContent = `${outlines.length} outlines`;
+          document.getElementById('completedOutlineCount').textContent = `${completed.length} outlines`;
+          document.getElementById('bookCount').textContent = `${books.length} books`;
+
+          if (!outlines.length) {
+            renderEmpty(outlineShelf, 'No outlines found in the outlines directory.');
+          } else {
+            outlines.forEach((outline) => {
+              const title = outline.title || outline.path.split('/').pop();
+              const detail = `${outline.item_count || 0} sections • ${outline.preview || 'No preview available.'}`;
+              outlineShelf.appendChild(
+                createCard(
+                  title,
+                  'Outline ready',
+                  detail,
+                  'Outline',
+                  'Next: Generate book',
+                  15,
+                ),
+              );
+            });
+          }
+
+          if (!completed.length) {
+            renderEmpty(completedShelf, 'No completed outlines archived yet.');
+          } else {
+            completed.forEach((outline) => {
+              const title = outline.title || outline.path.split('/').pop();
+              const detail = `${outline.item_count || 0} sections • ${outline.preview || 'No preview available.'}`;
+              completedShelf.appendChild(
+                createCard(
+                  title,
+                  'Archived outline',
+                  detail,
+                  'Completed',
+                  'Stored in completed_outlines',
+                  100,
+                ),
+              );
+            });
+          }
+
+          if (!books.length) {
+            renderEmpty(bookShelf, 'No books found in the books directory.');
+          } else {
+            books.forEach((book) => {
+              const statusFlags = [];
+              if (book.has_text) statusFlags.push('Text');
+              if (book.has_audio) statusFlags.push('Audio');
+              if (book.has_video) statusFlags.push('Video');
+              if (book.has_compilation) statusFlags.push('Compiled');
+              const status = book.has_compilation ? 'Compiled' : book.has_text ? 'Drafting' : 'No chapters';
+              const detail = `${book.chapter_count || 0} chapters • ${statusFlags.join(' • ') || 'No media yet'}`;
+              const progress = (statusFlags.length / 4) * 100;
+              bookShelf.appendChild(
+                createCard(
+                  book.title,
+                  status,
+                  detail,
+                  'Book',
+                  book.path.split('/').pop(),
+                  progress,
+                ),
+              );
+            });
+          }
+
+          log('Catalog loaded from disk.');
+        } catch (error) {
+          log(`Catalog load failed: ${error.message}`);
+        }
+      };
+
       document.getElementById('generateBook').addEventListener('click', async () => {
         try {
           const payload = {
@@ -489,6 +700,8 @@ def get_gui_html() -> str:
           log(`Video failed: ${error.message}`);
         }
       });
+
+      loadCatalog();
     </script>
   </body>
 </html>
