@@ -406,6 +406,17 @@ def _prompt_for_outline_generation(
     return _prompt_yes_no("Generate new books from outlines", True)
 
 
+def _prompt_for_primary_action() -> str:
+    print("Would you like to create new books or modify existing books?")
+    while True:
+        response = input("Enter 'c' to create or 'm' to modify: ").strip().lower()
+        if response in {"c", "create"}:
+            return "create"
+        if response in {"m", "modify"}:
+            return "modify"
+        print("Please enter 'c' to create or 'm' to modify.")
+
+
 def write_books_from_outlines(
     outlines_dir: Path,
     books_dir: Path,
@@ -653,11 +664,14 @@ def main() -> int:
         return 0
     outline_files = _outline_files(args.outlines_dir)
     if args.prompt:
+        primary_action = _prompt_for_primary_action()
         book_info = _book_directories(
             args.books_dir, args.tts_audio_dir, args.video_dir
         )
-        selected_books = _prompt_for_book_selection(book_info)
-        if selected_books:
+        if primary_action == "modify":
+            selected_books = _prompt_for_book_selection(book_info)
+            if not selected_books:
+                return 0
             task_selection = _prompt_for_book_tasks(args)
             for book in selected_books:
                 if task_selection.expand:
@@ -685,12 +699,9 @@ def main() -> int:
                         audio_dirname=task_selection.tts_settings.audio_dirname,
                         verbose=True,
                     )
-        if not outline_files and not args.outline.exists():
-            if selected_books:
-                return 0
-            parser.error("No outlines found to generate.")
-        if not _prompt_for_outline_generation(outline_files, args.outline):
             return 0
+        if not outline_files and not args.outline.exists():
+            parser.error("No outlines found to generate.")
         tones_dir = Path(__file__).parent / "tones"
         tone_options = [tone.stem for tone in _tone_files(tones_dir)]
         if outline_files:
@@ -740,8 +751,6 @@ def main() -> int:
                 )
             except ValueError as exc:
                 parser.error(str(exc))
-            return 0
-        if selected_books and not args.outline.exists():
             return 0
         outline_title, items = parse_outline_with_title(args.outline)
         if not items:

@@ -234,8 +234,8 @@ class TestCliPromptFlow(unittest.TestCase):
             (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
 
             prompt_inputs = [
-                "y",
-                "1",
+                "c",
+                "",
                 "1,2",
                 "1",
                 "novel",
@@ -286,6 +286,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
             )
 
             prompt_inputs = [
+                "m",
                 "1",
                 "y",
                 "2",
@@ -321,7 +322,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
 class TestCliPromptCombinedFlows(unittest.TestCase):
     @patch("book_writer.cli.write_books_from_outlines")
     @patch("book_writer.cli.expand_book")
-    def test_prompt_manages_books_and_generates_new(
+    def test_prompt_create_path_skips_book_management(
         self, expand_mock: MagicMock, write_mock: MagicMock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -338,16 +339,10 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
             (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
 
             prompt_inputs = [
+                "c",
+                "",
+                "all",
                 "1",
-                "y",
-                "2",
-                "n",
-                "n",
-                "n",
-                "y",
-                "",
-                "",
-                "",
                 "",
                 "y",
                 "",
@@ -369,9 +364,7 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
                     result = cli.main()
 
         self.assertEqual(result, 0)
-        expand_mock.assert_called_once()
-        _, expand_kwargs = expand_mock.call_args
-        self.assertEqual(expand_kwargs["passes"], 2)
+        expand_mock.assert_not_called()
         write_mock.assert_called_once()
         _, write_kwargs = write_mock.call_args
         outline_files = write_kwargs["outline_files"]

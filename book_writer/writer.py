@@ -507,6 +507,7 @@ def generate_book_pdf(
                 str(markdown_path),
                 "--from",
                 "markdown-yaml_metadata_block",
+                "--pdf-engine=xelatex",
                 "-o",
                 str(pdf_path),
             ],
