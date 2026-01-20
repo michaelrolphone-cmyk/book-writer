@@ -1,4 +1,5 @@
 import unittest
+from urllib.parse import quote
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -92,6 +93,45 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(result["title"], "Chapter One")
         self.assertIn("Content", result["content"])
+
+    def test_get_chapter_content_includes_media_urls(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            audio_dir = book_dir / "audio"
+            video_dir = book_dir / "video"
+            audio_dir.mkdir(parents=True)
+            video_dir.mkdir()
+            chapter = book_dir / "001-chapter-one.md"
+            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+            (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
+
+            result = server.get_chapter_content(
+                {
+                    "book_dir": str(book_dir),
+                    "chapter": "001-chapter-one.md",
+                    "audio_dirname": "audio",
+                    "video_dirname": "video",
+                }
+            )
+
+        expected_base = f"/media?book_dir={quote(str(book_dir))}"
+        self.assertTrue(result["audio_url"].startswith(expected_base))
+        self.assertTrue(result["video_url"].startswith(expected_base))
+
+    def test_resolve_media_path_blocks_escape(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            media_path = book_dir / "audio" / "chapter.mp3"
+            media_path.parent.mkdir()
+            media_path.write_text("audio", encoding="utf-8")
+
+            resolved = server._resolve_media_path(book_dir, "audio/chapter.mp3")
+
+            self.assertEqual(resolved, media_path.resolve())
+            with self.assertRaises(server.ApiError):
+                server._resolve_media_path(book_dir, "../outside.mp3")
 
     def test_generate_book_calls_writer(self) -> None:
         with TemporaryDirectory() as tmpdir:
