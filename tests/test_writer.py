@@ -24,6 +24,7 @@ from book_writer.writer import (
     expand_chapter_content,
     generate_book_title,
     generate_book_pdf,
+    save_book_progress,
     write_book,
 )
 
@@ -351,6 +352,59 @@ class TestWriter(unittest.TestCase):
         second_prompt = client.generate.call_args_list[2][0][0]
         self.assertIn("Previous chapter context:", second_prompt)
         self.assertIn("Chapter one summary", second_prompt)
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_resumes_from_progress(self, run_mock: Mock) -> None:
+        items = [
+            OutlineItem(title="Chapter One", level=1),
+            OutlineItem(title="Chapter Two", level=1),
+        ]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter two content",
+            "Chapter two summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nSaved content.\n", encoding="utf-8"
+            )
+            save_book_progress(
+                output_dir,
+                {
+                    "status": "in_progress",
+                    "total_steps": 2,
+                    "completed_steps": 1,
+                    "previous_chapter": {
+                        "title": "Chapter One",
+                        "content": "Saved summary",
+                    },
+                    "nextsteps_sections": [],
+                    "book_title": "My Book",
+                    "byline": "Marissa Bard",
+                },
+            )
+
+            write_book(
+                items,
+                output_dir,
+                client,
+                book_title="My Book",
+                resume=True,
+            )
+
+            progress = json.loads(
+                (output_dir / ".book_writer_progress.json").read_text(encoding="utf-8")
+            )
+
+        first_prompt = client.generate.call_args_list[0][0][0]
+        self.assertIn("Previous chapter context:", first_prompt)
+        self.assertIn("Saved summary", first_prompt)
+        self.assertEqual(progress["status"], "completed")
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")

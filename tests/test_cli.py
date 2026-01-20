@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from book_writer import cli
 from book_writer.cli import write_books_from_outlines
+from book_writer.writer import save_book_progress
 
 
 class TestWriteBooksFromOutlines(unittest.TestCase):
@@ -179,3 +180,42 @@ class TestCliTtsDefaults(unittest.TestCase):
 
         _, kwargs = write_mock.call_args
         self.assertFalse(kwargs["tts_settings"].enabled)
+
+
+class TestCliResumeFlow(unittest.TestCase):
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_prompts_to_resume_in_progress(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            save_book_progress(
+                output_dir,
+                {
+                    "status": "in_progress",
+                    "total_steps": 1,
+                    "completed_steps": 0,
+                    "previous_chapter": None,
+                    "nextsteps_sections": [],
+                    "book_title": "Generated Title",
+                    "byline": "Marissa Bard",
+                },
+            )
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch("builtins.input", return_value="c"):
+                    with patch(
+                        "sys.argv",
+                        ["book-writer", "--outline", str(outline_path)],
+                    ):
+                        cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        _, kwargs = write_mock.call_args
+        self.assertTrue(kwargs["resume"])
