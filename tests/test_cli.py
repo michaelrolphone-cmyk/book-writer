@@ -113,8 +113,10 @@ class TestCliExpandBook(unittest.TestCase):
     @patch("book_writer.cli.expand_book")
     def test_main_expands_completed_book(self, expand_mock: MagicMock) -> None:
         with TemporaryDirectory() as tmpdir:
-            with patch("sys.argv", ["book-writer", "--expand-book", tmpdir]):
-                result = cli.main()
+            questionary_stub = _QuestionaryStub(["instructive self help guide"])
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                with patch("sys.argv", ["book-writer", "--expand-book", tmpdir]):
+                    result = cli.main()
 
         self.assertEqual(result, 0)
         expand_mock.assert_called_once()
@@ -126,11 +128,13 @@ class TestCliExpandBook(unittest.TestCase):
         self, expand_mock: MagicMock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
-            with patch(
-                "sys.argv",
-                ["book-writer", "--expand-book", tmpdir, "--expand-passes", "3"],
-            ):
-                result = cli.main()
+            questionary_stub = _QuestionaryStub(["instructive self help guide"])
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                with patch(
+                    "sys.argv",
+                    ["book-writer", "--expand-book", tmpdir, "--expand-passes", "3"],
+                ):
+                    result = cli.main()
 
         self.assertEqual(result, 0)
         expand_mock.assert_called_once()
@@ -143,11 +147,13 @@ class TestCliExpandBook(unittest.TestCase):
         self, expand_mock: MagicMock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
-            with patch(
-                "sys.argv",
-                ["book-writer", "--expand-book", tmpdir, "--tone", "novel"],
-            ):
-                result = cli.main()
+            questionary_stub = _QuestionaryStub(["novel"])
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                with patch(
+                    "sys.argv",
+                    ["book-writer", "--expand-book", tmpdir, "--tone", "novel"],
+                ):
+                    result = cli.main()
 
         self.assertEqual(result, 0)
         expand_mock.assert_called_once()
@@ -342,6 +348,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                         if choice.value in {"expand", "compile", "audio"}
                     ],
                     "2",
+                    "instructive self help guide",
                     "",
                     "",
                     "",

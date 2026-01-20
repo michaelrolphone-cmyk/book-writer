@@ -34,6 +34,11 @@ def _tone_files(tones_dir: Path) -> list[Path]:
     return sorted(path for path in tones_dir.iterdir() if path.suffix == ".md")
 
 
+def _tone_options() -> list[str]:
+    tones_dir = Path(__file__).parent / "tones"
+    return [tone.stem for tone in _tone_files(tones_dir)]
+
+
 def _questionary():
     return importlib.import_module("questionary")
 
@@ -696,7 +701,11 @@ def main() -> int:
         background_video=args.background_video,
         video_dirname=args.video_dir,
     )
+    tone_options = _tone_options()
     if args.expand_book:
+        selected_tone = _prompt_for_tone(
+            args.expand_book.name, tone_options, args.tone
+        )
         expand_book(
             output_dir=args.expand_book,
             client=client,
@@ -704,7 +713,7 @@ def main() -> int:
             verbose=True,
             tts_settings=tts_settings,
             video_settings=video_settings,
-            tone=args.tone,
+            tone=selected_tone,
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
@@ -720,6 +729,9 @@ def main() -> int:
             task_selection = _prompt_for_book_tasks(args)
             for book in selected_books:
                 if task_selection.expand:
+                    selected_tone = _prompt_for_tone(
+                        book.path.name, tone_options, args.tone
+                    )
                     expand_book(
                         output_dir=book.path,
                         client=client,
@@ -727,7 +739,7 @@ def main() -> int:
                         verbose=True,
                         tts_settings=task_selection.tts_settings,
                         video_settings=task_selection.video_settings,
-                        tone=args.tone,
+                        tone=selected_tone,
                     )
                 if task_selection.compile:
                     compile_book(book.path)
@@ -747,8 +759,6 @@ def main() -> int:
             return 0
         if not outline_files and not args.outline.exists():
             parser.error("No outlines found to generate.")
-        tones_dir = Path(__file__).parent / "tones"
-        tone_options = [tone.stem for tone in _tone_files(tones_dir)]
         if outline_files:
             outline_info = []
             for outline_path in outline_files:
