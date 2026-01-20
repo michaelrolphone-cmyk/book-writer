@@ -121,6 +121,64 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _chapter_title_from_content(content: str, fallback: str) -> str:
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            return stripped.lstrip("#").strip() or fallback
+    return fallback
+
+
+def _find_chapter_file(book_dir: Path, chapter_value: str) -> Path:
+    chapter_files = _book_chapter_files(book_dir)
+    if chapter_value.isdigit():
+        index = int(chapter_value)
+        if 1 <= index <= len(chapter_files):
+            return chapter_files[index - 1]
+    for chapter_file in chapter_files:
+        if chapter_value in {chapter_file.name, chapter_file.stem}:
+            return chapter_file
+    raise ApiError(f"Chapter '{chapter_value}' not found in {book_dir}.")
+
+
+def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    chapters = []
+    for index, chapter_file in enumerate(_book_chapter_files(book_dir), start=1):
+        content = chapter_file.read_text(encoding="utf-8")
+        title = _chapter_title_from_content(content, chapter_file.stem)
+        chapters.append(
+            {
+                "index": index,
+                "name": chapter_file.name,
+                "stem": chapter_file.stem,
+                "title": title,
+            }
+        )
+    return {"chapters": chapters}
+
+
+def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    chapter_value = payload.get("chapter")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    if not chapter_value:
+        raise ApiError("chapter is required")
+    book_dir = Path(book_dir_value)
+    chapter_file = _find_chapter_file(book_dir, str(chapter_value))
+    content = chapter_file.read_text(encoding="utf-8")
+    title = _chapter_title_from_content(content, chapter_file.stem)
+    return {
+        "chapter": chapter_file.name,
+        "title": title,
+        "content": content,
+    }
+
+
 def generate_book(payload: dict[str, Any]) -> dict[str, Any]:
     outline_path_value = payload.get("outline_path")
     if not outline_path_value:
@@ -264,6 +322,14 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             return
         if path == "/api/books":
             response = list_books(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/chapters":
+            response = list_chapters(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/chapter-content":
+            response = get_chapter_content(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
 

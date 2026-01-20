@@ -64,6 +64,35 @@ class TestServerApi(unittest.TestCase):
         self.assertTrue(result["books"][0]["has_text"])
         self.assertEqual(result["books"][0]["chapter_count"], 1)
 
+    def test_list_chapters_returns_titles(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            first = book_dir / "001-chapter-one.md"
+            second = book_dir / "002-chapter-two.md"
+            first.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            second.write_text("# Chapter Two\n\nContent", encoding="utf-8")
+
+            result = server.list_chapters({"book_dir": str(book_dir)})
+
+        self.assertEqual(len(result["chapters"]), 2)
+        self.assertEqual(result["chapters"][0]["title"], "Chapter One")
+        self.assertEqual(result["chapters"][1]["title"], "Chapter Two")
+
+    def test_get_chapter_content_returns_markdown(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            chapter = book_dir / "001-chapter-one.md"
+            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+
+            result = server.get_chapter_content(
+                {"book_dir": str(book_dir), "chapter": "001-chapter-one.md"}
+            )
+
+        self.assertEqual(result["title"], "Chapter One")
+        self.assertIn("Content", result["content"])
+
     def test_generate_book_calls_writer(self) -> None:
         with TemporaryDirectory() as tmpdir:
             outline_path = Path(tmpdir) / "outline.md"

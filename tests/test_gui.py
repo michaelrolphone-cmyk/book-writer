@@ -11,6 +11,10 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"outlineShelf\"", html)
         self.assertIn("id=\"completedOutlineShelf\"", html)
         self.assertIn("id=\"bookShelf\"", html)
+        self.assertIn("id=\"outlineSelect\"", html)
+        self.assertIn("id=\"bookSelect\"", html)
+        self.assertIn("id=\"chapterSelect\"", html)
+        self.assertIn("id=\"readerPanel\"", html)
         self.assertIn("Neumorphic", gui.__doc__ or "")
 
     def test_save_gui_html_writes_file(self) -> None:
