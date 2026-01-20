@@ -1,0 +1,296 @@
+"""HTTP server exposing the Book Writer CLI functionality for the GUI."""
+from __future__ import annotations
+
+import json
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
+from book_writer.cli import (
+    _book_chapter_files,
+    _book_directories,
+    _outline_preview_text,
+    _select_chapter_files,
+)
+from book_writer.gui import get_gui_html
+from book_writer.outline import parse_outline_with_title
+from book_writer.tts import TTSSettings
+from book_writer.video import VideoSettings
+from book_writer.writer import (
+    LMStudioClient,
+    compile_book,
+    expand_book,
+    generate_book_audio,
+    generate_book_videos,
+    write_book,
+)
+
+
+class ApiError(ValueError):
+    """Raised when API input is invalid."""
+
+
+def _get_value(data: dict[str, Any], key: str, default: Any = None) -> Any:
+    value = data.get(key, default)
+    if value is None:
+        return default
+    return value
+
+
+def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
+    tts_payload = payload.get("tts_settings") or {}
+    return TTSSettings(
+        enabled=bool(tts_payload.get("enabled", payload.get("tts", True))),
+        voice=tts_payload.get("voice", "en-US-JennyNeural"),
+        rate=tts_payload.get("rate", "+0%"),
+        pitch=tts_payload.get("pitch", "+0Hz"),
+        audio_dirname=tts_payload.get("audio_dirname", "audio"),
+    )
+
+
+def _parse_video_settings(payload: dict[str, Any]) -> VideoSettings:
+    video_payload = payload.get("video_settings") or {}
+    return VideoSettings(
+        enabled=bool(video_payload.get("enabled", payload.get("video", False))),
+        background_video=Path(video_payload["background_video"])
+        if video_payload.get("background_video")
+        else None,
+        video_dirname=video_payload.get("video_dirname", "video"),
+    )
+
+
+def _build_client(payload: dict[str, Any]) -> LMStudioClient:
+    return LMStudioClient(
+        base_url=payload.get("base_url", "http://localhost:1234"),
+        model=payload.get("model", "local-model"),
+        timeout=payload.get("timeout"),
+        author=payload.get("author"),
+    )
+
+
+def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
+    outlines_dir = Path(payload.get("outlines_dir", "outlines"))
+    if not outlines_dir.exists():
+        return {"outlines": []}
+    outlines = []
+    for outline_path in sorted(outlines_dir.iterdir()):
+        if outline_path.suffix != ".md":
+            continue
+        title, items = parse_outline_with_title(outline_path)
+        preview = _outline_preview_text(title, items)
+        outlines.append(
+            {
+                "path": str(outline_path),
+                "title": title,
+                "preview": preview,
+            }
+        )
+    return {"outlines": outlines}
+
+
+def list_books(payload: dict[str, Any]) -> dict[str, Any]:
+    books_dir = Path(payload.get("books_dir", "books"))
+    audio_dir = payload.get("tts_audio_dir", "audio")
+    video_dir = payload.get("video_dir", "video")
+    books = _book_directories(books_dir, audio_dir, video_dir)
+    return {
+        "books": [
+            {
+                "path": str(book.path),
+                "title": book.title,
+                "has_text": book.has_text,
+                "has_audio": book.has_audio,
+                "has_video": book.has_video,
+                "has_compilation": book.has_compilation,
+            }
+            for book in books
+        ]
+    }
+
+
+def generate_book(payload: dict[str, Any]) -> dict[str, Any]:
+    outline_path_value = payload.get("outline_path")
+    if not outline_path_value:
+        raise ApiError("outline_path is required")
+    outline_path = Path(outline_path_value)
+    output_dir = Path(payload.get("output_dir", "output"))
+    title, items = parse_outline_with_title(outline_path)
+    if not items:
+        raise ApiError("No outline items found in the outline file.")
+
+    client = _build_client(payload)
+    tts_settings = _parse_tts_settings(payload)
+    video_settings = _parse_video_settings(payload)
+    written_files = write_book(
+        items=items,
+        output_dir=output_dir,
+        client=client,
+        verbose=bool(payload.get("verbose", False)),
+        tts_settings=tts_settings,
+        video_settings=video_settings,
+        book_title=payload.get("book_title") or title,
+        byline=payload.get("byline", "Marissa Bard"),
+        tone=payload.get("tone", "instructive self help guide"),
+        resume=bool(payload.get("resume", False)),
+    )
+    return {
+        "written_files": [str(path) for path in written_files],
+        "output_dir": str(output_dir),
+    }
+
+
+def expand_book_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("expand_book")
+    if not book_dir_value:
+        raise ApiError("expand_book is required")
+    book_dir = Path(book_dir_value)
+    client = _build_client(payload)
+    tts_settings = _parse_tts_settings(payload)
+    video_settings = _parse_video_settings(payload)
+    expand_only = _get_value(payload, "expand_only")
+    chapter_files = None
+    if expand_only:
+        chapter_files = _select_chapter_files(
+            _book_chapter_files(book_dir),
+            str(expand_only),
+        )
+    expand_book(
+        output_dir=book_dir,
+        client=client,
+        passes=int(payload.get("expand_passes", 1)),
+        verbose=bool(payload.get("verbose", False)),
+        tts_settings=tts_settings,
+        video_settings=video_settings,
+        tone=payload.get("tone", "instructive self help guide"),
+        chapter_files=chapter_files,
+    )
+    return {"status": "expanded", "book_dir": str(book_dir)}
+
+
+def compile_book_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    compile_book(book_dir)
+    return {"status": "compiled", "book_dir": str(book_dir)}
+
+
+def generate_audio_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    tts_settings = _parse_tts_settings(payload)
+    generate_book_audio(
+        output_dir=book_dir,
+        tts_settings=tts_settings,
+        verbose=bool(payload.get("verbose", False)),
+    )
+    return {"status": "audio_generated", "book_dir": str(book_dir)}
+
+
+def generate_videos_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    video_settings = _parse_video_settings(payload)
+    generate_book_videos(
+        output_dir=book_dir,
+        video_settings=video_settings,
+        audio_dirname=payload.get("audio_dirname", "audio"),
+        verbose=bool(payload.get("verbose", False)),
+    )
+    return {"status": "videos_generated", "book_dir": str(book_dir)}
+
+
+def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+    length = int(handler.headers.get("Content-Length", "0"))
+    if length == 0:
+        return {}
+    raw = handler.rfile.read(length)
+    if not raw:
+        return {}
+    return json.loads(raw.decode("utf-8"))
+
+
+def _send_json(handler: BaseHTTPRequestHandler, payload: dict[str, Any], status: int) -> None:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _send_html(handler: BaseHTTPRequestHandler, html: str) -> None:
+    body = html.encode("utf-8")
+    handler.send_response(HTTPStatus.OK)
+    handler.send_header("Content-Type", "text/html; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _parse_query(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+    query = parse_qs(urlparse(handler.path).query)
+    return {key: values[0] for key, values in query.items() if values}
+
+
+def _handle_api(handler: BaseHTTPRequestHandler) -> None:
+    path = urlparse(handler.path).path
+    try:
+        if path == "/api/outlines":
+            response = list_outlines(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/books":
+            response = list_books(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+
+        payload = _read_json(handler)
+        routes = {
+            "/api/generate-book": generate_book,
+            "/api/expand-book": expand_book_api,
+            "/api/compile-book": compile_book_api,
+            "/api/generate-audio": generate_audio_api,
+            "/api/generate-videos": generate_videos_api,
+        }
+        handler_fn = routes.get(path)
+        if handler_fn is None:
+            _send_json(handler, {"error": "Unknown endpoint"}, HTTPStatus.NOT_FOUND)
+            return
+        response = handler_fn(payload)
+        _send_json(handler, response, HTTPStatus.OK)
+    except ApiError as exc:
+        _send_json(handler, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+    except json.JSONDecodeError:
+        _send_json(handler, {"error": "Invalid JSON payload."}, HTTPStatus.BAD_REQUEST)
+
+
+class BookWriterRequestHandler(BaseHTTPRequestHandler):
+    """Serve the GUI and CLI-equivalent API endpoints."""
+
+    def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+        if self.path.startswith("/api/"):
+            _handle_api(self)
+            return
+        _send_html(self, get_gui_html())
+
+    def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
+        if not self.path.startswith("/api/"):
+            _send_json(self, {"error": "Unsupported endpoint"}, HTTPStatus.NOT_FOUND)
+            return
+        _handle_api(self)
+
+
+def run_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
+    """Run the Book Writer HTTP server."""
+    server = ThreadingHTTPServer((host, port), BookWriterRequestHandler)
+    print(f"Book Writer GUI available at http://{host}:{port}")
+    server.serve_forever()
+    return server
