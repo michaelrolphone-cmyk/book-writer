@@ -398,6 +398,14 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     )
 
 
+def _prompt_for_outline_generation(
+    outline_files: list[Path], outline_path: Path
+) -> bool:
+    if not outline_files and not outline_path.exists():
+        return False
+    return _prompt_yes_no("Generate new books from outlines", True)
+
+
 def write_books_from_outlines(
     outlines_dir: Path,
     books_dir: Path,
@@ -677,6 +685,12 @@ def main() -> int:
                         audio_dirname=task_selection.tts_settings.audio_dirname,
                         verbose=True,
                     )
+        if not outline_files and not args.outline.exists():
+            if selected_books:
+                return 0
+            parser.error("No outlines found to generate.")
+        if not _prompt_for_outline_generation(outline_files, args.outline):
+            return 0
         tones_dir = Path(__file__).parent / "tones"
         tone_options = [tone.stem for tone in _tone_files(tones_dir)]
         if outline_files:

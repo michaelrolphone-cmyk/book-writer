@@ -234,6 +234,7 @@ class TestCliPromptFlow(unittest.TestCase):
             (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
 
             prompt_inputs = [
+                "y",
                 "1",
                 "1,2",
                 "1",
@@ -315,3 +316,63 @@ class TestCliBookManagementPrompt(unittest.TestCase):
         compile_mock.assert_called_once_with(book_dir)
         audio_mock.assert_called_once()
         video_mock.assert_not_called()
+
+
+class TestCliPromptCombinedFlows(unittest.TestCase):
+    @patch("book_writer.cli.write_books_from_outlines")
+    @patch("book_writer.cli.expand_book")
+    def test_prompt_manages_books_and_generates_new(
+        self, expand_mock: MagicMock, write_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            books_dir = base_dir / "books"
+            book_dir = books_dir / "alpha"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            outlines_dir = base_dir / "outlines"
+            outlines_dir.mkdir()
+            (outlines_dir / "alpha.md").write_text("# Chapter Alpha\n", encoding="utf-8")
+            (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
+
+            prompt_inputs = [
+                "1",
+                "y",
+                "2",
+                "n",
+                "n",
+                "n",
+                "y",
+                "",
+                "",
+                "",
+                "",
+                "y",
+                "",
+                "n",
+                "n",
+            ]
+            with patch("builtins.input", side_effect=prompt_inputs):
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--prompt",
+                        "--books-dir",
+                        str(books_dir),
+                        "--outlines-dir",
+                        str(outlines_dir),
+                    ],
+                ):
+                    result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+        _, expand_kwargs = expand_mock.call_args
+        self.assertEqual(expand_kwargs["passes"], 2)
+        write_mock.assert_called_once()
+        _, write_kwargs = write_mock.call_args
+        outline_files = write_kwargs["outline_files"]
+        self.assertEqual([path.name for path in outline_files], ["alpha.md", "beta.md"])
