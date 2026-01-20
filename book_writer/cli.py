@@ -281,7 +281,6 @@ class BookInfo:
 class BookTaskSelection:
     expand: bool
     expand_passes: int
-    expand_only: Optional[str]
     compile: bool
     tts_settings: TTSSettings
     video_settings: VideoSettings
@@ -343,6 +342,29 @@ def _select_chapter_files(
             f"Expand-only selection '{token}' did not match a chapter file."
         )
     return [path for path in chapter_files if path in selection]
+
+
+def _prompt_for_expand_only(
+    chapter_files: list[Path], expand_only: Optional[str]
+) -> list[Path]:
+    if not chapter_files:
+        return chapter_files
+    questionary = _questionary()
+    default_selection: list[Path] = []
+    if expand_only:
+        default_selection = _select_chapter_files(chapter_files, expand_only)
+    choices = [
+        questionary.Choice(f"{index:03d}. {path.name}", value=path)
+        for index, path in enumerate(chapter_files, start=1)
+    ]
+    selected = questionary.checkbox(
+        "Select chapters to expand (leave blank for all):",
+        choices=choices,
+        default=default_selection,
+    ).ask()
+    if not selected:
+        return chapter_files
+    return [path for path in chapter_files if path in selected]
 
 
 def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
@@ -489,7 +511,6 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     selected_tasks = set(selected or [])
     expand = "expand" in selected_tasks
     expand_passes = args.expand_passes
-    expand_only = args.expand_only
     if expand:
         passes_response = questionary.text(
             "Expansion passes:",
@@ -501,12 +522,6 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
             except ValueError:
                 print("Expansion passes must be a whole number.")
                 expand_passes = args.expand_passes
-        expand_only_response = questionary.text(
-            "Expand-only selection (optional):",
-            default=args.expand_only or "",
-        ).ask()
-        if expand_only_response:
-            expand_only = expand_only_response
     generate_audio = "audio" in selected_tasks
     tts_settings = TTSSettings(
         enabled=False,
@@ -531,7 +546,6 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     return BookTaskSelection(
         expand=expand,
         expand_passes=expand_passes,
-        expand_only=expand_only,
         compile=compile_book_assets,
         tts_settings=tts_settings,
         video_settings=video_settings,
@@ -867,8 +881,8 @@ def main() -> int:
                         book.path.name, tone_options, args.tone
                     )
                     try:
-                        selected_chapters = _select_chapter_files(
-                            _book_chapter_files(book.path), task_selection.expand_only
+                        selected_chapters = _prompt_for_expand_only(
+                            _book_chapter_files(book.path), args.expand_only
                         )
                     except ValueError as exc:
                         parser.error(str(exc))

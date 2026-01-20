@@ -412,6 +412,9 @@ class TestCliBookManagementPrompt(unittest.TestCase):
             (book_dir / "001-chapter-one.md").write_text(
                 "# Chapter One\n", encoding="utf-8"
             )
+            (book_dir / "002-chapter-two.md").write_text(
+                "# Chapter Two\n", encoding="utf-8"
+            )
 
             questionary_stub = _QuestionaryStub(
                 [
@@ -423,13 +426,13 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                         if choice.value in {"expand", "compile", "audio"}
                     ],
                     "2",
-                    "1",
                     "",
                     "",
                     "",
                     "",
                     "curious-storyteller",
                     "instructive self help guide",
+                    lambda choices, **kwargs: [choices[1].value],
                 ]
             )
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
@@ -450,7 +453,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
         self.assertEqual(expand_kwargs["passes"], 2)
         self.assertEqual(len(expand_kwargs["chapter_files"]), 1)
         self.assertEqual(
-            expand_kwargs["chapter_files"][0].name, "001-chapter-one.md"
+            expand_kwargs["chapter_files"][0].name, "002-chapter-two.md"
         )
         compile_mock.assert_called_once_with(book_dir)
         audio_mock.assert_called_once()
