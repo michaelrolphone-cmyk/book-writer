@@ -784,7 +784,37 @@ class TestWriter(unittest.TestCase):
 
             updated_content = chapter_path.read_text(encoding="utf-8")
             self.assertIn("Expanded twice.", updated_content)
-            self.assertEqual(expanded_files, [chapter_path])
+        self.assertEqual(expanded_files, [chapter_path])
+
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_limits_to_selected_chapters(
+        self, run_mock: Mock
+    ) -> None:
+        client = MagicMock()
+        client.generate.return_value = "Expanded paragraph."
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_one = output_dir / "001-chapter-one.md"
+            chapter_two = output_dir / "002-chapter-two.md"
+            chapter_one.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+            chapter_two.write_text(
+                "# Chapter Two\n\nOriginal paragraph.", encoding="utf-8"
+            )
+
+            expanded_files = expand_book(
+                output_dir, client, chapter_files=[chapter_one]
+            )
+
+            updated_one = chapter_one.read_text(encoding="utf-8")
+            updated_two = chapter_two.read_text(encoding="utf-8")
+            self.assertIn("Expanded paragraph.", updated_one)
+            self.assertIn("Original paragraph.", updated_two)
+            self.assertEqual(expanded_files, [chapter_one])
 
         run_mock.assert_called_once()
 

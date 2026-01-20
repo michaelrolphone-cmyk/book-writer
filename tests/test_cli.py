@@ -164,6 +164,41 @@ class TestCliExpandBook(unittest.TestCase):
         _, kwargs = expand_mock.call_args
         self.assertEqual(kwargs["tone"], "novel")
 
+    @patch("book_writer.cli.expand_book")
+    def test_main_expands_only_selected_chapters(
+        self, expand_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            (book_dir / "002-chapter-two.md").write_text(
+                "# Chapter Two\n", encoding="utf-8"
+            )
+            questionary_stub = _QuestionaryStub(
+                [None, "instructive self help guide"]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--expand-book",
+                        tmpdir,
+                        "--expand-only",
+                        "2",
+                    ],
+                ):
+                    result = cli.main()
+
+        self.assertEqual(result, 0)
+        expand_mock.assert_called_once()
+        _, kwargs = expand_mock.call_args
+        selected = kwargs["chapter_files"]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].name, "002-chapter-two.md")
+
 
 class TestCliTtsDefaults(unittest.TestCase):
     @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
