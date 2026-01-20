@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from typing import Optional
+from typing import Callable, Optional
 from pathlib import Path
 
 from book_writer.outline import parse_outline, parse_outline_with_title
@@ -9,8 +9,10 @@ from book_writer.tts import TTSSettings
 from book_writer.video import VideoSettings
 from book_writer.writer import (
     LMStudioClient,
+    clear_book_progress,
     expand_book,
     generate_book_title,
+    load_book_progress,
     write_book,
 )
 
@@ -31,6 +33,7 @@ def write_books_from_outlines(
     video_settings: Optional[VideoSettings] = None,
     byline: str = "Marissa Bard",
     tone: str = "instructive self help guide",
+    resume_decider: Optional[Callable[[Path, Path, dict], bool]] = None,
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -55,6 +58,18 @@ def write_books_from_outlines(
 
         book_short_title = outline_path.stem
         book_output_dir = books_dir / book_short_title
+        resume = False
+        progress = load_book_progress(book_output_dir)
+        if progress:
+            if progress.get("status") == "in_progress":
+                if resume_decider:
+                    resume = resume_decider(outline_path, book_output_dir, progress)
+                    if not resume:
+                        clear_book_progress(book_output_dir)
+                else:
+                    resume = True
+            else:
+                clear_book_progress(book_output_dir)
         written_files.extend(
             write_book(
                 items=items,
@@ -66,6 +81,7 @@ def write_books_from_outlines(
                 book_title=book_title,
                 byline=byline,
                 tone=tone,
+                resume=resume,
             )
         )
         reset_supported = client.reset_context()
@@ -199,6 +215,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _prompt_for_resume(output_dir: Path, progress: dict) -> bool:
+    completed_steps = progress.get("completed_steps", 0)
+    total_steps = progress.get("total_steps", "unknown")
+    prompt = (
+        f"Found in-progress book generation in {output_dir} "
+        f"(step {completed_steps}/{total_steps}). "
+        "Continue from the last saved step? [c]ontinue/[r]estart: "
+    )
+    while True:
+        response = input(prompt).strip().lower()
+        if response in {"c", "continue", "y", "yes"}:
+            return True
+        if response in {"r", "restart", "n", "no"}:
+            return False
+        print("Please enter 'c' to continue or 'r' to restart.")
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -240,6 +273,9 @@ def main() -> int:
                 video_settings=video_settings,
                 byline=args.byline,
                 tone=args.tone,
+                resume_decider=lambda outline, output, progress: _prompt_for_resume(
+                    output, progress
+                ),
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -249,6 +285,15 @@ def main() -> int:
     if not items:
         parser.error("No outline items found in the outline file.")
     book_title = outline_title or generate_book_title(items, client)
+    resume = False
+    progress = load_book_progress(args.output_dir)
+    if progress:
+        if progress.get("status") == "in_progress":
+            resume = _prompt_for_resume(args.output_dir, progress)
+            if not resume:
+                clear_book_progress(args.output_dir)
+        else:
+            clear_book_progress(args.output_dir)
     write_book(
         items=items,
         output_dir=args.output_dir,
@@ -259,6 +304,7 @@ def main() -> int:
         book_title=book_title,
         byline=args.byline,
         tone=args.tone,
+        resume=resume,
     )
     return 0
 

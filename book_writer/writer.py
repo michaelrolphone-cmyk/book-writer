@@ -80,6 +80,33 @@ class LMStudioClient:
         return False
 
 
+PROGRESS_FILENAME = ".book_writer_progress.json"
+
+
+def _progress_path(output_dir: Path) -> Path:
+    return output_dir / PROGRESS_FILENAME
+
+
+def load_book_progress(output_dir: Path) -> Optional[dict]:
+    progress_path = _progress_path(output_dir)
+    if not progress_path.exists():
+        return None
+    return json.loads(progress_path.read_text(encoding="utf-8"))
+
+
+def save_book_progress(output_dir: Path, progress: dict) -> None:
+    progress_path = _progress_path(output_dir)
+    progress_path.write_text(
+        json.dumps(progress, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def clear_book_progress(output_dir: Path) -> None:
+    progress_path = _progress_path(output_dir)
+    if progress_path.exists():
+        progress_path.unlink()
+
+
 def _tone_preface(tone: Optional[str]) -> str:
     if not tone:
         return ""
@@ -659,6 +686,7 @@ def write_book(
     book_title: Optional[str] = None,
     byline: str = "Marissa Bard",
     tone: Optional[str] = None,
+    resume: bool = False,
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -667,6 +695,44 @@ def write_book(
     index = 0
     previous_chapter: Optional[ChapterContext] = None
     nextsteps_sections: list[str] = []
+    total_steps = len(items)
+    progress = load_book_progress(output_dir) if resume else None
+    if progress and progress.get("status") == "in_progress" and resume:
+        if progress.get("total_steps") == total_steps:
+            index = int(progress.get("completed_steps", 0))
+            previous_data = progress.get("previous_chapter")
+            if previous_data:
+                previous_chapter = ChapterContext(
+                    title=previous_data.get("title", ""),
+                    content=previous_data.get("content", ""),
+                )
+            nextsteps_sections = progress.get("nextsteps_sections", [])
+            if book_title is None:
+                book_title = progress.get("book_title")
+            written_files = _chapter_files(output_dir)
+            if verbose and index < total_steps:
+                print(
+                    f"[write] Resuming from step {index + 1}/{total_steps} in "
+                    f"{output_dir}."
+                )
+        else:
+            clear_book_progress(output_dir)
+            progress = None
+    elif progress:
+        clear_book_progress(output_dir)
+        progress = None
+
+    if progress is None:
+        progress = {
+            "status": "in_progress",
+            "total_steps": total_steps,
+            "completed_steps": index,
+            "previous_chapter": None,
+            "nextsteps_sections": [],
+            "book_title": book_title or (items[0].title if items else "Untitled"),
+            "byline": byline,
+        }
+        save_book_progress(output_dir, progress)
 
     while index < len(items):
         item = items[index]
@@ -730,6 +796,18 @@ def write_book(
                 )
                 if verbose:
                     print(f"[write] Generated context summary for {item.title}.")
+        progress["completed_steps"] = index + 1
+        progress["previous_chapter"] = (
+            {
+                "title": previous_chapter.title,
+                "content": previous_chapter.content,
+            }
+            if previous_chapter
+            else None
+        )
+        progress["nextsteps_sections"] = nextsteps_sections
+        progress["status"] = "in_progress"
+        save_book_progress(output_dir, progress)
         index += 1
 
     _write_nextsteps(output_dir, nextsteps_sections)
@@ -778,4 +856,7 @@ def write_book(
     if verbose:
         print("[write] Wrote back-cover-synopsis.md.")
 
+    progress["status"] = "completed"
+    progress["completed_steps"] = total_steps
+    save_book_progress(output_dir, progress)
     return written_files
