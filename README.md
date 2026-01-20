@@ -12,6 +12,14 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 
 ## Commands
 
+### Launch the GUI server
+
+```bash
+python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080
+```
+
+Open `http://127.0.0.1:8080` in your browser after the server starts. You can also launch the GUI from the interactive CLI by running `python -m book_writer --prompt` and choosing **Launch GUI server** from the first menu.
+
 ### Generate a single book from an outline
 
 ```bash
