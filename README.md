@@ -8,6 +8,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
 - [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
 - [`ffmpeg`](https://ffmpeg.org/) for generating chapter MP4 videos when `--video` is enabled.
+- [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).
 
 ## Commands
 
