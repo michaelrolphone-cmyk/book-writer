@@ -34,6 +34,22 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(len(result["outlines"]), 1)
         self.assertIn("Chapter One", result["outlines"][0]["preview"])
+        self.assertEqual(result["outlines"][0]["item_count"], 1)
+
+    def test_list_completed_outlines_returns_preview(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outlines_dir = Path(tmpdir) / "completed_outlines"
+            outlines_dir.mkdir()
+            outline_path = outlines_dir / "archived.md"
+            outline_path.write_text("# Book Two\n\n## Chapter Two\n", encoding="utf-8")
+
+            result = server.list_completed_outlines(
+                {"completed_outlines_dir": str(outlines_dir)}
+            )
+
+        self.assertEqual(len(result["outlines"]), 1)
+        self.assertIn("Chapter Two", result["outlines"][0]["preview"])
+        self.assertEqual(result["outlines"][0]["item_count"], 1)
 
     def test_list_books_returns_status(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -46,6 +62,7 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(len(result["books"]), 1)
         self.assertTrue(result["books"][0]["has_text"])
+        self.assertEqual(result["books"][0]["chapter_count"], 1)
 
     def test_generate_book_calls_writer(self) -> None:
         with TemporaryDirectory() as tmpdir:
