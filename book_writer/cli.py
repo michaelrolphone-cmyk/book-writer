@@ -344,6 +344,32 @@ def _select_chapter_files(
     return [path for path in chapter_files if path in selection]
 
 
+def _prompt_for_expand_only(
+    chapter_files: list[Path], expand_only: Optional[str]
+) -> list[Path]:
+    if not chapter_files:
+        return chapter_files
+    questionary = _questionary()
+    default_selection: list[Path] = []
+    if expand_only:
+        default_selection = _select_chapter_files(chapter_files, expand_only)
+    choices = [
+        questionary.Choice(f"{index:03d}. {path.name}", value=path)
+        for index, path in enumerate(chapter_files, start=1)
+    ]
+    default_values = default_selection or None
+    checkbox_kwargs = {"choices": choices}
+    if default_values:
+        checkbox_kwargs["default"] = default_values
+    selected = questionary.checkbox(
+        "Select chapters to expand (leave blank for all):",
+        **checkbox_kwargs,
+    ).ask()
+    if not selected:
+        return chapter_files
+    return [path for path in chapter_files if path in selected]
+
+
 def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
     book_md = book_dir / "book.md"
     if book_md.exists():
@@ -858,7 +884,7 @@ def main() -> int:
                         book.path.name, tone_options, args.tone
                     )
                     try:
-                        selected_chapters = _select_chapter_files(
+                        selected_chapters = _prompt_for_expand_only(
                             _book_chapter_files(book.path), args.expand_only
                         )
                     except ValueError as exc:

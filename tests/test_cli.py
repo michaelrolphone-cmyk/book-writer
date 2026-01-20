@@ -55,6 +55,19 @@ class _QuestionaryStub:
         return _FakePrompt(self._resolve(self._next(), **kwargs))
 
 
+class _CheckboxDefaultGuard:
+    Choice = _FakeChoice
+
+    def __init__(self, response: Any) -> None:
+        self._response = response
+
+    def checkbox(self, *args: Any, **kwargs: Any) -> _FakePrompt:
+        if kwargs.get("default") == []:
+            raise AssertionError("Checkbox default should not be an empty list.")
+        response = self._response(**kwargs) if callable(self._response) else self._response
+        return _FakePrompt(response)
+
+
 class TestWriteBooksFromOutlines(unittest.TestCase):
     @patch("book_writer.writer.subprocess.run")
     def test_writes_books_and_moves_outlines(self, run_mock: MagicMock) -> None:
@@ -198,6 +211,25 @@ class TestCliExpandBook(unittest.TestCase):
         selected = kwargs["chapter_files"]
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0].name, "002-chapter-two.md")
+
+
+class TestCliExpandOnlyPrompt(unittest.TestCase):
+    def test_prompt_for_expand_only_skips_empty_default(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            chapter_one = base_dir / "001-chapter-one.md"
+            chapter_two = base_dir / "002-chapter-two.md"
+            chapter_one.write_text("# Chapter One\n", encoding="utf-8")
+            chapter_two.write_text("# Chapter Two\n", encoding="utf-8")
+            chapter_files = [chapter_one, chapter_two]
+
+            questionary_stub = _CheckboxDefaultGuard(
+                lambda choices, **kwargs: [choices[0].value]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                selected = cli._prompt_for_expand_only(chapter_files, None)
+
+        self.assertEqual(selected, [chapter_one])
 
 
 class TestCliTtsDefaults(unittest.TestCase):
@@ -412,6 +444,9 @@ class TestCliBookManagementPrompt(unittest.TestCase):
             (book_dir / "001-chapter-one.md").write_text(
                 "# Chapter One\n", encoding="utf-8"
             )
+            (book_dir / "002-chapter-two.md").write_text(
+                "# Chapter Two\n", encoding="utf-8"
+            )
 
             questionary_stub = _QuestionaryStub(
                 [
@@ -429,6 +464,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                     "",
                     "curious-storyteller",
                     "instructive self help guide",
+                    lambda choices, **kwargs: [choices[1].value],
                 ]
             )
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
@@ -447,6 +483,10 @@ class TestCliBookManagementPrompt(unittest.TestCase):
         expand_mock.assert_called_once()
         _, expand_kwargs = expand_mock.call_args
         self.assertEqual(expand_kwargs["passes"], 2)
+        self.assertEqual(len(expand_kwargs["chapter_files"]), 1)
+        self.assertEqual(
+            expand_kwargs["chapter_files"][0].name, "002-chapter-two.md"
+        )
         compile_mock.assert_called_once_with(book_dir)
         audio_mock.assert_called_once()
         video_mock.assert_not_called()
