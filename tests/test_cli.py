@@ -113,7 +113,9 @@ class TestCliExpandBook(unittest.TestCase):
     @patch("book_writer.cli.expand_book")
     def test_main_expands_completed_book(self, expand_mock: MagicMock) -> None:
         with TemporaryDirectory() as tmpdir:
-            questionary_stub = _QuestionaryStub(["instructive self help guide"])
+            questionary_stub = _QuestionaryStub(
+                [None, "instructive self help guide"]
+            )
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch("sys.argv", ["book-writer", "--expand-book", tmpdir]):
                     result = cli.main()
@@ -128,7 +130,9 @@ class TestCliExpandBook(unittest.TestCase):
         self, expand_mock: MagicMock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
-            questionary_stub = _QuestionaryStub(["instructive self help guide"])
+            questionary_stub = _QuestionaryStub(
+                [None, "instructive self help guide"]
+            )
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch(
                     "sys.argv",
@@ -147,7 +151,7 @@ class TestCliExpandBook(unittest.TestCase):
         self, expand_mock: MagicMock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
-            questionary_stub = _QuestionaryStub(["novel"])
+            questionary_stub = _QuestionaryStub([None, "novel"])
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
                 with patch(
                     "sys.argv",
@@ -182,6 +186,37 @@ class TestCliTtsDefaults(unittest.TestCase):
 
         _, kwargs = write_mock.call_args
         self.assertTrue(kwargs["tts_settings"].enabled)
+
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_passes_author_to_client(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch("book_writer.cli.LMStudioClient") as client_mock:
+                    with patch(
+                        "sys.argv",
+                        [
+                            "book-writer",
+                            "--outline",
+                            str(outline_path),
+                            "--author",
+                            "curious-storyteller",
+                        ],
+                    ):
+                        cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        client_mock.assert_called_once()
+        _, kwargs = client_mock.call_args
+        self.assertEqual(kwargs["author"], "curious-storyteller")
+        write_mock.assert_called_once()
 
     @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
     @patch("book_writer.cli.write_book")
@@ -291,6 +326,8 @@ class TestCliPromptFlow(unittest.TestCase):
                     "create",
                     [],
                     lambda choices: [choice.value for choice in choices],
+                    "curious-storyteller",
+                    "precise-historian",
                     "childrensbook",
                     "novel",
                     ["text"],
@@ -313,6 +350,9 @@ class TestCliPromptFlow(unittest.TestCase):
         outline_files = kwargs["outline_files"]
         self.assertEqual([path.name for path in outline_files], ["alpha.md", "beta.md"])
         tone_decider = kwargs["tone_decider"]
+        author_decider = kwargs["author_decider"]
+        self.assertEqual(author_decider(outline_files[0]), "curious-storyteller")
+        self.assertEqual(author_decider(outline_files[1]), "precise-historian")
         self.assertEqual(tone_decider(outline_files[0]), "childrensbook")
         self.assertEqual(tone_decider(outline_files[1]), "novel")
 
@@ -348,11 +388,12 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                         if choice.value in {"expand", "compile", "audio"}
                     ],
                     "2",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "curious-storyteller",
                     "instructive self help guide",
-                    "",
-                    "",
-                    "",
-                    "",
                 ]
             )
             with patch("book_writer.cli._questionary", return_value=questionary_stub):
@@ -400,6 +441,8 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
                     "create",
                     [],
                     lambda choices: [choice.value for choice in choices],
+                    "curious-storyteller",
+                    "precise-historian",
                     "instructive self help guide",
                     "instructive self help guide",
                     ["text"],

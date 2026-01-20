@@ -19,6 +19,7 @@ from book_writer.writer import (
     build_expand_paragraph_prompt,
     build_prompt,
     build_synopsis_prompt,
+    _base_prompt,
     _sanitize_markdown_for_latex,
     compile_book,
     expand_book,
@@ -33,6 +34,11 @@ from book_writer.writer import (
 
 
 class TestWriter(unittest.TestCase):
+    def test_base_prompt_uses_author_persona(self) -> None:
+        prompt = _base_prompt("curious-storyteller")
+
+        self.assertIn("curious storyteller", prompt.casefold())
+
     def test_build_prompt_includes_outline_and_current_item(self) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),
