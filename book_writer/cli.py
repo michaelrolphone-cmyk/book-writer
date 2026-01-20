@@ -34,9 +34,20 @@ def _tone_files(tones_dir: Path) -> list[Path]:
     return sorted(path for path in tones_dir.iterdir() if path.suffix == ".md")
 
 
+def _author_files(authors_dir: Path) -> list[Path]:
+    if not authors_dir.exists():
+        return []
+    return sorted(path for path in authors_dir.iterdir() if path.suffix == ".md")
+
+
 def _tone_options() -> list[str]:
     tones_dir = Path(__file__).parent / "tones"
     return [tone.stem for tone in _tone_files(tones_dir)]
+
+
+def _author_options() -> list[str]:
+    authors_dir = Path(__file__).resolve().parents[1] / "authors"
+    return [author.stem for author in _author_files(authors_dir)]
 
 
 def _questionary():
@@ -110,6 +121,33 @@ def _prompt_for_tone(
         ).ask()
         return custom or default
     return selected or default
+
+
+def _prompt_for_author(
+    outline_name: str,
+    author_options: list[str],
+    default: Optional[str],
+) -> Optional[str]:
+    if not author_options:
+        return default
+    questionary = _questionary()
+    choices = [
+        questionary.Choice(title="Default prompt (PROMPT.md)", value=None),
+        *[
+            questionary.Choice(
+                title=f"{author} (authors/{author}.md)", value=author
+            )
+            for author in author_options
+        ],
+    ]
+    selected = questionary.select(
+        f"Select an author persona for {outline_name}:",
+        choices=choices,
+        default=default if default in author_options else None,
+    ).ask()
+    if selected is None:
+        return default
+    return selected
 
 
 def _prompt_for_task_settings(
@@ -478,6 +516,7 @@ def write_books_from_outlines(
     resume_decider: Optional[Callable[[Path, Path, dict], bool]] = None,
     outline_files: Optional[list[Path]] = None,
     tone_decider: Optional[Callable[[Path], str]] = None,
+    author_decider: Optional[Callable[[Path], Optional[str]]] = None,
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -498,6 +537,8 @@ def write_books_from_outlines(
         outline_title, items = parse_outline_with_title(outline_path)
         if not items:
             raise ValueError(f"No outline items found in {outline_path}.")
+        if author_decider:
+            client.set_author(author_decider(outline_path))
         book_title = outline_title or generate_book_title(items, client)
         outline_tone = tone_decider(outline_path) if tone_decider else tone
 
@@ -657,6 +698,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Tone to use for chapter generation and expansion.",
     )
     parser.add_argument(
+        "--author",
+        default=None,
+        help=(
+            "Author persona to use from the authors/ folder (omit to use PROMPT.md)."
+        ),
+    )
+    parser.add_argument(
         "--prompt",
         action="store_true",
         help="Use interactive prompts to select outlines, tones, and tasks.",
@@ -688,7 +736,12 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    client = LMStudioClient(base_url=args.base_url, model=args.model, timeout=args.timeout)
+    client = LMStudioClient(
+        base_url=args.base_url,
+        model=args.model,
+        timeout=args.timeout,
+        author=args.author,
+    )
     tts_settings = TTSSettings(
         enabled=args.tts,
         voice=args.tts_voice,
@@ -702,7 +755,12 @@ def main() -> int:
         video_dirname=args.video_dir,
     )
     tone_options = _tone_options()
+    author_options = _author_options()
     if args.expand_book:
+        selected_author = _prompt_for_author(
+            args.expand_book.name, author_options, args.author
+        )
+        client.set_author(selected_author)
         selected_tone = _prompt_for_tone(
             args.expand_book.name, tone_options, args.tone
         )
@@ -729,6 +787,10 @@ def main() -> int:
             task_selection = _prompt_for_book_tasks(args)
             for book in selected_books:
                 if task_selection.expand:
+                    selected_author = _prompt_for_author(
+                        book.path.name, author_options, args.author
+                    )
+                    client.set_author(selected_author)
                     selected_tone = _prompt_for_tone(
                         book.path.name, tone_options, args.tone
                     )
@@ -775,6 +837,12 @@ def main() -> int:
             selected_outlines = _prompt_for_outline_selection(outline_info)
             if not selected_outlines:
                 parser.error("No outlines selected for generation.")
+            author_map = {
+                info.path: _prompt_for_author(
+                    info.path.name, author_options, args.author
+                )
+                for info in selected_outlines
+            }
             tone_map = {
                 info.path: _prompt_for_tone(
                     info.path.name, tone_options, args.tone
@@ -803,6 +871,7 @@ def main() -> int:
                     ),
                     outline_files=[info.path for info in selected_outlines],
                     tone_decider=lambda path: tone_map[path],
+                    author_decider=lambda path: author_map[path],
                 )
             except ValueError as exc:
                 parser.error(str(exc))
@@ -813,6 +882,10 @@ def main() -> int:
         preview_text = _outline_preview_text(outline_title, items)
         print(f"Preview for {args.outline.name}:")
         print(preview_text)
+        selected_author = _prompt_for_author(
+            args.outline.name, author_options, args.author
+        )
+        client.set_author(selected_author)
         selected_tone = _prompt_for_tone(args.outline.name, tone_options, args.tone)
         text_enabled, byline, tts_settings, video_settings = _prompt_for_task_settings(
             args

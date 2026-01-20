@@ -22,13 +22,21 @@ class ChapterContext:
 
 
 class LMStudioClient:
-    def __init__(self, base_url: str, model: str, timeout: Optional[float] = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        timeout: Optional[float] = None,
+        base_prompt: Optional[str] = None,
+        author: Optional[str] = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self.base_prompt = base_prompt if base_prompt is not None else _base_prompt(author)
 
     def generate(self, prompt: str) -> str:
-        prompt = f"{_base_prompt()}\n\n{prompt}".strip()
+        prompt = f"{self.base_prompt}\n\n{prompt}".strip()
         payload = {
             "model": self.model,
             "messages": [
@@ -54,6 +62,9 @@ class LMStudioClient:
             body = response.read().decode("utf-8")
         parsed = json.loads(body)
         return parsed["choices"][0]["message"]["content"].strip()
+
+    def set_author(self, author: Optional[str]) -> None:
+        self.base_prompt = _base_prompt(author)
 
     def reset_context(self) -> bool:
         payload = {"model": self.model}
@@ -122,8 +133,18 @@ def _tone_preface(tone: Optional[str]) -> str:
     return f"{content}\n\n"
 
 
-def _base_prompt() -> str:
-    prompt_path = Path(__file__).resolve().parents[1] / "PROMPT.md"
+def _base_prompt(author: Optional[str] = None) -> str:
+    project_root = Path(__file__).resolve().parents[1]
+    if author:
+        authors_dir = project_root / "authors"
+        author_path = authors_dir / f"{author}.md"
+        if not author_path.exists():
+            raise ValueError(
+                f"Author persona '{author}' is not available. Add {author_path.name} "
+                f"to {authors_dir}."
+            )
+        return author_path.read_text(encoding="utf-8").strip()
+    prompt_path = project_root / "PROMPT.md"
     if not prompt_path.exists():
         raise FileNotFoundError(f"Base prompt file not found at {prompt_path}.")
     return prompt_path.read_text(encoding="utf-8").strip()

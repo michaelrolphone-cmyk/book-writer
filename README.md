@@ -32,6 +32,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
 - `--byline`: Byline shown on the book title page (default `Marissa Bard`).
+- `--author`: Author persona to load from the `authors/` folder (omit to use `PROMPT.md`).
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
@@ -90,6 +91,7 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 
 ## Notes
 
+- Author personas live in `authors/` as markdown files (for example, `authors/curious-storyteller.md`). Provide the filename stem with `--author` to select a persona.
 - `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
 - Install the `edge-tts` package (`pip install edge-tts`) to enable MP3 narration with the default neural voice.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
