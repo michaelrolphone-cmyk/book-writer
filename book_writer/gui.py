@@ -546,6 +546,10 @@ def get_gui_html() -> str:
             <h3>Audio + video</h3>
             <label>Audio output dir</label>
             <input id="audioDir" placeholder="audio" />
+            <label class="checkbox">
+              <input type="checkbox" id="audioOverwrite" />
+              Overwrite existing audio
+            </label>
             <label>Video output dir</label>
             <input id="videoDir" placeholder="video" />
             <label>Background video path</label>
@@ -974,7 +978,10 @@ def get_gui_html() -> str:
         try {
           const payload = {
             book_dir: bookSelect.value,
-            tts_settings: { audio_dirname: document.getElementById('audioDir').value || 'audio' },
+            tts_settings: {
+              audio_dirname: document.getElementById('audioDir').value || 'audio',
+              overwrite_audio: document.getElementById('audioOverwrite').checked,
+            },
           };
           await postJson('/api/generate-audio', payload);
           log('Audio generation complete.');

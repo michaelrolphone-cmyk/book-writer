@@ -574,7 +574,7 @@ def generate_book_audio(
     audio_dir = output_dir / tts_settings.audio_dirname
     for chapter_file in chapter_files:
         audio_path = audio_dir / f"{chapter_file.stem}.mp3"
-        if audio_path.exists():
+        if audio_path.exists() and not tts_settings.overwrite_audio:
             continue
         generated = synthesize_chapter_audio(
             chapter_path=chapter_file,
@@ -592,7 +592,7 @@ def generate_book_audio(
         [path.read_text(encoding="utf-8") for path in chapter_files],
     )
     book_audio_path = audio_dir / "book.mp3"
-    if not book_audio_path.exists():
+    if tts_settings.overwrite_audio or not book_audio_path.exists():
         generated = synthesize_text_audio(
             text=audiobook_text,
             output_path=book_audio_path,
@@ -604,7 +604,9 @@ def generate_book_audio(
 
     synopsis_path = output_dir / "back-cover-synopsis.md"
     synopsis_audio_path = audio_dir / "back-cover-synopsis.mp3"
-    if synopsis_path.exists() and not synopsis_audio_path.exists():
+    if synopsis_path.exists() and (
+        tts_settings.overwrite_audio or not synopsis_audio_path.exists()
+    ):
         generated = synthesize_text_audio(
             text=synopsis_path.read_text(encoding="utf-8"),
             output_path=synopsis_audio_path,
@@ -776,6 +778,7 @@ def expand_book(
                     rate=tts_settings.rate,
                     pitch=tts_settings.pitch,
                     audio_dirname=tts_settings.audio_dirname,
+                    overwrite_audio=tts_settings.overwrite_audio,
                 )
             audio_path = synthesize_chapter_audio(
                 chapter_path=chapter_file,

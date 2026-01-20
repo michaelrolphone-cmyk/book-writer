@@ -20,6 +20,7 @@ class TTSSettings:
     rate: str = "+0%"
     pitch: str = "+0Hz"
     audio_dirname: str = "audio"
+    overwrite_audio: bool = False
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
