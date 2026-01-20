@@ -423,6 +423,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                         if choice.value in {"expand", "compile", "audio"}
                     ],
                     "2",
+                    "1",
                     "",
                     "",
                     "",
@@ -447,6 +448,10 @@ class TestCliBookManagementPrompt(unittest.TestCase):
         expand_mock.assert_called_once()
         _, expand_kwargs = expand_mock.call_args
         self.assertEqual(expand_kwargs["passes"], 2)
+        self.assertEqual(len(expand_kwargs["chapter_files"]), 1)
+        self.assertEqual(
+            expand_kwargs["chapter_files"][0].name, "001-chapter-one.md"
+        )
         compile_mock.assert_called_once_with(book_dir)
         audio_mock.assert_called_once()
         video_mock.assert_not_called()
