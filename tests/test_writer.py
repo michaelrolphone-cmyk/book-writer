@@ -263,6 +263,66 @@ class TestWriter(unittest.TestCase):
             ]
         )
 
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    def test_generate_book_audio_overwrites_existing_audio(
+        self,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        tts_settings = TTSSettings(enabled=True, overwrite_audio=True)
+        synthesize_chapter_mock.return_value = Path("chapter.mp3")
+        synthesize_text_mock.side_effect = [
+            Path("book.mp3"),
+            Path("back-cover-synopsis.mp3"),
+        ]
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+            synopsis_path = output_dir / "back-cover-synopsis.md"
+            synopsis_path.write_text("Synopsis", encoding="utf-8")
+            audio_dir = output_dir / tts_settings.audio_dirname
+            audio_dir.mkdir()
+            (audio_dir / "001-chapter-one.mp3").write_text(
+                "existing", encoding="utf-8"
+            )
+            (audio_dir / "book.mp3").write_text("existing", encoding="utf-8")
+            (audio_dir / "back-cover-synopsis.mp3").write_text(
+                "existing", encoding="utf-8"
+            )
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [chapter_path.read_text(encoding="utf-8")],
+            )
+
+            generate_book_audio(output_dir, tts_settings)
+
+        synthesize_chapter_mock.assert_called_once_with(
+            chapter_path=chapter_path,
+            output_dir=audio_dir,
+            settings=tts_settings,
+            verbose=False,
+        )
+        synthesize_text_mock.assert_has_calls(
+            [
+                call(
+                    text=audiobook_text,
+                    output_path=audio_dir / "book.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+                call(
+                    text="Synopsis",
+                    output_path=audio_dir / "back-cover-synopsis.mp3",
+                    settings=tts_settings,
+                    verbose=False,
+                ),
+            ]
+        )
+
     @patch("book_writer.writer.synthesize_chapter_video")
     def test_generate_book_videos_uses_existing_audio(
         self, synthesize_video_mock: Mock

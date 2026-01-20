@@ -195,6 +195,7 @@ def _prompt_for_task_settings(
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        overwrite_audio=args.tts_overwrite,
     )
     if audio_enabled:
         voice = questionary.text(
@@ -213,12 +214,17 @@ def _prompt_for_task_settings(
             "Audio output directory:",
             default=args.tts_audio_dir,
         ).ask()
+        overwrite_audio = _prompt_yes_no(
+            "Overwrite existing audio files?",
+            args.tts_overwrite,
+        )
         tts_settings = TTSSettings(
             enabled=True,
             voice=voice or args.tts_voice,
             rate=rate or args.tts_rate,
             pitch=pitch or args.tts_pitch,
             audio_dirname=audio_dir or args.tts_audio_dir,
+            overwrite_audio=overwrite_audio,
         )
 
     video_enabled = "video" in selected
@@ -468,12 +474,17 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         "Audio output directory:",
         default=args.tts_audio_dir,
     ).ask()
+    overwrite_audio = _prompt_yes_no(
+        "Overwrite existing audio files?",
+        args.tts_overwrite,
+    )
     return TTSSettings(
         enabled=True,
         voice=voice or args.tts_voice,
         rate=rate or args.tts_rate,
         pitch=pitch or args.tts_pitch,
         audio_dirname=audio_dir or args.tts_audio_dir,
+        overwrite_audio=overwrite_audio,
     )
 
 
@@ -532,6 +543,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        overwrite_audio=args.tts_overwrite,
     )
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
@@ -755,6 +767,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory name for storing chapter audio files.",
     )
     parser.add_argument(
+        "--tts-overwrite",
+        action="store_true",
+        help="Overwrite existing audio files when generating narration.",
+    )
+    parser.add_argument(
         "--video",
         action="store_true",
         help="Enable MP4 chapter videos using a background video and chapter audio.",
@@ -853,6 +870,7 @@ def main() -> int:
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        overwrite_audio=args.tts_overwrite,
     )
     video_settings = VideoSettings(
         enabled=args.video,
