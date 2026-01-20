@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from typing import Callable, Optional
 from pathlib import Path
 
@@ -23,6 +24,185 @@ def _outline_files(outlines_dir: Path) -> list[Path]:
     return sorted(path for path in outlines_dir.iterdir() if path.suffix == ".md")
 
 
+def _tone_files(tones_dir: Path) -> list[Path]:
+    if not tones_dir.exists():
+        return []
+    return sorted(path for path in tones_dir.iterdir() if path.suffix == ".md")
+
+
+def _prompt_yes_no(prompt: str, default: bool) -> bool:
+    suffix = "Y/n" if default else "y/N"
+    while True:
+        response = input(f"{prompt} [{suffix}]: ").strip().lower()
+        if not response:
+            return default
+        if response in {"y", "yes"}:
+            return True
+        if response in {"n", "no"}:
+            return False
+        print("Please enter 'y' or 'n'.")
+
+
+def _parse_number_list(response: str, max_value: int) -> list[int]:
+    if not response:
+        return []
+    if response.lower() == "all":
+        return list(range(1, max_value + 1))
+    selected: list[int] = []
+    for part in response.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if not part.isdigit():
+            raise ValueError("Selection must be a comma-separated list of numbers.")
+        value = int(part)
+        if value < 1 or value > max_value:
+            raise ValueError("Selection is out of range.")
+        if value not in selected:
+            selected.append(value)
+    return selected
+
+
+def _prompt_for_outline_selection(outline_info: list["OutlineInfo"]) -> list["OutlineInfo"]:
+    if not outline_info:
+        return []
+    print("Available outlines:")
+    for index, info in enumerate(outline_info, start=1):
+        title = info.title or "(title will be generated)"
+        print(f"  {index}. {info.path.name} — {title}")
+    preview_response = input(
+        "Enter outline numbers to preview (comma-separated), or press Enter to continue: "
+    ).strip()
+    if preview_response:
+        try:
+            preview_indices = _parse_number_list(preview_response, len(outline_info))
+        except ValueError as error:
+            print(error)
+        else:
+            for index in preview_indices:
+                info = outline_info[index - 1]
+                print(f"\nPreview for {info.path.name}:")
+                print(info.preview_text)
+
+    while True:
+        selection_response = input(
+            "Select outlines to generate (comma-separated numbers or 'all') [all]: "
+        ).strip()
+        if not selection_response:
+            selection_response = "all"
+        try:
+            selection_indices = _parse_number_list(
+                selection_response, len(outline_info)
+            )
+        except ValueError as error:
+            print(error)
+            continue
+        return [outline_info[index - 1] for index in selection_indices]
+
+
+def _prompt_for_tone(
+    outline_name: str,
+    tone_options: list[str],
+    default: str,
+) -> str:
+    if not tone_options:
+        return default
+    print(f"Available tones for {outline_name}:")
+    for index, tone in enumerate(tone_options, start=1):
+        print(f"  {index}. {tone}")
+    while True:
+        response = input(f"Select a tone [default: {default}]: ").strip()
+        if not response:
+            return default
+        if response.isdigit():
+            index = int(response)
+            if 1 <= index <= len(tone_options):
+                return tone_options[index - 1]
+            print("Selection is out of range.")
+            continue
+        if response in tone_options:
+            return response
+        print("Please enter a number from the list or a tone name.")
+
+
+def _prompt_for_task_settings(
+    args: argparse.Namespace,
+) -> tuple[bool, str, TTSSettings, VideoSettings]:
+    text_enabled = _prompt_yes_no("Generate text content", True)
+    byline = args.byline
+    if text_enabled:
+        byline_response = input(f"Byline [default: {args.byline}]: ").strip()
+        if byline_response:
+            byline = byline_response
+
+    audio_enabled = _prompt_yes_no("Generate audio narration", args.tts)
+    tts_settings = TTSSettings(
+        enabled=audio_enabled,
+        voice=args.tts_voice,
+        rate=args.tts_rate,
+        pitch=args.tts_pitch,
+        audio_dirname=args.tts_audio_dir,
+    )
+    if audio_enabled:
+        voice = input(f"TTS voice [default: {args.tts_voice}]: ").strip()
+        rate = input(f"TTS rate [default: {args.tts_rate}]: ").strip()
+        pitch = input(f"TTS pitch [default: {args.tts_pitch}]: ").strip()
+        audio_dir = input(
+            f"Audio output directory [default: {args.tts_audio_dir}]: "
+        ).strip()
+        tts_settings = TTSSettings(
+            enabled=True,
+            voice=voice or args.tts_voice,
+            rate=rate or args.tts_rate,
+            pitch=pitch or args.tts_pitch,
+            audio_dirname=audio_dir or args.tts_audio_dir,
+        )
+
+    video_enabled = _prompt_yes_no("Generate videos", args.video)
+    background_video = args.background_video
+    video_dirname = args.video_dir
+    if video_enabled:
+        background_response = input(
+            "Background video path (leave blank for none): "
+        ).strip()
+        if background_response:
+            background_video = Path(background_response)
+        video_dir_response = input(
+            f"Video output directory [default: {args.video_dir}]: "
+        ).strip()
+        if video_dir_response:
+            video_dirname = video_dir_response
+    video_settings = VideoSettings(
+        enabled=video_enabled,
+        background_video=background_video,
+        video_dirname=video_dirname,
+    )
+    return text_enabled, byline, tts_settings, video_settings
+
+
+def _outline_preview_text(title: Optional[str], items: list) -> str:
+    lines = []
+    if title:
+        lines.append(f"Title: {title}")
+    if not items:
+        lines.append("(No outline items detected.)")
+        return "\n".join(lines)
+    if title:
+        lines.append("Chapters:")
+    for item in items:
+        indent = "  " if item.level > 1 else ""
+        lines.append(f"{indent}- {item.title}")
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class OutlineInfo:
+    path: Path
+    title: Optional[str]
+    items: list
+    preview_text: str
+
+
 def write_books_from_outlines(
     outlines_dir: Path,
     books_dir: Path,
@@ -34,11 +214,13 @@ def write_books_from_outlines(
     byline: str = "Marissa Bard",
     tone: str = "instructive self help guide",
     resume_decider: Optional[Callable[[Path, Path, dict], bool]] = None,
+    outline_files: Optional[list[Path]] = None,
+    tone_decider: Optional[Callable[[Path], str]] = None,
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
     written_files: list[Path] = []
-    outline_files = _outline_files(outlines_dir)
+    outline_files = outline_files or _outline_files(outlines_dir)
     if not outline_files:
         raise ValueError(f"No outline markdown files found in {outlines_dir}.")
 
@@ -55,6 +237,7 @@ def write_books_from_outlines(
         if not items:
             raise ValueError(f"No outline items found in {outline_path}.")
         book_title = outline_title or generate_book_title(items, client)
+        outline_tone = tone_decider(outline_path) if tone_decider else tone
 
         book_short_title = outline_path.stem
         book_output_dir = books_dir / book_short_title
@@ -80,7 +263,7 @@ def write_books_from_outlines(
                 video_settings=video_settings,
                 book_title=book_title,
                 byline=byline,
-                tone=tone,
+                tone=outline_tone,
                 resume=resume,
             )
         )
@@ -211,6 +394,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="instructive self help guide",
         help="Tone to use for chapter generation and expansion.",
     )
+    parser.add_argument(
+        "--prompt",
+        action="store_true",
+        help="Use interactive prompts to select outlines, tones, and tasks.",
+    )
     parser.set_defaults(tts=True)
     return parser
 
@@ -261,6 +449,93 @@ def main() -> int:
         )
         return 0
     outline_files = _outline_files(args.outlines_dir)
+    if args.prompt:
+        tones_dir = Path(__file__).parent / "tones"
+        tone_options = [tone.stem for tone in _tone_files(tones_dir)]
+        if outline_files:
+            outline_info = []
+            for outline_path in outline_files:
+                outline_title, items = parse_outline_with_title(outline_path)
+                preview_text = _outline_preview_text(outline_title, items)
+                outline_info.append(
+                    OutlineInfo(
+                        path=outline_path,
+                        title=outline_title,
+                        items=items,
+                        preview_text=preview_text,
+                    )
+                )
+            selected_outlines = _prompt_for_outline_selection(outline_info)
+            if not selected_outlines:
+                parser.error("No outlines selected for generation.")
+            tone_map = {
+                info.path: _prompt_for_tone(
+                    info.path.name, tone_options, args.tone
+                )
+                for info in selected_outlines
+            }
+            text_enabled, byline, tts_settings, video_settings = (
+                _prompt_for_task_settings(args)
+            )
+            if not text_enabled:
+                print("Text generation disabled; no books were generated.")
+                return 0
+            try:
+                write_books_from_outlines(
+                    outlines_dir=args.outlines_dir,
+                    books_dir=args.books_dir,
+                    completed_outlines_dir=args.completed_outlines_dir,
+                    client=client,
+                    verbose=True,
+                    tts_settings=tts_settings,
+                    video_settings=video_settings,
+                    byline=byline,
+                    tone=args.tone,
+                    resume_decider=lambda outline, output, progress: _prompt_for_resume(
+                        output, progress
+                    ),
+                    outline_files=[info.path for info in selected_outlines],
+                    tone_decider=lambda path: tone_map[path],
+                )
+            except ValueError as exc:
+                parser.error(str(exc))
+            return 0
+        outline_title, items = parse_outline_with_title(args.outline)
+        if not items:
+            parser.error("No outline items found in the outline file.")
+        preview_text = _outline_preview_text(outline_title, items)
+        print(f"Preview for {args.outline.name}:")
+        print(preview_text)
+        selected_tone = _prompt_for_tone(args.outline.name, tone_options, args.tone)
+        text_enabled, byline, tts_settings, video_settings = _prompt_for_task_settings(
+            args
+        )
+        if not text_enabled:
+            print("Text generation disabled; no book was generated.")
+            return 0
+        book_title = outline_title or generate_book_title(items, client)
+        resume = False
+        progress = load_book_progress(args.output_dir)
+        if progress:
+            if progress.get("status") == "in_progress":
+                resume = _prompt_for_resume(args.output_dir, progress)
+                if not resume:
+                    clear_book_progress(args.output_dir)
+            else:
+                clear_book_progress(args.output_dir)
+        write_book(
+            items=items,
+            output_dir=args.output_dir,
+            client=client,
+            verbose=True,
+            tts_settings=tts_settings,
+            video_settings=video_settings,
+            book_title=book_title,
+            byline=byline,
+            tone=selected_tone,
+            resume=resume,
+        )
+        return 0
     if outline_files:
         try:
             write_books_from_outlines(
