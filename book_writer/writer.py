@@ -522,6 +522,112 @@ def generate_book_pdf(
     return pdf_path
 
 
+def compile_book(output_dir: Path) -> Path:
+    chapter_files = _chapter_files(output_dir)
+    if not chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
+    outline_text = book_metadata.content or _derive_outline_from_chapters(chapter_files)
+    return generate_book_pdf(
+        output_dir=output_dir,
+        title=book_metadata.title,
+        outline_text=outline_text,
+        chapter_files=chapter_files,
+        byline=byline,
+    )
+
+
+def generate_book_audio(
+    output_dir: Path,
+    tts_settings: TTSSettings,
+    verbose: bool = False,
+) -> List[Path]:
+    if not tts_settings.enabled:
+        return []
+    chapter_files = _chapter_files(output_dir)
+    if not chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    created: List[Path] = []
+    audio_dir = output_dir / tts_settings.audio_dirname
+    for chapter_file in chapter_files:
+        audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+        if audio_path.exists():
+            continue
+        generated = synthesize_chapter_audio(
+            chapter_path=chapter_file,
+            output_dir=audio_dir,
+            settings=tts_settings,
+            verbose=verbose,
+        )
+        if generated:
+            created.append(generated)
+
+    book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
+    audiobook_text = build_audiobook_text(
+        book_metadata.title,
+        byline,
+        [path.read_text(encoding="utf-8") for path in chapter_files],
+    )
+    book_audio_path = audio_dir / "book.mp3"
+    if not book_audio_path.exists():
+        generated = synthesize_text_audio(
+            text=audiobook_text,
+            output_path=book_audio_path,
+            settings=tts_settings,
+            verbose=verbose,
+        )
+        if generated:
+            created.append(generated)
+
+    synopsis_path = output_dir / "back-cover-synopsis.md"
+    synopsis_audio_path = audio_dir / "back-cover-synopsis.mp3"
+    if synopsis_path.exists() and not synopsis_audio_path.exists():
+        generated = synthesize_text_audio(
+            text=synopsis_path.read_text(encoding="utf-8"),
+            output_path=synopsis_audio_path,
+            settings=tts_settings,
+            verbose=verbose,
+        )
+        if generated:
+            created.append(generated)
+    return created
+
+
+def generate_book_videos(
+    output_dir: Path,
+    video_settings: VideoSettings,
+    audio_dirname: str = "audio",
+    verbose: bool = False,
+) -> List[Path]:
+    if not video_settings.enabled:
+        return []
+    chapter_files = _chapter_files(output_dir)
+    if not chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    created: List[Path] = []
+    video_dir = output_dir / video_settings.video_dirname
+    audio_dir = output_dir / audio_dirname
+    for chapter_file in chapter_files:
+        audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+        if not audio_path.exists():
+            continue
+        video_path = video_dir / f"{audio_path.stem}.mp4"
+        if video_path.exists():
+            continue
+        generated = synthesize_chapter_video(
+            audio_path=audio_path,
+            output_dir=video_dir,
+            settings=video_settings,
+            verbose=verbose,
+            text=chapter_file.read_text(encoding="utf-8"),
+        )
+        if generated:
+            created.append(generated)
+        elif video_path.exists():
+            created.append(video_path)
+    return created
+
+
 def _chapter_files(output_dir: Path) -> List[Path]:
     return sorted(
         path
