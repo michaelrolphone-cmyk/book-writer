@@ -219,3 +219,45 @@ class TestCliResumeFlow(unittest.TestCase):
 
         _, kwargs = write_mock.call_args
         self.assertTrue(kwargs["resume"])
+
+
+class TestCliPromptFlow(unittest.TestCase):
+    @patch("book_writer.cli.write_books_from_outlines")
+    def test_prompt_selects_outlines_tones_and_tasks(
+        self, write_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            outlines_dir = base_dir / "outlines"
+            outlines_dir.mkdir()
+            (outlines_dir / "alpha.md").write_text("# Chapter Alpha\n", encoding="utf-8")
+            (outlines_dir / "beta.md").write_text("# Chapter Beta\n", encoding="utf-8")
+
+            prompt_inputs = [
+                "1",
+                "1,2",
+                "1",
+                "novel",
+                "y",
+                "",
+                "n",
+                "n",
+            ]
+            with patch("builtins.input", side_effect=prompt_inputs):
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--prompt",
+                        "--outlines-dir",
+                        str(outlines_dir),
+                    ],
+                ):
+                    cli.main()
+
+        _, kwargs = write_mock.call_args
+        outline_files = kwargs["outline_files"]
+        self.assertEqual([path.name for path in outline_files], ["alpha.md", "beta.md"])
+        tone_decider = kwargs["tone_decider"]
+        self.assertEqual(tone_decider(outline_files[0]), "childrensbook")
+        self.assertEqual(tone_decider(outline_files[1]), "novel")
