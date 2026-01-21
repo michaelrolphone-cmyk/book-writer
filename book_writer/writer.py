@@ -150,6 +150,16 @@ def _base_prompt(author: Optional[str] = None) -> str:
     return prompt_path.read_text(encoding="utf-8").strip()
 
 
+def _expand_prompt_text() -> str:
+    project_root = Path(__file__).resolve().parents[1]
+    prompt_path = project_root / "EXPAND_PROMPT.md"
+    if not prompt_path.exists():
+        raise FileNotFoundError(
+            f"Expand prompt file not found at {prompt_path}."
+        )
+    return prompt_path.read_text(encoding="utf-8").strip()
+
+
 def build_prompt(
     items: Iterable[OutlineItem],
     current: OutlineItem,
@@ -252,10 +262,7 @@ def build_expand_paragraph_prompt(
     context = "\n\n".join(context_parts)
     return (
         f"{_tone_preface(tone)}"
-        "Expand only the current paragraph or section with more detail. "
-        "Use the surrounding context to maintain continuity, but do not repeat it. "
-        "Do not add chapter titles, headings, or section separators. "
-        "Return only the expanded markdown for the current paragraph or section.\n\n"
+        f"{_expand_prompt_text()}\n\n"
         f"{context}\n\n"
         f"Current paragraph/section:\n{current}"
     ).strip()

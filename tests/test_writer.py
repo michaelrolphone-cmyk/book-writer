@@ -751,6 +751,9 @@ class TestWriter(unittest.TestCase):
         run_mock.assert_called_once()
 
     def test_build_expand_paragraph_prompt_includes_context(self) -> None:
+        expand_prompt = (
+            Path(__file__).resolve().parents[1] / "EXPAND_PROMPT.md"
+        ).read_text(encoding="utf-8").strip()
         prompt = build_expand_paragraph_prompt(
             current="Current paragraph.",
             previous="Previous paragraph.",
@@ -760,11 +763,11 @@ class TestWriter(unittest.TestCase):
         )
 
         self.assertIn("Write in an instructive self help guide style.", prompt)
+        self.assertIn(expand_prompt, prompt)
         self.assertIn("Section heading: Section One", prompt)
         self.assertIn("Previous section/paragraph:", prompt)
         self.assertIn("Next section/paragraph:", prompt)
         self.assertIn("Current paragraph/section:", prompt)
-        self.assertIn("Do not add chapter titles, headings, or section separators.", prompt)
 
     def test_build_prompt_includes_tone_preface(self) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
