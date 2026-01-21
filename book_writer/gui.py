@@ -237,6 +237,62 @@ def get_gui_html() -> str:
         backdrop-filter: blur(6px);
       }
 
+      .cover-header {
+        border-radius: 24px;
+        padding: 24px;
+        min-height: 150px;
+        display: flex;
+        align-items: flex-end;
+        overflow: hidden;
+        position: relative;
+        color: var(--card-text, var(--text));
+        box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.08),
+          inset -4px -4px 12px rgba(0, 0, 0, 0.25);
+      }
+
+      .cover-header::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--card-cover, var(--bg));
+        background-size: cover;
+        background-position: center;
+        z-index: 0;
+        transform: scale(1.02);
+      }
+
+      .cover-header::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--card-overlay, rgba(255, 255, 255, 0.7));
+        z-index: 1;
+      }
+
+      .cover-header > * {
+        position: relative;
+        z-index: 2;
+      }
+
+      .cover-header .cover-title {
+        font-size: 20px;
+        font-weight: 600;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      }
+
+      .workspace-cover {
+        margin-bottom: 18px;
+      }
+
+      .reader-cover {
+        min-height: 130px;
+        margin-bottom: 16px;
+      }
+
+      .visually-hidden {
+        display: none;
+      }
+
       .book-cover.has-image {
         padding: 20px;
       }
@@ -1042,19 +1098,18 @@ def get_gui_html() -> str:
               </div>
             </div>
             <div class="workspace-view is-hidden" id="bookWorkspace">
+              <div class="cover-header workspace-cover" id="bookWorkspaceCoverHeader">
+                <span class="cover-title" id="bookWorkspaceTitle">Book title</span>
+              </div>
+              <img id="bookCoverImage" class="visually-hidden" alt="Book cover" />
               <div class="workspace-meta">
                 <span class="tag">Book</span>
                 <span class="status-chip" id="bookWorkspaceState"></span>
               </div>
-              <strong id="bookWorkspaceTitle">Book title</strong>
               <p class="meta-line" id="bookWorkspacePath"></p>
               <div class="detail-section">
                 <h4>Book playback</h4>
                 <div class="media-panel">
-                  <div class="media-block hidden" id="bookCoverBlock">
-                    <label>Book cover</label>
-                    <img id="bookCoverImage" alt="Book cover" />
-                  </div>
                   <div class="media-block hidden" id="bookAudioBlock">
                     <label>Full book audio</label>
                     <audio controls id="bookAudio"></audio>
@@ -1135,14 +1190,11 @@ def get_gui_html() -> str:
           <div class="panel">
             <h3>Reader view</h3>
             <div class="reader-panel active" id="chapterReaderPanel">
-              <div class="book-meta">
-                <strong id="chapterReaderTitle">Chapter preview</strong>
+              <div class="cover-header reader-cover" id="chapterReaderCover">
+                <span class="cover-title" id="chapterReaderTitle">Chapter preview</span>
               </div>
+              <img id="chapterCoverImage" class="visually-hidden" alt="Chapter cover" />
               <div class="media-panel" id="chapterMediaPanel">
-                <div class="media-block hidden" id="chapterCoverBlock">
-                  <label>Chapter cover</label>
-                  <img id="chapterCoverImage" alt="Chapter cover" />
-                </div>
                 <div class="media-block hidden" id="chapterViewAudioBlock">
                   <label>Chapter audio</label>
                   <audio controls id="chapterViewAudio"></audio>
@@ -1386,7 +1438,6 @@ def get_gui_html() -> str:
       const chapterVideo = document.getElementById('chapterVideo');
       const bookAudioBlock = document.getElementById('bookAudioBlock');
       const bookAudio = document.getElementById('bookAudio');
-      const bookCoverBlock = document.getElementById('bookCoverBlock');
       const bookCoverImage = document.getElementById('bookCoverImage');
       const homeView = document.getElementById('homeView');
       const detailView = document.getElementById('detailView');
@@ -1403,8 +1454,8 @@ def get_gui_html() -> str:
       const chapterViewVideoBlock = document.getElementById('chapterViewVideoBlock');
       const chapterViewAudio = document.getElementById('chapterViewAudio');
       const chapterViewVideo = document.getElementById('chapterViewVideo');
-      const chapterCoverBlock = document.getElementById('chapterCoverBlock');
       const chapterCoverImage = document.getElementById('chapterCoverImage');
+      const chapterReaderCover = document.getElementById('chapterReaderCover');
       const chapterExpand = document.getElementById('chapterExpand');
       const chapterGenerateAudio = document.getElementById('chapterGenerateAudio');
       const chapterGenerateVideo = document.getElementById('chapterGenerateVideo');
@@ -1432,6 +1483,7 @@ def get_gui_html() -> str:
       const bookWorkspace = document.getElementById('bookWorkspace');
       const bookWorkspaceState = document.getElementById('bookWorkspaceState');
       const bookWorkspaceTitle = document.getElementById('bookWorkspaceTitle');
+      const bookWorkspaceCoverHeader = document.getElementById('bookWorkspaceCoverHeader');
       const bookWorkspacePath = document.getElementById('bookWorkspacePath');
       const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
       const chapterShelf = document.getElementById('chapterShelf');
@@ -1781,10 +1833,12 @@ def get_gui_html() -> str:
           )}`,
         );
         const readerTitleValue = result.title || 'Chapter preview';
-        chapterReaderTitle.textContent = displayChapterTitle(readerTitleValue);
+        const displayReaderTitle = displayChapterTitle(readerTitleValue);
+        chapterReaderTitle.textContent = displayReaderTitle;
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         restoreChapterAudioToDetail();
-        setImageSource(chapterCoverBlock, chapterCoverImage, result.cover_url);
+        setHiddenImageSource(chapterCoverImage, result.cover_url);
+        setCoverHeader(chapterReaderCover, displayReaderTitle, result.cover_url);
         setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
         setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
         handoffChapterAudioToDetail(cardAudio, result.audio_url);
@@ -1830,10 +1884,12 @@ def get_gui_html() -> str:
           const statusLabel = statusFlags.length ? statusFlags.join(' • ') : 'No media yet';
           bookWorkspaceState.textContent = statusLabel;
           const bookTitle = displayBookTitle(entry.title || '');
-          bookWorkspaceTitle.textContent = bookTitle || entry.path.split('/').pop();
+          const resolvedBookTitle = bookTitle || entry.path.split('/').pop();
+          bookWorkspaceTitle.textContent = resolvedBookTitle;
           bookWorkspacePath.textContent = entry.path;
           setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
-          setImageSource(bookCoverBlock, bookCoverImage, entry.cover_url);
+          setHiddenImageSource(bookCoverImage, entry.cover_url);
+          setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
           const chapters = await loadChapters(entry.path);
           renderChapterShelf(entry.path, chapters);
           if (chapters.length) {
@@ -1914,16 +1970,28 @@ def get_gui_html() -> str:
         element.load();
       };
 
-      const setImageSource = (block, element, url) => {
+      const setHiddenImageSource = (element, url) => {
+        if (!element) return;
         if (!url) {
-          block.classList.add('hidden');
           element.removeAttribute('src');
           element.dataset.mediaUrl = '';
           return;
         }
-        block.classList.remove('hidden');
         element.src = url;
         element.dataset.mediaUrl = url;
+      };
+
+      const setCoverHeader = (element, title, coverUrl) => {
+        if (!element) return;
+        const resolvedTitle = title || '';
+        const coverBackground = coverUrl ? `url("${coverUrl}")` : gradientFor(resolvedTitle);
+        const overlayBackground = coverUrl
+          ? 'linear-gradient(180deg, rgba(8, 12, 20, 0.1) 0%, rgba(8, 12, 20, 0.78) 100%)'
+          : 'linear-gradient(180deg, rgba(8, 12, 20, 0.05) 0%, rgba(8, 12, 20, 0.45) 100%)';
+        element.style.setProperty('--card-cover', coverBackground);
+        element.style.setProperty('--card-overlay', overlayBackground);
+        element.style.setProperty('--card-text', '#f8f9fb');
+        element.classList.toggle('has-image', Boolean(coverUrl));
       };
 
       const parseOptionalNumber = (value) => {
@@ -2506,7 +2574,12 @@ def get_gui_html() -> str:
             );
             if (updated) {
               currentChapter = { ...updated, bookDir: currentChapter.bookDir };
-              setImageSource(chapterCoverBlock, chapterCoverImage, updated.cover_url);
+              const updatedTitle = displayChapterTitle(
+                updated.title || `Chapter ${updated.index}`,
+              );
+              chapterReaderTitle.textContent = updatedTitle;
+              setHiddenImageSource(chapterCoverImage, updated.cover_url);
+              setCoverHeader(chapterReaderCover, updatedTitle, updated.cover_url);
             }
           }
         } catch (error) {
