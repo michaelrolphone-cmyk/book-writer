@@ -127,6 +127,22 @@ def get_gui_html() -> str:
         gap: 16px;
       }
 
+      .book-card.selectable {
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .book-card.selectable:hover {
+        transform: translateY(-4px);
+        box-shadow: 14px 14px 26px var(--shadow-dark), -14px -14px 26px var(--shadow-light);
+      }
+
+      .book-card.selected {
+        box-shadow: inset 4px 4px 12px rgba(31, 111, 235, 0.2),
+          inset -4px -4px 12px rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(31, 111, 235, 0.2);
+      }
+
       .shelf-section {
         margin-bottom: 28px;
       }
@@ -377,6 +393,151 @@ def get_gui_html() -> str:
         gap: 12px;
       }
 
+      .tree {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .tree-section {
+        background: var(--surface);
+        border-radius: 16px;
+        padding: 10px 12px;
+        box-shadow: inset 3px 3px 8px rgba(200, 206, 216, 0.7),
+          inset -3px -3px 8px rgba(255, 255, 255, 0.7);
+      }
+
+      .tree-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .tree-items {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .tree-item {
+        border: none;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        font-size: 13px;
+        color: var(--text);
+        padding: 6px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      .tree-item:hover,
+      .tree-item.active {
+        background: rgba(31, 111, 235, 0.12);
+        color: var(--accent);
+      }
+
+      .workspace-empty {
+        font-size: 13px;
+        color: var(--muted);
+        background: var(--surface);
+        padding: 14px;
+        border-radius: 14px;
+        box-shadow: inset 3px 3px 8px rgba(200, 206, 216, 0.7),
+          inset -3px -3px 8px rgba(255, 255, 255, 0.7);
+      }
+
+      .workspace-view.is-hidden {
+        display: none;
+      }
+
+      .is-hidden {
+        display: none;
+      }
+
+      .workspace-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+
+      .detail-section {
+        margin-top: 16px;
+      }
+
+      .detail-section h4 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+
+      .detail-actions {
+        margin: 0;
+        padding: 0 0 0 18px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .detail-content {
+        background: var(--surface);
+        border-radius: 14px;
+        padding: 12px;
+        max-height: 260px;
+        overflow: auto;
+        font-size: 13px;
+        color: var(--text);
+        box-shadow: inset 3px 3px 8px rgba(200, 206, 216, 0.7),
+          inset -3px -3px 8px rgba(255, 255, 255, 0.7);
+      }
+
+      .detail-content p {
+        margin: 0 0 8px;
+      }
+
+      .detail-content p:last-child {
+        margin-bottom: 0;
+      }
+
+      .detail-content ul,
+      .detail-content ol {
+        margin: 6px 0 10px 18px;
+        padding: 0;
+      }
+
+      .detail-content li {
+        margin-bottom: 6px;
+      }
+
+      .detail-content pre {
+        background: #dde3ec;
+        padding: 10px;
+        border-radius: 10px;
+        overflow-x: auto;
+      }
+
+      .detail-content code {
+        background: #dde3ec;
+        padding: 2px 4px;
+        border-radius: 6px;
+      }
+
+      .workspace-actions {
+        display: grid;
+        gap: 8px;
+      }
+
+      .workspace-actions .pill-button {
+        width: 100%;
+      }
+
       .status-chip {
         display: inline-flex;
         align-items: center;
@@ -445,6 +606,11 @@ def get_gui_html() -> str:
       <div class="layout">
         <section>
           <div class="catalog">
+            <div class="panel">
+              <h3>Library tree</h3>
+              <ul class="tree" id="libraryTree"></ul>
+            </div>
+
             <section class="shelf-section">
               <div class="section-header">
                 <div>
@@ -481,6 +647,59 @@ def get_gui_html() -> str:
         </section>
 
         <aside>
+          <div class="panel" id="workspacePanel">
+            <h3>Workspace</h3>
+            <div class="workspace-empty" id="workspaceEmpty">
+              Select a book or outline to open its workspace view.
+            </div>
+            <div class="workspace-view is-hidden" id="outlineWorkspace">
+              <div class="workspace-meta">
+                <span class="tag">Outline</span>
+                <span class="status-chip" id="outlineWorkspaceState"></span>
+              </div>
+              <strong id="outlineWorkspaceTitle">Outline title</strong>
+              <p class="meta-line" id="outlineWorkspacePath"></p>
+              <div class="detail-section">
+                <h4>Outline actions</h4>
+                <div class="workspace-actions">
+                  <button class="pill-button primary" id="outlineWorkspaceGenerate">
+                    Generate book from outline
+                  </button>
+                </div>
+              </div>
+              <div class="detail-section">
+                <h4>Outline content</h4>
+                <div class="detail-content markdown" id="outlineWorkspaceContent"></div>
+              </div>
+            </div>
+            <div class="workspace-view is-hidden" id="bookWorkspace">
+              <div class="workspace-meta">
+                <span class="tag">Book</span>
+                <span class="status-chip" id="bookWorkspaceState"></span>
+              </div>
+              <strong id="bookWorkspaceTitle">Book title</strong>
+              <p class="meta-line" id="bookWorkspacePath"></p>
+              <div class="detail-section">
+                <label for="bookWorkspaceChapterSelect">Chapter</label>
+                <select id="bookWorkspaceChapterSelect"></select>
+              </div>
+              <div class="detail-section">
+                <h4>Book actions</h4>
+                <div class="workspace-actions">
+                  <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
+                  <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
+                  <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
+                  <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
+                  <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
+                </div>
+              </div>
+              <div class="detail-section">
+                <h4>Book content</h4>
+                <div class="detail-content markdown" id="bookWorkspaceContent"></div>
+              </div>
+            </div>
+          </div>
+
           <div class="panel">
             <h3>Generate from outline</h3>
             <label>Outline</label>
@@ -672,6 +891,45 @@ def get_gui_html() -> str:
         container.appendChild(empty);
       };
 
+      const renderTreeSection = (title, items, type, countLabel, labelBuilder) => {
+        const section = document.createElement('li');
+        section.className = 'tree-section';
+        const header = document.createElement('div');
+        header.className = 'tree-section-header';
+        const titleEl = document.createElement('span');
+        titleEl.textContent = title;
+        const countEl = document.createElement('span');
+        countEl.textContent = countLabel;
+        header.appendChild(titleEl);
+        header.appendChild(countEl);
+        section.appendChild(header);
+        const list = document.createElement('ul');
+        list.className = 'tree-items';
+        if (!items.length) {
+          const emptyItem = document.createElement('li');
+          emptyItem.className = 'meta-line';
+          emptyItem.textContent = 'No items yet.';
+          list.appendChild(emptyItem);
+        } else {
+          items.forEach((entry) => {
+            const listItem = document.createElement('li');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'tree-item';
+            button.dataset.type = type;
+            button.dataset.path = entry.path;
+            button.textContent = labelBuilder(entry);
+            button.addEventListener('click', () => {
+              selectEntry(type, entry);
+            });
+            listItem.appendChild(button);
+            list.appendChild(listItem);
+          });
+        }
+        section.appendChild(list);
+        return section;
+      };
+
       const escapeHtml = (value) =>
         value
           .replace(/&/g, '&amp;')
@@ -744,6 +1002,25 @@ def get_gui_html() -> str:
       const videoBlock = document.getElementById('videoBlock');
       const chapterAudio = document.getElementById('chapterAudio');
       const chapterVideo = document.getElementById('chapterVideo');
+      const libraryTree = document.getElementById('libraryTree');
+      const workspaceEmpty = document.getElementById('workspaceEmpty');
+      const outlineWorkspace = document.getElementById('outlineWorkspace');
+      const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
+      const outlineWorkspaceTitle = document.getElementById('outlineWorkspaceTitle');
+      const outlineWorkspacePath = document.getElementById('outlineWorkspacePath');
+      const outlineWorkspaceContent = document.getElementById('outlineWorkspaceContent');
+      const outlineWorkspaceGenerate = document.getElementById('outlineWorkspaceGenerate');
+      const bookWorkspace = document.getElementById('bookWorkspace');
+      const bookWorkspaceState = document.getElementById('bookWorkspaceState');
+      const bookWorkspaceTitle = document.getElementById('bookWorkspaceTitle');
+      const bookWorkspacePath = document.getElementById('bookWorkspacePath');
+      const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
+      const bookWorkspaceChapterSelect = document.getElementById('bookWorkspaceChapterSelect');
+      const bookWorkspaceReader = document.getElementById('bookWorkspaceReader');
+      const bookWorkspaceExpand = document.getElementById('bookWorkspaceExpand');
+      const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
+      const bookWorkspaceAudio = document.getElementById('bookWorkspaceAudio');
+      const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -764,6 +1041,143 @@ def get_gui_html() -> str:
 
       const bookLabel = (book) =>
         `${book.title} (${book.chapter_count || 0} chapters)`;
+
+      const catalogState = {
+        outlines: [],
+        completedOutlines: [],
+        books: [],
+      };
+
+      let currentSelection = {
+        type: null,
+        path: null,
+      };
+
+      const setSelectedCard = (cardElement) => {
+        document.querySelectorAll('.book-card.selected').forEach((card) => {
+          card.classList.remove('selected');
+        });
+        if (cardElement) {
+          cardElement.classList.add('selected');
+        }
+      };
+
+      const findCardByPath = (type, path) => {
+        const cards = Array.from(document.querySelectorAll('.book-card.selectable'));
+        return (
+          cards.find((card) => card.dataset.type === type && card.dataset.path === path) || null
+        );
+      };
+
+      const showWorkspace = (type) => {
+        workspaceEmpty.classList.add('is-hidden');
+        outlineWorkspace.classList.toggle('is-hidden', type !== 'outline');
+        bookWorkspace.classList.toggle('is-hidden', type !== 'book');
+      };
+
+      const setOutlineContent = (content) => {
+        outlineWorkspaceContent.innerHTML = renderMarkdown(
+          content || 'No outline content available.',
+        );
+      };
+
+      const setBookContent = (content) => {
+        bookWorkspaceContent.innerHTML = renderMarkdown(content || 'No chapter content available.');
+      };
+
+      const clearTreeSelection = () => {
+        document.querySelectorAll('.tree-item.active').forEach((item) => {
+          item.classList.remove('active');
+        });
+      };
+
+      const setTreeSelection = (path) => {
+        clearTreeSelection();
+        const activeItem = libraryTree.querySelector(`button[data-path="${path}"]`);
+        if (activeItem) {
+          activeItem.classList.add('active');
+        }
+      };
+
+      const loadOutlineContent = async (outlinePath) => {
+        const result = await fetchJson(
+          `/api/outline-content?outline_path=${encodeURIComponent(outlinePath)}`,
+        );
+        return result;
+      };
+
+      const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
+        if (!bookDir || !chapterValue) return;
+        const audioDir = document.getElementById('audioDir').value || 'audio';
+        const videoDir = document.getElementById('videoDir').value || 'video';
+        const result = await fetchJson(
+          `/api/chapter-content?book_dir=${encodeURIComponent(
+            bookDir,
+          )}&chapter=${encodeURIComponent(chapterValue)}&audio_dirname=${encodeURIComponent(
+            audioDir,
+          )}&video_dirname=${encodeURIComponent(videoDir)}`,
+        );
+        setBookContent(result.content || '');
+      };
+
+      const loadWorkspaceChapters = async (bookDir) => {
+        bookWorkspaceChapterSelect.disabled = true;
+        setSelectOptions(bookWorkspaceChapterSelect, [], 'Select a chapter');
+        if (!bookDir) return [];
+        const result = await fetchJson(`/api/chapters?book_dir=${encodeURIComponent(bookDir)}`);
+        const chapters = result.chapters || [];
+        setSelectOptions(
+          bookWorkspaceChapterSelect,
+          chapters.map((chapter) => ({
+            value: String(chapter.index),
+            label: `${chapter.index}. ${chapter.title}`,
+          })),
+          chapters.length ? 'Select a chapter' : 'No chapters',
+        );
+        bookWorkspaceChapterSelect.disabled = !chapters.length;
+        return chapters;
+      };
+
+      const selectEntry = async (type, entry, cardElement = null) => {
+        if (!entry) return;
+        currentSelection = { type, path: entry.path };
+        setSelectedCard(cardElement || findCardByPath(type, entry.path));
+        setTreeSelection(entry.path);
+
+        if (type === 'book') {
+          showWorkspace('book');
+          bookSelect.value = entry.path;
+          const statusFlags = [];
+          if (entry.has_text) statusFlags.push('Text');
+          if (entry.has_audio) statusFlags.push('Audio');
+          if (entry.has_video) statusFlags.push('Video');
+          if (entry.has_compilation) statusFlags.push('Compiled');
+          const statusLabel = statusFlags.length ? statusFlags.join(' • ') : 'No media yet';
+          bookWorkspaceState.textContent = statusLabel;
+          bookWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
+          bookWorkspacePath.textContent = entry.path;
+          await loadChapters(entry.path);
+          const chapters = await loadWorkspaceChapters(entry.path);
+          if (chapters.length) {
+            bookWorkspaceChapterSelect.value = String(chapters[0].index);
+            await loadWorkspaceChapterContent(entry.path, bookWorkspaceChapterSelect.value);
+          } else {
+            setBookContent('No chapters found for this book.');
+          }
+          return;
+        }
+
+        showWorkspace('outline');
+        if (type === 'outline') {
+          outlineSelect.value = entry.path;
+        }
+        outlineWorkspaceState.textContent =
+          type === 'completed-outline' ? 'Completed outline' : 'Active outline';
+        outlineWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
+        outlineWorkspacePath.textContent = entry.path;
+        const result = await loadOutlineContent(entry.path);
+        setOutlineContent(result.content || '');
+      };
 
       const loadChapters = async (bookDir) => {
         chapterSelect.disabled = true;
@@ -817,6 +1231,9 @@ def get_gui_html() -> str:
           const outlines = outlineResponse.outlines || [];
           const completed = completedResponse.outlines || [];
           const books = booksResponse.books || [];
+          catalogState.outlines = outlines;
+          catalogState.completedOutlines = completed;
+          catalogState.books = books;
 
           const outlineShelf = document.getElementById('outlineShelf');
           const completedShelf = document.getElementById('completedOutlineShelf');
@@ -825,6 +1242,7 @@ def get_gui_html() -> str:
           outlineShelf.innerHTML = '';
           completedShelf.innerHTML = '';
           bookShelf.innerHTML = '';
+          libraryTree.innerHTML = '';
 
           document.getElementById('outlineCount').textContent = `${outlines.length} outlines`;
           document.getElementById('completedOutlineCount').textContent = `${completed.length} outlines`;
@@ -837,16 +1255,22 @@ def get_gui_html() -> str:
               const title = outline.title || outline.path.split('/').pop();
               const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
               const detail = `${outline.item_count || 0} sections${previewText}`;
-              outlineShelf.appendChild(
-                createCard(
-                  title,
-                  'Outline ready',
-                  detail,
-                  'Outline',
-                  'Next: Generate book',
-                  15,
-                ),
+              const card = createCard(
+                title,
+                'Outline ready',
+                detail,
+                'Outline',
+                'Next: Generate book',
+                15,
               );
+              card.classList.add('selectable');
+              card.dataset.type = 'outline';
+              card.dataset.path = outline.path;
+              card.addEventListener('click', () => {
+                outlineSelect.value = outline.path;
+                selectEntry('outline', outline, card);
+              });
+              outlineShelf.appendChild(card);
             });
           }
 
@@ -857,16 +1281,21 @@ def get_gui_html() -> str:
               const title = outline.title || outline.path.split('/').pop();
               const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
               const detail = `${outline.item_count || 0} sections${previewText}`;
-              completedShelf.appendChild(
-                createCard(
-                  title,
-                  'Archived outline',
-                  detail,
-                  'Completed',
-                  'Stored in completed_outlines',
-                  100,
-                ),
+              const card = createCard(
+                title,
+                'Archived outline',
+                detail,
+                'Completed',
+                'Stored in completed_outlines',
+                100,
               );
+              card.classList.add('selectable');
+              card.dataset.type = 'completed-outline';
+              card.dataset.path = outline.path;
+              card.addEventListener('click', () => {
+                selectEntry('completed-outline', outline, card);
+              });
+              completedShelf.appendChild(card);
             });
           }
 
@@ -882,18 +1311,50 @@ def get_gui_html() -> str:
               const status = book.has_compilation ? 'Compiled' : book.has_text ? 'Drafting' : 'No chapters';
               const detail = `${book.chapter_count || 0} chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
               const progress = (statusFlags.length / 4) * 100;
-              bookShelf.appendChild(
-                createCard(
-                  book.title,
-                  status,
-                  detail,
-                  'Book',
-                  book.path.split('/').pop(),
-                  progress,
-                ),
+              const card = createCard(
+                book.title,
+                status,
+                detail,
+                'Book',
+                book.path.split('/').pop(),
+                progress,
               );
+              card.classList.add('selectable');
+              card.dataset.type = 'book';
+              card.dataset.path = book.path;
+              card.addEventListener('click', () => {
+                bookSelect.value = book.path;
+                loadChapters(book.path);
+                selectEntry('book', book, card);
+              });
+              bookShelf.appendChild(card);
             });
           }
+
+          const outlineTree = renderTreeSection(
+            'Outlines',
+            outlines,
+            'outline',
+            `${outlines.length}`,
+            (outline) => outline.title || outline.path.split('/').pop(),
+          );
+          const completedTree = renderTreeSection(
+            'Completed outlines',
+            completed,
+            'completed-outline',
+            `${completed.length}`,
+            (outline) => outline.title || outline.path.split('/').pop(),
+          );
+          const bookTree = renderTreeSection(
+            'Books',
+            books,
+            'book',
+            `${books.length}`,
+            (book) => book.title,
+          );
+          libraryTree.appendChild(outlineTree);
+          libraryTree.appendChild(completedTree);
+          libraryTree.appendChild(bookTree);
 
           setSelectOptions(
             outlineSelect,
@@ -923,6 +1384,18 @@ def get_gui_html() -> str:
             await loadChapters(bookSelect.value);
           } else {
             chapterSelect.disabled = true;
+          }
+
+          if (currentSelection.type && currentSelection.path) {
+            const activeEntry =
+              catalogState.outlines.find((outline) => outline.path === currentSelection.path) ||
+              catalogState.completedOutlines.find(
+                (outline) => outline.path === currentSelection.path,
+              ) ||
+              catalogState.books.find((book) => book.path === currentSelection.path);
+            if (activeEntry) {
+              await selectEntry(currentSelection.type, activeEntry);
+            }
           }
 
           log('Catalog loaded from disk.');
@@ -1012,6 +1485,21 @@ def get_gui_html() -> str:
         const value = event.target.value;
         await loadChapters(value);
         openReader.disabled = true;
+        if (value) {
+          const book = catalogState.books.find((entry) => entry.path === value);
+          if (book) {
+            selectEntry('book', book);
+          }
+        }
+      });
+
+      outlineSelect.addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const outline = catalogState.outlines.find((entry) => entry.path === value);
+        if (outline) {
+          selectEntry('outline', outline);
+        }
       });
 
       chapterSelect.addEventListener('change', (event) => {
@@ -1050,6 +1538,36 @@ def get_gui_html() -> str:
 
       closeReader.addEventListener('click', () => {
         closeReaderPanel();
+      });
+
+      bookWorkspaceChapterSelect.addEventListener('change', async (event) => {
+        const chapterValue = event.target.value;
+        if (!chapterValue || currentSelection.type !== 'book') return;
+        await loadWorkspaceChapterContent(currentSelection.path, chapterValue);
+      });
+
+      outlineWorkspaceGenerate.addEventListener('click', () => {
+        document.getElementById('generateBook').click();
+      });
+
+      bookWorkspaceReader.addEventListener('click', () => {
+        openReader.click();
+      });
+
+      bookWorkspaceExpand.addEventListener('click', () => {
+        document.getElementById('expandBook').click();
+      });
+
+      bookWorkspaceCompile.addEventListener('click', () => {
+        document.getElementById('compileBook').click();
+      });
+
+      bookWorkspaceAudio.addEventListener('click', () => {
+        document.getElementById('generateAudio').click();
+      });
+
+      bookWorkspaceVideo.addEventListener('click', () => {
+        document.getElementById('generateVideo').click();
       });
 
       loadCatalog();

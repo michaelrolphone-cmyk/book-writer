@@ -163,6 +163,33 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     return {"chapters": chapters}
 
 
+def get_outline_content(payload: dict[str, Any]) -> dict[str, Any]:
+    outline_path_value = payload.get("outline_path")
+    if not outline_path_value:
+        raise ApiError("outline_path is required")
+    outline_path = Path(outline_path_value)
+    if not outline_path.is_file():
+        raise ApiError("Outline file not found.")
+    content = outline_path.read_text(encoding="utf-8")
+    title, items = parse_outline_with_title(outline_path)
+    if title is None:
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                candidate = stripped.lstrip("#").strip()
+                if candidate:
+                    title = candidate
+                    break
+    if title is None:
+        title = outline_path.stem
+    return {
+        "outline_path": str(outline_path),
+        "title": title,
+        "content": content,
+        "item_count": len(items),
+    }
+
+
 def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     book_dir_value = payload.get("book_dir")
     chapter_value = payload.get("chapter")
@@ -373,6 +400,10 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             return
         if path == "/api/chapters":
             response = list_chapters(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/outline-content":
+            response = get_outline_content(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
         if path == "/api/chapter-content":
