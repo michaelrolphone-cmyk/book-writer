@@ -30,6 +30,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"detailBack\"", html)
         self.assertIn("id=\"workspacePanel\"", html)
         self.assertIn("id=\"outlineWorkspace\"", html)
+        self.assertIn("id=\"outlineWorkspaceAuthor\"", html)
+        self.assertIn("id=\"outlineWorkspaceTone\"", html)
         self.assertIn("id=\"outlineEditor\"", html)
         self.assertIn("id=\"outlineSave\"", html)
         self.assertIn("id=\"outlineReload\"", html)
