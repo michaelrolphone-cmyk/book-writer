@@ -77,6 +77,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("sanitizeTitleForDisplay", html)
         self.assertIn("displayBookTitle", html)
         self.assertIn("displayChapterTitle", html)
+        self.assertIn("cleaned = cleaned.replace(/^[\\-–—]+\\s*/, '');", html)
         self.assertIn("renderCatalog", html)
         self.assertIn("filterEntries", html)
         self.assertIn(".workspace-actions {", html)

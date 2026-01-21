@@ -1361,6 +1361,7 @@ def get_gui_html() -> str:
         }
         if (type === 'chapter') {
           cleaned = cleaned.replace(/^chapter\\s+\\d+\\s*[:\\-–]?\\s*/i, '');
+          cleaned = cleaned.replace(/^[\\-–—]+\\s*/, '');
         }
         cleaned = cleaned.replace(/\\s+/g, ' ').trim();
         return cleaned || base;
