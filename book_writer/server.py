@@ -118,6 +118,11 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_video": book.has_video,
                 "has_compilation": book.has_compilation,
                 "chapter_count": len(_book_chapter_files(book.path)),
+                "book_audio_url": (
+                    _build_media_url(book.path, Path(audio_dir) / "book.mp3")
+                    if (book.path / audio_dir / "book.mp3").exists()
+                    else None
+                ),
             }
             for book in books
         ]
@@ -149,16 +154,30 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     if not book_dir_value:
         raise ApiError("book_dir is required")
     book_dir = Path(book_dir_value)
+    audio_dirname = payload.get("audio_dirname", "audio")
+    video_dirname = payload.get("video_dirname", "video")
     chapters = []
     for index, chapter_file in enumerate(_book_chapter_files(book_dir), start=1):
         content = chapter_file.read_text(encoding="utf-8")
         title = _chapter_title_from_content(content, chapter_file.stem)
+        audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+        video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
         chapters.append(
             {
                 "index": index,
                 "name": chapter_file.name,
                 "stem": chapter_file.stem,
                 "title": title,
+                "audio_url": (
+                    _build_media_url(book_dir, audio_path.relative_to(book_dir))
+                    if audio_path.exists()
+                    else None
+                ),
+                "video_url": (
+                    _build_media_url(book_dir, video_path.relative_to(book_dir))
+                    if video_path.exists()
+                    else None
+                ),
             }
         )
     return {"chapters": chapters}

@@ -66,6 +66,23 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(len(result["books"]), 1)
         self.assertTrue(result["books"][0]["has_text"])
         self.assertEqual(result["books"][0]["chapter_count"], 1)
+        self.assertIsNone(result["books"][0]["book_audio_url"])
+
+    def test_list_books_includes_book_audio_url(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            audio_dir = book_dir / "audio"
+            audio_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+
+            result = server.list_books(
+                {"books_dir": str(books_dir), "tts_audio_dir": "audio"}
+            )
+
+        expected_base = f"/media?book_dir={quote(str(book_dir))}"
+        self.assertTrue(result["books"][0]["book_audio_url"].startswith(expected_base))
 
     def test_list_chapters_returns_titles(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -81,6 +98,31 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(len(result["chapters"]), 2)
         self.assertEqual(result["chapters"][0]["title"], "Chapter One")
         self.assertEqual(result["chapters"][1]["title"], "Chapter Two")
+        self.assertIsNone(result["chapters"][0]["audio_url"])
+
+    def test_list_chapters_includes_media_urls(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            audio_dir = book_dir / "audio"
+            video_dir = book_dir / "video"
+            audio_dir.mkdir(parents=True)
+            video_dir.mkdir()
+            first = book_dir / "001-chapter-one.md"
+            first.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+            (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
+
+            result = server.list_chapters(
+                {
+                    "book_dir": str(book_dir),
+                    "audio_dirname": "audio",
+                    "video_dirname": "video",
+                }
+            )
+
+        expected_base = f"/media?book_dir={quote(str(book_dir))}"
+        self.assertTrue(result["chapters"][0]["audio_url"].startswith(expected_base))
+        self.assertTrue(result["chapters"][0]["video_url"].startswith(expected_base))
 
     def test_get_chapter_content_returns_markdown(self) -> None:
         with TemporaryDirectory() as tmpdir:
