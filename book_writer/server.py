@@ -15,6 +15,7 @@ from book_writer.cli import (
     _outline_preview_text,
     _select_chapter_files,
 )
+from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.gui import get_gui_html
 from book_writer.outline import parse_outline_with_title
 from book_writer.tts import TTSSettings
@@ -24,7 +25,9 @@ from book_writer.writer import (
     compile_book,
     expand_book,
     generate_book_audio,
+    generate_book_cover_asset,
     generate_book_videos,
+    generate_chapter_cover_assets,
     write_book,
 )
 
@@ -61,6 +64,52 @@ def _parse_video_settings(payload: dict[str, Any]) -> VideoSettings:
         if video_payload.get("background_video")
         else None,
         video_dirname=video_payload.get("video_dirname", "video"),
+    )
+
+
+def _parse_cover_settings(payload: dict[str, Any]) -> CoverSettings:
+    cover_payload = payload.get("cover_settings") or {}
+    default_module_path = CoverSettings().module_path
+
+    def parse_int(value: Any, fallback: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def parse_optional_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def parse_float(value: Any, fallback: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    output_name = cover_payload.get("output_name") or "cover.png"
+    return CoverSettings(
+        enabled=bool(cover_payload.get("enabled", payload.get("cover", False))),
+        prompt=cover_payload.get("prompt") or None,
+        negative_prompt=cover_payload.get("negative_prompt") or None,
+        model_path=Path(cover_payload["model_path"])
+        if cover_payload.get("model_path")
+        else None,
+        module_path=Path(cover_payload["module_path"])
+        if cover_payload.get("module_path")
+        else default_module_path,
+        steps=parse_int(cover_payload.get("steps", 30), 30),
+        guidance_scale=parse_float(cover_payload.get("guidance_scale", 7.5), 7.5),
+        seed=parse_optional_int(cover_payload.get("seed")),
+        width=parse_int(cover_payload.get("width", 768), 768),
+        height=parse_int(cover_payload.get("height", 1024), 1024),
+        output_name=output_name,
+        overwrite=bool(cover_payload.get("overwrite", False)),
+        command=parse_cover_command(cover_payload.get("command")),
     )
 
 
@@ -124,7 +173,13 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_audio": book.has_audio,
                 "has_video": book.has_video,
                 "has_compilation": book.has_compilation,
+                "has_cover": (book.path / "cover.png").exists(),
                 "chapter_count": len(_book_chapter_files(book.path)),
+                "cover_url": (
+                    _build_media_url(book.path, Path("cover.png"))
+                    if (book.path / "cover.png").exists()
+                    else None
+                ),
                 "book_audio_url": (
                     _build_media_url(book.path, Path(audio_dir) / "book.mp3")
                     if (book.path / audio_dir / "book.mp3").exists()
@@ -163,18 +218,29 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     book_dir = Path(book_dir_value)
     audio_dirname = payload.get("audio_dirname", "audio")
     video_dirname = payload.get("video_dirname", "video")
+    chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
     chapters = []
     for index, chapter_file in enumerate(_book_chapter_files(book_dir), start=1):
         content = chapter_file.read_text(encoding="utf-8")
         title = _chapter_title_from_content(content, chapter_file.stem)
         audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
         video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
+        cover_path = (
+            book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
+        )
         chapters.append(
             {
                 "index": index,
                 "name": chapter_file.name,
                 "stem": chapter_file.stem,
                 "title": title,
+                "cover_url": (
+                    _build_media_url(
+                        book_dir, cover_path.relative_to(book_dir)
+                    )
+                    if cover_path.exists()
+                    else None
+                ),
                 "audio_url": (
                     _build_media_url(book_dir, audio_path.relative_to(book_dir))
                     if audio_path.exists()
@@ -230,8 +296,10 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     title = _chapter_title_from_content(content, chapter_file.stem)
     audio_dirname = payload.get("audio_dirname", "audio")
     video_dirname = payload.get("video_dirname", "video")
+    chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
     audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
     video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
+    cover_path = book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
     audio_url = (
         _build_media_url(book_dir, audio_path.relative_to(book_dir))
         if audio_path.exists()
@@ -242,10 +310,16 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
         if video_path.exists()
         else None
     )
+    cover_url = (
+        _build_media_url(book_dir, cover_path.relative_to(book_dir))
+        if cover_path.exists()
+        else None
+    )
     return {
         "chapter": chapter_file.name,
         "title": title,
         "content": content,
+        "cover_url": cover_url,
         "audio_url": audio_url,
         "video_url": video_url,
     }
@@ -348,6 +422,40 @@ def generate_videos_api(payload: dict[str, Any]) -> dict[str, Any]:
     return {"status": "videos_generated", "book_dir": str(book_dir)}
 
 
+def generate_cover_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    cover_settings = _parse_cover_settings(payload)
+    generate_book_cover_asset(book_dir, cover_settings)
+    return {"status": "cover_generated", "book_dir": str(book_dir)}
+
+
+def generate_chapter_covers_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    chapter_value = payload.get("chapter")
+    chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
+    cover_settings = _parse_cover_settings(payload)
+    chapter_files = None
+    if chapter_value:
+        chapter_files = [_find_chapter_file(book_dir, str(chapter_value))]
+    generated = generate_chapter_cover_assets(
+        output_dir=book_dir,
+        cover_settings=cover_settings,
+        chapter_cover_dir=chapter_cover_dir,
+        chapter_files=chapter_files,
+    )
+    return {
+        "status": "chapter_covers_generated",
+        "book_dir": str(book_dir),
+        "generated": [str(path) for path in generated],
+    }
+
+
 def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     length = int(handler.headers.get("Content-Length", "0"))
     if length == 0:
@@ -448,6 +556,8 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             "/api/compile-book": compile_book_api,
             "/api/generate-audio": generate_audio_api,
             "/api/generate-videos": generate_videos_api,
+            "/api/generate-cover": generate_cover_api,
+            "/api/generate-chapter-covers": generate_chapter_covers_api,
         }
         handler_fn = routes.get(path)
         if handler_fn is None:

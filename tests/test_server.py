@@ -105,6 +105,7 @@ class TestServerApi(unittest.TestCase):
         self.assertTrue(result["books"][0]["has_text"])
         self.assertEqual(result["books"][0]["chapter_count"], 1)
         self.assertIsNone(result["books"][0]["book_audio_url"])
+        self.assertFalse(result["books"][0]["has_cover"])
 
     def test_list_books_handles_unreadable_chapters(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -162,24 +163,29 @@ class TestServerApi(unittest.TestCase):
             book_dir = Path(tmpdir) / "book"
             audio_dir = book_dir / "audio"
             video_dir = book_dir / "video"
+            cover_dir = book_dir / "chapter_covers"
             audio_dir.mkdir(parents=True)
             video_dir.mkdir()
+            cover_dir.mkdir()
             first = book_dir / "001-chapter-one.md"
             first.write_text("# Chapter One\n\nContent", encoding="utf-8")
             (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
+            (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
 
             result = server.list_chapters(
                 {
                     "book_dir": str(book_dir),
                     "audio_dirname": "audio",
                     "video_dirname": "video",
+                    "chapter_cover_dir": "chapter_covers",
                 }
             )
 
         expected_base = f"/media?book_dir={quote(str(book_dir))}"
         self.assertTrue(result["chapters"][0]["audio_url"].startswith(expected_base))
         self.assertTrue(result["chapters"][0]["video_url"].startswith(expected_base))
+        self.assertTrue(result["chapters"][0]["cover_url"].startswith(expected_base))
 
     def test_get_chapter_content_returns_markdown(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -211,12 +217,15 @@ class TestServerApi(unittest.TestCase):
             book_dir = Path(tmpdir) / "book"
             audio_dir = book_dir / "audio"
             video_dir = book_dir / "video"
+            cover_dir = book_dir / "chapter_covers"
             audio_dir.mkdir(parents=True)
             video_dir.mkdir()
+            cover_dir.mkdir()
             chapter = book_dir / "001-chapter-one.md"
             chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
             (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
+            (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
 
             result = server.get_chapter_content(
                 {
@@ -224,12 +233,14 @@ class TestServerApi(unittest.TestCase):
                     "chapter": "001-chapter-one.md",
                     "audio_dirname": "audio",
                     "video_dirname": "video",
+                    "chapter_cover_dir": "chapter_covers",
                 }
             )
 
         expected_base = f"/media?book_dir={quote(str(book_dir))}"
         self.assertTrue(result["audio_url"].startswith(expected_base))
         self.assertTrue(result["video_url"].startswith(expected_base))
+        self.assertTrue(result["cover_url"].startswith(expected_base))
 
     def test_resolve_media_path_blocks_escape(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -282,6 +293,47 @@ class TestServerApi(unittest.TestCase):
         expand_book.assert_called_once()
         chapter_files = expand_book.call_args.kwargs["chapter_files"]
         self.assertEqual(chapter_files, [second])
+
+    def test_generate_cover_api_invokes_cover_generation(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            with patch("book_writer.server.generate_book_cover_asset") as cover_mock:
+                response = server.generate_cover_api(
+                    {
+                        "book_dir": str(book_dir),
+                        "cover_settings": {"model_path": "/tmp/resource"},
+                    }
+                )
+
+        cover_mock.assert_called_once()
+        self.assertEqual(response["status"], "cover_generated")
+
+    def test_generate_chapter_covers_api_invokes_generation(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            with patch(
+                "book_writer.server.generate_chapter_cover_assets"
+            ) as cover_mock:
+                cover_mock.return_value = [book_dir / "chapter_covers/001.png"]
+                response = server.generate_chapter_covers_api(
+                    {
+                        "book_dir": str(book_dir),
+                        "chapter": "1",
+                        "chapter_cover_dir": "chapter_covers",
+                        "cover_settings": {"model_path": "/tmp/resource"},
+                    }
+                )
+
+        cover_mock.assert_called_once()
+        self.assertEqual(response["status"], "chapter_covers_generated")
 
 
 if __name__ == "__main__":

@@ -45,12 +45,27 @@ DEFAULT_COVER_COMMAND = [
 
 
 def build_cover_prompt(title: str, synopsis: str) -> str:
-    synopsis_text = " ".join(synopsis.split())
-    if len(synopsis_text) > 600:
-        synopsis_text = synopsis_text[:597].rstrip() + "..."
+    synopsis_text = _truncate_prompt_text(synopsis)
     return (
         f"Book cover illustration for '{title}'. "
         f"Visualize: {synopsis_text} "
+        "No text, no typography, cinematic lighting, highly detailed."
+    ).strip()
+
+
+def build_chapter_cover_prompt(
+    book_title: str, chapter_title: str, chapter_content: str
+) -> str:
+    lines = [
+        line.strip()
+        for line in chapter_content.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    summary = " ".join(lines) or chapter_title
+    summary_text = _truncate_prompt_text(summary)
+    return (
+        f"Chapter cover illustration for '{chapter_title}' in '{book_title}'. "
+        f"Visualize: {summary_text} "
         "No text, no typography, cinematic lighting, highly detailed."
     ).strip()
 
@@ -171,3 +186,55 @@ def generate_book_cover(
     if candidates:
         candidates[0].replace(output_path)
     return output_path
+
+
+def generate_chapter_cover(
+    output_dir: Path,
+    book_title: str,
+    chapter_title: str,
+    chapter_content: str,
+    settings: CoverSettings,
+) -> Optional[Path]:
+    if not settings.enabled:
+        return None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / settings.output_name
+    if output_path.exists() and not settings.overwrite:
+        return output_path
+    if settings.command is None and not settings.model_path:
+        raise ValueError(
+            "Cover generation requires a --cover-model-path when using the default "
+            "swift command."
+        )
+    prompt = settings.prompt or build_chapter_cover_prompt(
+        book_title, chapter_title, chapter_content
+    )
+    command = _resolve_command(settings, prompt, output_path, output_dir)
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            env=_build_cover_env(settings.module_path),
+            cwd=str(settings.module_path) if settings.module_path else None,
+        )
+    except FileNotFoundError as exc:
+        message = (
+            "Cover generation command not found. "
+            "Ensure it is installed and available in your PATH or set --cover-command."
+        )
+        raise RuntimeError(message) from exc
+    if output_path.exists():
+        return output_path
+    candidates = sorted(
+        output_dir.glob("*.png"), key=lambda path: path.stat().st_mtime, reverse=True
+    )
+    if candidates:
+        candidates[0].replace(output_path)
+    return output_path
+
+
+def _truncate_prompt_text(text: str) -> str:
+    text_value = " ".join(text.split())
+    if len(text_value) > 600:
+        return text_value[:597].rstrip() + "..."
+    return text_value

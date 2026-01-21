@@ -213,6 +213,50 @@ class TestCliExpandBook(unittest.TestCase):
         self.assertEqual(selected[0].name, "002-chapter-two.md")
 
 
+class TestCliCoverGeneration(unittest.TestCase):
+    @patch("book_writer.cli.generate_book_cover_asset")
+    def test_main_generates_cover_for_existing_book(
+        self, cover_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            with patch(
+                "sys.argv",
+                ["book-writer", "--cover-book", str(book_dir), "--cover-model-path", "/tmp/model"],
+            ):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        cover_mock.assert_called_once()
+
+    @patch("book_writer.cli.generate_chapter_cover_assets")
+    def test_main_generates_chapter_covers_for_existing_book(
+        self, cover_mock: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+            with patch(
+                "sys.argv",
+                [
+                    "book-writer",
+                    "--chapter-covers-book",
+                    str(book_dir),
+                    "--cover-model-path",
+                    "/tmp/model",
+                ],
+            ):
+                result = cli.main()
+
+        self.assertEqual(result, 0)
+        cover_mock.assert_called_once()
+
+
 class TestCliExpandOnlyPrompt(unittest.TestCase):
     def test_prompt_for_expand_only_skips_empty_default(self) -> None:
         with TemporaryDirectory() as tmpdir:
