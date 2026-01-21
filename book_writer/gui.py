@@ -238,7 +238,8 @@ def get_gui_html() -> str:
       }
 
       .cover-header {
-        border-radius: 24px;
+        border-radius: 24px 24px 0 0;
+        margin: -22px -22px 18px;
         padding: 24px;
         min-height: 150px;
         display: flex;
@@ -274,6 +275,13 @@ def get_gui_html() -> str:
         z-index: 2;
       }
 
+      .cover-header-content {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+      }
+
       .cover-header .cover-title {
         font-size: 20px;
         font-weight: 600;
@@ -287,6 +295,15 @@ def get_gui_html() -> str:
       .reader-cover {
         min-height: 130px;
         margin-bottom: 16px;
+      }
+
+      .cover-header .media-block {
+        background: rgba(8, 12, 20, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .cover-header .media-block label {
+        color: rgba(248, 249, 251, 0.82);
       }
 
       .visually-hidden {
@@ -1052,11 +1069,11 @@ def get_gui_html() -> str:
 
         <div class="detail-layout">
           <div class="panel" id="workspacePanel">
-            <h3>Workspace</h3>
             <div class="workspace-empty" id="workspaceEmpty">
               Select a book or outline to open its workspace view.
             </div>
             <div class="workspace-view is-hidden" id="outlineWorkspace">
+              <h3>Workspace</h3>
               <div class="workspace-meta">
                 <span class="tag">Outline</span>
                 <span class="status-chip" id="outlineWorkspaceState"></span>
@@ -1099,7 +1116,13 @@ def get_gui_html() -> str:
             </div>
             <div class="workspace-view is-hidden" id="bookWorkspace">
               <div class="cover-header workspace-cover" id="bookWorkspaceCoverHeader">
-                <span class="cover-title" id="bookWorkspaceTitle">Book title</span>
+                <div class="cover-header-content">
+                  <span class="cover-title" id="bookWorkspaceTitle">Book title</span>
+                  <div class="media-block hidden" id="bookAudioBlock">
+                    <label>Full book audio</label>
+                    <audio controls id="bookAudio"></audio>
+                  </div>
+                </div>
               </div>
               <img id="bookCoverImage" class="visually-hidden" alt="Book cover" />
               <div class="workspace-meta">
@@ -1107,15 +1130,6 @@ def get_gui_html() -> str:
                 <span class="status-chip" id="bookWorkspaceState"></span>
               </div>
               <p class="meta-line" id="bookWorkspacePath"></p>
-              <div class="detail-section">
-                <h4>Book playback</h4>
-                <div class="media-panel">
-                  <div class="media-block hidden" id="bookAudioBlock">
-                    <label>Full book audio</label>
-                    <audio controls id="bookAudio"></audio>
-                  </div>
-                </div>
-              </div>
               <div class="detail-section">
                 <h4>Book actions</h4>
                 <div class="workspace-actions">
@@ -1187,25 +1201,24 @@ def get_gui_html() -> str:
               <button class="pill-button" id="chapterGenerateCover">Generate cover</button>
             </div>
           </div>
-          <div class="panel">
-            <h3>Reader view</h3>
-            <div class="reader-panel active" id="chapterReaderPanel">
-              <div class="cover-header reader-cover" id="chapterReaderCover">
+          <div class="panel reader-panel active" id="chapterReaderPanel">
+            <div class="cover-header reader-cover" id="chapterReaderCover">
+              <div class="cover-header-content">
                 <span class="cover-title" id="chapterReaderTitle">Chapter preview</span>
-              </div>
-              <img id="chapterCoverImage" class="visually-hidden" alt="Chapter cover" />
-              <div class="media-panel" id="chapterMediaPanel">
                 <div class="media-block hidden" id="chapterViewAudioBlock">
                   <label>Chapter audio</label>
                   <audio controls id="chapterViewAudio"></audio>
                 </div>
-                <div class="media-block hidden" id="chapterViewVideoBlock">
-                  <label>Chapter video</label>
-                  <video controls id="chapterViewVideo"></video>
-                </div>
               </div>
-              <div class="reader-body" id="chapterReaderBody"></div>
             </div>
+            <img id="chapterCoverImage" class="visually-hidden" alt="Chapter cover" />
+            <div class="media-panel" id="chapterMediaPanel">
+              <div class="media-block hidden" id="chapterViewVideoBlock">
+                <label>Chapter video</label>
+                <video controls id="chapterViewVideo"></video>
+              </div>
+            </div>
+            <div class="reader-body" id="chapterReaderBody"></div>
           </div>
         </div>
       </main>
