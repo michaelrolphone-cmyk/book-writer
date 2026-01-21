@@ -1719,28 +1719,14 @@ def get_gui_html() -> str:
         restoreChapterAudioToDetail();
       };
 
-      const ensureLazyAudioSource = (audio) => {
+      const hydrateAudioSource = (audio, mediaUrl) => {
         if (!audio) return;
-        if (audio.dataset.lazyBound) return;
-        audio.dataset.lazyBound = 'true';
-        audio.preload = 'none';
-        const hydrateSource = () => {
-          const mediaUrl = audio.dataset.mediaUrl;
-          if (!mediaUrl) return;
-          if (audio.src === mediaUrl) return;
+        if (!mediaUrl) return;
+        if (audio.src !== mediaUrl) {
           audio.src = mediaUrl;
-          audio.load();
-        };
-        const handleIntent = () => {
-          hydrateSource();
-        };
-        audio.addEventListener('pointerdown', handleIntent);
-        audio.addEventListener('keydown', (event) => {
-          if (event.key === ' ' || event.key === 'Enter') {
-            handleIntent();
-          }
-        });
-        audio.addEventListener('play', handleIntent);
+        }
+        audio.preload = 'metadata';
+        audio.load();
       };
 
       const createChapterCard = (bookDir, chapter) => {
@@ -1766,7 +1752,7 @@ def get_gui_html() -> str:
           audio.controls = true;
           audio.dataset.audioUrl = chapter.audio_url;
           audio.dataset.mediaUrl = chapter.audio_url;
-          ensureLazyAudioSource(audio);
+          hydrateAudioSource(audio, chapter.audio_url);
           audio.addEventListener('click', (event) => {
             event.stopPropagation();
           });
@@ -2005,8 +1991,7 @@ def get_gui_html() -> str:
         block.classList.remove('hidden');
         element.dataset.mediaUrl = url;
         if (element.tagName === 'AUDIO') {
-          element.removeAttribute('src');
-          ensureLazyAudioSource(element);
+          hydrateAudioSource(element, url);
           return;
         }
         element.src = url;
