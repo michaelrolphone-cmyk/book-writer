@@ -95,6 +95,17 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(result["title"], "Chapter One")
         self.assertIn("Content", result["content"])
 
+    def test_get_outline_content_returns_content(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "outline.md"
+            outline_path.write_text("# Book One\n\n## Chapter One\n", encoding="utf-8")
+
+            result = server.get_outline_content({"outline_path": str(outline_path)})
+
+        self.assertEqual(result["title"], "Book One")
+        self.assertIn("Chapter One", result["content"])
+        self.assertEqual(result["item_count"], 1)
+
     def test_get_chapter_content_includes_media_urls(self) -> None:
         with TemporaryDirectory() as tmpdir:
             book_dir = Path(tmpdir) / "book"
