@@ -86,6 +86,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("const workspacePath = outlineWorkspacePath.textContent.trim();", html)
         self.assertIn("const outlinePath = resolveOutlinePath();", html)
         self.assertIn(".book-card.cover-filled::before {", html)
+        self.assertIn("border-radius: 24px 24px 0 0;", html)
         self.assertIn("card.className = 'book-card cover-filled';", html)
         self.assertIn("card.style.setProperty('--card-cover'", html)
         book_shelf_index = html.index("id=\"bookShelf\"")

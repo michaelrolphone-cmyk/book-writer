@@ -220,7 +220,7 @@ def get_gui_html() -> str:
       }
 
       .book-cover {
-        border-radius: 24px 24px 18px 18px;
+        border-radius: 24px 24px 0 0;
         margin: -22px -22px 0;
         padding: 20px;
         background: rgba(12, 16, 24, 0.4);
