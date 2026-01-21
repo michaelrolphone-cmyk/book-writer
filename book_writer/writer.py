@@ -10,6 +10,7 @@ from typing import Iterable, List, Optional
 from urllib import request
 from urllib.error import HTTPError
 
+from book_writer.cover import CoverSettings, generate_book_cover
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
     TTSSynthesisError,
@@ -730,6 +731,32 @@ def _read_book_metadata(
     return ChapterContext(title=title, content=outline), "Marissa Bard"
 
 
+def _read_cover_synopsis(output_dir: Path) -> str:
+    synopsis_path = output_dir / "back-cover-synopsis.md"
+    if synopsis_path.exists():
+        return synopsis_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def generate_book_cover_asset(
+    output_dir: Path,
+    cover_settings: CoverSettings,
+) -> Optional[Path]:
+    if not cover_settings.enabled:
+        return None
+    chapter_files = _chapter_files(output_dir)
+    if not chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    book_metadata, _ = _read_book_metadata(output_dir, chapter_files)
+    synopsis = _read_cover_synopsis(output_dir)
+    return generate_book_cover(
+        output_dir=output_dir,
+        title=book_metadata.title,
+        synopsis=synopsis,
+        settings=cover_settings,
+    )
+
+
 def expand_book(
     output_dir: Path,
     client: LMStudioClient,
@@ -737,6 +764,7 @@ def expand_book(
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
     video_settings: Optional[VideoSettings] = None,
+    cover_settings: Optional[CoverSettings] = None,
     tone: Optional[str] = None,
     chapter_files: Optional[Iterable[Path]] = None,
 ) -> List[Path]:
@@ -745,6 +773,7 @@ def expand_book(
     video_settings = video_settings or VideoSettings()
     if passes < 1:
         raise ValueError("Expansion passes must be at least 1.")
+    cover_settings = cover_settings or CoverSettings()
     all_chapter_files = _chapter_files(output_dir)
     if not all_chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
@@ -852,6 +881,10 @@ def expand_book(
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
+    if cover_settings.enabled:
+        generate_book_cover_asset(output_dir, cover_settings)
+        if verbose:
+            print("[expand] Generated cover image.")
     return selected_chapters
 
 
@@ -862,6 +895,7 @@ def write_book(
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
     video_settings: Optional[VideoSettings] = None,
+    cover_settings: Optional[CoverSettings] = None,
     book_title: Optional[str] = None,
     byline: str = "Marissa Bard",
     tone: Optional[str] = None,
@@ -869,6 +903,7 @@ def write_book(
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
+    cover_settings = cover_settings or CoverSettings()
     output_dir.mkdir(parents=True, exist_ok=True)
     written_files: List[Path] = []
     index = 0
@@ -1040,6 +1075,15 @@ def write_book(
     )
     if verbose:
         print("[write] Wrote back-cover-synopsis.md.")
+    if cover_settings.enabled:
+        generate_book_cover(
+            output_dir=output_dir,
+            title=book_title,
+            synopsis=synopsis,
+            settings=cover_settings,
+        )
+        if verbose:
+            print("[write] Generated cover image.")
 
     progress["status"] = "completed"
     progress["completed_steps"] = total_steps

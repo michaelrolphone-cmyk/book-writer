@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 from pathlib import Path
 
+from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import TTSSettings
 from book_writer.video import VideoSettings
@@ -16,6 +17,7 @@ from book_writer.writer import (
     compile_book,
     expand_book,
     generate_book_audio,
+    generate_book_cover_asset,
     generate_book_title,
     generate_book_videos,
     load_book_progress,
@@ -153,8 +155,9 @@ def _prompt_for_author(
 
 def _prompt_for_task_settings(
     args: argparse.Namespace,
-) -> tuple[bool, str, TTSSettings, VideoSettings]:
+) -> tuple[bool, str, TTSSettings, VideoSettings, CoverSettings]:
     questionary = _questionary()
+    default_module_path = CoverSettings().module_path
     task_choices = [
         questionary.Choice(
             title="Generate text content",
@@ -170,6 +173,11 @@ def _prompt_for_task_settings(
             title="Generate videos",
             value="video",
             checked=args.video,
+        ),
+        questionary.Choice(
+            title="Generate book cover",
+            value="cover",
+            checked=args.cover,
         ),
     ]
     selected_tasks = questionary.checkbox(
@@ -249,7 +257,25 @@ def _prompt_for_task_settings(
         background_video=background_video,
         video_dirname=video_dirname,
     )
-    return text_enabled, byline, tts_settings, video_settings
+    cover_enabled = "cover" in selected
+    cover_settings = CoverSettings(
+        enabled=cover_enabled,
+        prompt=args.cover_prompt,
+        negative_prompt=args.cover_negative_prompt,
+        model_path=args.cover_model_path,
+        module_path=args.cover_module_path or default_module_path,
+        steps=args.cover_steps,
+        guidance_scale=args.cover_guidance_scale,
+        seed=args.cover_seed,
+        width=args.cover_width,
+        height=args.cover_height,
+        output_name=args.cover_output_name,
+        overwrite=args.cover_overwrite,
+        command=parse_cover_command(args.cover_command),
+    )
+    if cover_enabled:
+        cover_settings = _prompt_for_cover_settings(args, cover_settings)
+    return text_enabled, byline, tts_settings, video_settings, cover_settings
 
 
 def _outline_preview_text(title: Optional[str], items: list) -> str:
@@ -283,6 +309,7 @@ class BookInfo:
     has_audio: bool
     has_video: bool
     has_compilation: bool
+    has_cover: bool
 
 
 @dataclass(frozen=True)
@@ -292,8 +319,10 @@ class BookTaskSelection:
     compile: bool
     tts_settings: TTSSettings
     video_settings: VideoSettings
+    cover_settings: CoverSettings
     generate_audio: bool
     generate_video: bool
+    generate_cover: bool
 
 
 def _book_chapter_files(book_dir: Path) -> list[Path]:
@@ -404,6 +433,7 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
         path.suffix == ".mp4" for path in video_dir_path.iterdir()
     )
     has_compilation = (book_dir / "book.pdf").exists()
+    has_cover = (book_dir / "cover.png").exists()
     return BookInfo(
         path=book_dir,
         title=title,
@@ -411,6 +441,7 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
         has_audio=has_audio,
         has_video=has_video,
         has_compilation=has_compilation,
+        has_cover=has_cover,
     )
 
 
@@ -434,6 +465,7 @@ def _format_book_status(book_info: BookInfo) -> str:
             flag("audio", book_info.has_audio),
             flag("video", book_info.has_video),
             flag("compiled", book_info.has_compilation),
+            flag("cover", book_info.has_cover),
         ]
     )
 
@@ -517,13 +549,118 @@ def _prompt_for_video_settings(args: argparse.Namespace) -> VideoSettings:
     )
 
 
+def _prompt_for_cover_settings(
+    args: argparse.Namespace,
+    settings: CoverSettings,
+) -> CoverSettings:
+    questionary = _questionary()
+    prompt = questionary.text(
+        "Cover prompt override (leave blank for auto):",
+        default=settings.prompt or "",
+    ).ask()
+    negative_prompt = questionary.text(
+        "Negative prompt (optional):",
+        default=settings.negative_prompt or "",
+    ).ask()
+    model_path_response = questionary.text(
+        "Core ML model path (optional):",
+        default=str(settings.model_path or ""),
+    ).ask()
+    module_path_response = questionary.text(
+        "python_coreml_stable_diffusion module path:",
+        default=str(settings.module_path or ""),
+    ).ask()
+    steps_response = questionary.text(
+        "Inference steps:",
+        default=str(settings.steps),
+    ).ask()
+    guidance_response = questionary.text(
+        "Guidance scale:",
+        default=str(settings.guidance_scale),
+    ).ask()
+    seed_response = questionary.text(
+        "Seed (optional):",
+        default="" if settings.seed is None else str(settings.seed),
+    ).ask()
+    width_response = questionary.text(
+        "Image width:",
+        default=str(settings.width),
+    ).ask()
+    height_response = questionary.text(
+        "Image height:",
+        default=str(settings.height),
+    ).ask()
+    output_name = questionary.text(
+        "Cover output filename:",
+        default=settings.output_name,
+    ).ask()
+    overwrite = _prompt_yes_no(
+        "Overwrite existing cover image?",
+        settings.overwrite,
+    )
+    command_response = questionary.text(
+        "Custom cover command (optional):",
+        default=args.cover_command or "",
+    ).ask()
+
+    def parse_int(value: Optional[str], fallback: int) -> int:
+        if value is None or not value.strip():
+            return fallback
+        try:
+            return int(value)
+        except ValueError:
+            print(f"Invalid number '{value}', using {fallback}.")
+            return fallback
+
+    def parse_float(value: Optional[str], fallback: float) -> float:
+        if value is None or not value.strip():
+            return fallback
+        try:
+            return float(value)
+        except ValueError:
+            print(f"Invalid number '{value}', using {fallback}.")
+            return fallback
+
+    def parse_optional_int(value: Optional[str]) -> Optional[int]:
+        if value is None or not value.strip():
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            print(f"Invalid seed '{value}', leaving unset.")
+            return None
+
+    model_path = Path(model_path_response) if model_path_response else None
+    module_path = (
+        Path(module_path_response) if module_path_response else settings.module_path
+    )
+    command = parse_cover_command(command_response) or settings.command
+    return CoverSettings(
+        enabled=True,
+        prompt=prompt or None,
+        negative_prompt=negative_prompt or None,
+        model_path=model_path,
+        module_path=module_path,
+        steps=parse_int(steps_response, settings.steps),
+        guidance_scale=parse_float(guidance_response, settings.guidance_scale),
+        seed=parse_optional_int(seed_response),
+        width=parse_int(width_response, settings.width),
+        height=parse_int(height_response, settings.height),
+        output_name=output_name or settings.output_name,
+        overwrite=overwrite,
+        command=command,
+    )
+
+
 def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     questionary = _questionary()
+    default_module_path = CoverSettings().module_path
     task_choices = [
         questionary.Choice("Expand selected books", value="expand"),
         questionary.Choice("Generate compiled book.pdf", value="compile"),
         questionary.Choice("Generate audio narration", value="audio"),
         questionary.Choice("Generate videos", value="video"),
+        questionary.Choice("Generate book cover", value="cover"),
     ]
     selected = questionary.checkbox(
         "Select tasks for the selected books:",
@@ -565,6 +702,25 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     if generate_video:
         video_settings = _prompt_for_video_settings(args)
 
+    generate_cover = "cover" in selected_tasks
+    cover_settings = CoverSettings(
+        enabled=False,
+        prompt=args.cover_prompt,
+        negative_prompt=args.cover_negative_prompt,
+        model_path=args.cover_model_path,
+        module_path=args.cover_module_path or default_module_path,
+        steps=args.cover_steps,
+        guidance_scale=args.cover_guidance_scale,
+        seed=args.cover_seed,
+        width=args.cover_width,
+        height=args.cover_height,
+        output_name=args.cover_output_name,
+        overwrite=args.cover_overwrite,
+        command=parse_cover_command(args.cover_command),
+    )
+    if generate_cover:
+        cover_settings = _prompt_for_cover_settings(args, cover_settings)
+
     compile_book_assets = "compile" in selected_tasks
     return BookTaskSelection(
         expand=expand,
@@ -572,8 +728,10 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         compile=compile_book_assets,
         tts_settings=tts_settings,
         video_settings=video_settings,
+        cover_settings=cover_settings,
         generate_audio=generate_audio,
         generate_video=generate_video,
+        generate_cover=generate_cover,
     )
 
 
@@ -606,6 +764,7 @@ def write_books_from_outlines(
     verbose: bool = False,
     tts_settings: Optional[TTSSettings] = None,
     video_settings: Optional[VideoSettings] = None,
+    cover_settings: Optional[CoverSettings] = None,
     byline: str = "Marissa Bard",
     tone: str = "instructive self help guide",
     resume_decider: Optional[Callable[[Path, Path, dict], bool]] = None,
@@ -615,6 +774,7 @@ def write_books_from_outlines(
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
+    cover_settings = cover_settings or CoverSettings()
     written_files: list[Path] = []
     outline_files = outline_files or _outline_files(outlines_dir)
     if not outline_files:
@@ -659,6 +819,7 @@ def write_books_from_outlines(
                 verbose=verbose,
                 tts_settings=tts_settings,
                 video_settings=video_settings,
+                cover_settings=cover_settings,
                 book_title=book_title,
                 byline=byline,
                 tone=outline_tone,
@@ -801,6 +962,84 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory name for storing chapter video files.",
     )
     parser.add_argument(
+        "--cover",
+        action="store_true",
+        help="Generate a book cover image using python_coreml_stable_diffusion.",
+    )
+    parser.add_argument(
+        "--cover-prompt",
+        default=None,
+        help="Override the prompt used to generate the book cover image.",
+    )
+    parser.add_argument(
+        "--cover-negative-prompt",
+        default=None,
+        help="Negative prompt to avoid unwanted cover elements.",
+    )
+    parser.add_argument(
+        "--cover-model-path",
+        type=Path,
+        default=None,
+        help="Optional Core ML model path for cover generation.",
+    )
+    parser.add_argument(
+        "--cover-module-path",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the python_coreml_stable_diffusion module "
+            "(default: ../ml-stable-diffusion)."
+        ),
+    )
+    parser.add_argument(
+        "--cover-steps",
+        type=int,
+        default=30,
+        help="Number of inference steps for cover generation.",
+    )
+    parser.add_argument(
+        "--cover-guidance-scale",
+        type=float,
+        default=7.5,
+        help="Guidance scale (CFG) for cover generation.",
+    )
+    parser.add_argument(
+        "--cover-seed",
+        type=int,
+        default=None,
+        help="Random seed for cover generation.",
+    )
+    parser.add_argument(
+        "--cover-width",
+        type=int,
+        default=768,
+        help="Output width for the cover image.",
+    )
+    parser.add_argument(
+        "--cover-height",
+        type=int,
+        default=1024,
+        help="Output height for the cover image.",
+    )
+    parser.add_argument(
+        "--cover-output-name",
+        default="cover.png",
+        help="Filename for the generated cover image.",
+    )
+    parser.add_argument(
+        "--cover-overwrite",
+        action="store_true",
+        help="Overwrite any existing cover image.",
+    )
+    parser.add_argument(
+        "--cover-command",
+        default=None,
+        help=(
+            "Custom command template for cover generation. "
+            "Use placeholders like {prompt}, {output_path}, {steps}."
+        ),
+    )
+    parser.add_argument(
         "--byline",
         default="Marissa Bard",
         help="Byline shown on the book title page.",
@@ -864,6 +1103,7 @@ def _prompt_for_resume(output_dir: Path, progress: dict) -> bool:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    default_module_path = CoverSettings().module_path
 
     if args.gui:
         from book_writer.server import run_server
@@ -891,6 +1131,21 @@ def main() -> int:
         background_video=args.background_video,
         video_dirname=args.video_dir,
     )
+    cover_settings = CoverSettings(
+        enabled=args.cover,
+        prompt=args.cover_prompt,
+        negative_prompt=args.cover_negative_prompt,
+        model_path=args.cover_model_path,
+        module_path=args.cover_module_path or default_module_path,
+        steps=args.cover_steps,
+        guidance_scale=args.cover_guidance_scale,
+        seed=args.cover_seed,
+        width=args.cover_width,
+        height=args.cover_height,
+        output_name=args.cover_output_name,
+        overwrite=args.cover_overwrite,
+        command=parse_cover_command(args.cover_command),
+    )
     tone_options = _tone_options()
     author_options = _author_options()
     if args.expand_book:
@@ -914,6 +1169,7 @@ def main() -> int:
             verbose=True,
             tts_settings=tts_settings,
             video_settings=video_settings,
+            cover_settings=cover_settings,
             tone=selected_tone,
             chapter_files=selected_chapters,
         )
@@ -956,6 +1212,7 @@ def main() -> int:
                         verbose=True,
                         tts_settings=task_selection.tts_settings,
                         video_settings=task_selection.video_settings,
+                        cover_settings=task_selection.cover_settings,
                         tone=selected_tone,
                         chapter_files=selected_chapters,
                     )
@@ -973,6 +1230,11 @@ def main() -> int:
                         video_settings=task_selection.video_settings,
                         audio_dirname=task_selection.tts_settings.audio_dirname,
                         verbose=True,
+                    )
+                if task_selection.generate_cover:
+                    generate_book_cover_asset(
+                        output_dir=book.path,
+                        cover_settings=task_selection.cover_settings,
                     )
             return 0
         if not outline_files and not args.outline.exists():
@@ -1005,7 +1267,7 @@ def main() -> int:
                 )
                 for info in selected_outlines
             }
-            text_enabled, byline, tts_settings, video_settings = (
+            text_enabled, byline, tts_settings, video_settings, cover_settings = (
                 _prompt_for_task_settings(args)
             )
             if not text_enabled:
@@ -1020,6 +1282,7 @@ def main() -> int:
                     verbose=True,
                     tts_settings=tts_settings,
                     video_settings=video_settings,
+                    cover_settings=cover_settings,
                     byline=byline,
                     tone=args.tone,
                     resume_decider=lambda outline, output, progress: _prompt_for_resume(
@@ -1043,9 +1306,13 @@ def main() -> int:
         )
         client.set_author(selected_author)
         selected_tone = _prompt_for_tone(args.outline.name, tone_options, args.tone)
-        text_enabled, byline, tts_settings, video_settings = _prompt_for_task_settings(
-            args
-        )
+        (
+            text_enabled,
+            byline,
+            tts_settings,
+            video_settings,
+            cover_settings,
+        ) = _prompt_for_task_settings(args)
         if not text_enabled:
             print("Text generation disabled; no book was generated.")
             return 0
@@ -1066,6 +1333,7 @@ def main() -> int:
             verbose=True,
             tts_settings=tts_settings,
             video_settings=video_settings,
+            cover_settings=cover_settings,
             book_title=book_title,
             byline=byline,
             tone=selected_tone,
@@ -1082,6 +1350,7 @@ def main() -> int:
                 verbose=True,
                 tts_settings=tts_settings,
                 video_settings=video_settings,
+                cover_settings=cover_settings,
                 byline=args.byline,
                 tone=args.tone,
                 resume_decider=lambda outline, output, progress: _prompt_for_resume(
@@ -1112,6 +1381,7 @@ def main() -> int:
         verbose=True,
         tts_settings=tts_settings,
         video_settings=video_settings,
+        cover_settings=cover_settings,
         book_title=book_title,
         byline=args.byline,
         tone=args.tone,
