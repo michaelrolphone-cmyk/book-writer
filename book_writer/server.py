@@ -28,6 +28,7 @@ from book_writer.writer import (
     generate_book_cover_asset,
     generate_book_videos,
     generate_chapter_cover_assets,
+    generate_outline,
     write_book,
 )
 
@@ -149,6 +150,27 @@ def _collect_outlines(outlines_dir: Path) -> list[dict[str, Any]]:
     return outlines
 
 
+def _resolve_outline_path(
+    outlines_dir: Path,
+    outline_path_value: str | None,
+    outline_name: str | None,
+) -> Path:
+    if outline_path_value:
+        candidate = Path(outline_path_value)
+    else:
+        outlines_dir.mkdir(parents=True, exist_ok=True)
+        name = outline_name or "outline.md"
+        if not name.endswith(".md"):
+            name = f"{name}.md"
+        candidate = outlines_dir / name
+    if not candidate.is_absolute():
+        candidate = (outlines_dir / candidate).resolve()
+    outlines_root = outlines_dir.resolve()
+    if outlines_root not in candidate.parents and candidate != outlines_root:
+        raise ApiError("Invalid outline path.")
+    return candidate
+
+
 def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
     outlines_dir = Path(payload.get("outlines_dir", "outlines"))
     return {"outlines": _collect_outlines(outlines_dir)}
@@ -157,6 +179,55 @@ def list_outlines(payload: dict[str, Any]) -> dict[str, Any]:
 def list_completed_outlines(payload: dict[str, Any]) -> dict[str, Any]:
     outlines_dir = Path(payload.get("completed_outlines_dir", "completed_outlines"))
     return {"outlines": _collect_outlines(outlines_dir)}
+
+
+def generate_outline_api(payload: dict[str, Any]) -> dict[str, Any]:
+    prompt = payload.get("prompt", "")
+    if not str(prompt).strip():
+        raise ApiError("prompt is required")
+    outlines_dir = Path(payload.get("outlines_dir", "outlines"))
+    outline_path = _resolve_outline_path(
+        outlines_dir,
+        payload.get("outline_path"),
+        payload.get("outline_name"),
+    )
+    revision_prompts = payload.get("revision_prompts") or []
+    if isinstance(revision_prompts, str):
+        revision_prompts = [revision_prompts]
+    client = _build_client(payload)
+    outline_text = generate_outline(
+        prompt=str(prompt),
+        client=client,
+        revision_prompts=[str(item) for item in revision_prompts if item is not None],
+    )
+    outline_path.write_text(outline_text + "\n", encoding="utf-8")
+    title, items = parse_outline_with_title(outline_path)
+    return {
+        "outline_path": str(outline_path),
+        "title": title,
+        "content": outline_text,
+        "item_count": len(items),
+    }
+
+
+def save_outline_api(payload: dict[str, Any]) -> dict[str, Any]:
+    outline_path_value = payload.get("outline_path")
+    if not outline_path_value:
+        raise ApiError("outline_path is required")
+    outlines_dir = Path(payload.get("outlines_dir", "outlines"))
+    outlines_dir.mkdir(parents=True, exist_ok=True)
+    outline_path = _resolve_outline_path(outlines_dir, outline_path_value, None)
+    content = payload.get("content", "")
+    if not str(content).strip():
+        raise ApiError("content is required")
+    outline_path.write_text(str(content).rstrip() + "\n", encoding="utf-8")
+    title, items = parse_outline_with_title(outline_path)
+    return {
+        "outline_path": str(outline_path),
+        "title": title,
+        "content": str(content),
+        "item_count": len(items),
+    }
 
 
 def list_books(payload: dict[str, Any]) -> dict[str, Any]:
@@ -558,6 +629,8 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             "/api/generate-videos": generate_videos_api,
             "/api/generate-cover": generate_cover_api,
             "/api/generate-chapter-covers": generate_chapter_covers_api,
+            "/api/generate-outline": generate_outline_api,
+            "/api/save-outline": save_outline_api,
         }
         handler_fn = routes.get(path)
         if handler_fn is None:

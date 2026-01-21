@@ -122,6 +122,34 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             run_mock.assert_called()
 
 
+class TestCliOutlineWizard(unittest.TestCase):
+    @patch("book_writer.cli.generate_outline")
+    def test_prompt_outline_wizard_writes_outline(self, generate_mock: MagicMock) -> None:
+        generate_mock.return_value = "# Book One\n\n## Chapter One"
+        with TemporaryDirectory() as tmpdir:
+            outlines_dir = Path(tmpdir) / "outlines"
+            questionary_stub = _QuestionaryStub(
+                [
+                    "outline",
+                    "A fantasy epic.",
+                    "fantasy.md",
+                    str(outlines_dir),
+                    None,
+                    False,
+                ]
+            )
+            with patch("book_writer.cli._questionary", return_value=questionary_stub):
+                with patch("sys.argv", ["book-writer", "--prompt"]):
+                    result = cli.main()
+
+            outline_path = outlines_dir / "fantasy.md"
+            self.assertEqual(result, 0)
+            self.assertTrue(outline_path.exists())
+            self.assertIn(
+                "Chapter One", outline_path.read_text(encoding="utf-8")
+            )
+
+
 class TestCliExpandBook(unittest.TestCase):
     @patch("book_writer.cli.expand_book")
     def test_main_expands_completed_book(self, expand_mock: MagicMock) -> None:

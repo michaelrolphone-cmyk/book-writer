@@ -615,6 +615,26 @@ def get_gui_html() -> str:
         min-height: 90px;
       }
 
+      .outline-editor {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .outline-editor textarea {
+        min-height: 220px;
+        resize: vertical;
+        border: none;
+        border-radius: 16px;
+        padding: 14px 16px;
+        font-family: "SF Mono", "Courier New", monospace;
+        font-size: 14px;
+        background: var(--surface);
+        box-shadow: inset 6px 6px 12px var(--shadow-dark),
+          inset -6px -6px 12px var(--shadow-light);
+        outline: none;
+      }
+
       @media (max-width: 1024px) {
         .detail-header {
           flex-direction: column;
@@ -676,6 +696,43 @@ def get_gui_html() -> str:
         </section>
 
         <section class="home-utilities">
+          <div class="panel">
+            <h3>Create outline wizard</h3>
+            <label>Outline prompt</label>
+            <textarea
+              id="outlinePrompt"
+              placeholder="Describe the book you want to outline"
+            ></textarea>
+            <label>Revision prompts (one per line)</label>
+            <textarea
+              id="outlineRevisions"
+              placeholder="Add a stronger hook&#10;Refine the chapter arc"
+            ></textarea>
+            <div class="row">
+              <div>
+                <label>Outline filename</label>
+                <input id="outlineName" placeholder="my-outline.md" />
+              </div>
+              <div>
+                <label>Outlines directory</label>
+                <input id="outlineDir" placeholder="outlines" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>Model</label>
+                <input id="outlineModel" placeholder="local-model" />
+              </div>
+              <div>
+                <label>Base URL</label>
+                <input id="outlineBaseUrl" placeholder="http://localhost:1234" />
+              </div>
+            </div>
+            <button class="pill-button primary" id="generateOutline">
+              Generate outline
+            </button>
+          </div>
+
           <div class="panel">
             <h3>Generate from outline</h3>
             <label>Outline</label>
@@ -841,7 +898,17 @@ def get_gui_html() -> str:
                 </div>
               </div>
               <div class="detail-section">
-                <h4>Outline content</h4>
+                <h4>Outline editor</h4>
+                <div class="outline-editor">
+                  <textarea id="outlineEditor" placeholder="Edit outline markdown here"></textarea>
+                  <div class="workspace-actions">
+                    <button class="pill-button" id="outlineReload">Reload outline</button>
+                    <button class="pill-button primary" id="outlineSave">Save outline</button>
+                  </div>
+                </div>
+              </div>
+              <div class="detail-section">
+                <h4>Outline preview</h4>
                 <div class="detail-content markdown" id="outlineWorkspaceContent"></div>
               </div>
             </div>
@@ -1175,6 +1242,16 @@ def get_gui_html() -> str:
       const outlineWorkspaceSummary = document.getElementById('outlineWorkspaceSummary');
       const outlineWorkspaceContent = document.getElementById('outlineWorkspaceContent');
       const outlineWorkspaceGenerate = document.getElementById('outlineWorkspaceGenerate');
+      const outlineEditor = document.getElementById('outlineEditor');
+      const outlineSave = document.getElementById('outlineSave');
+      const outlineReload = document.getElementById('outlineReload');
+      const outlinePrompt = document.getElementById('outlinePrompt');
+      const outlineRevisions = document.getElementById('outlineRevisions');
+      const outlineName = document.getElementById('outlineName');
+      const outlineDir = document.getElementById('outlineDir');
+      const outlineModel = document.getElementById('outlineModel');
+      const outlineBaseUrl = document.getElementById('outlineBaseUrl');
+      const generateOutline = document.getElementById('generateOutline');
       const bookWorkspace = document.getElementById('bookWorkspace');
       const bookWorkspaceState = document.getElementById('bookWorkspaceState');
       const bookWorkspaceTitle = document.getElementById('bookWorkspaceTitle');
@@ -1271,10 +1348,15 @@ def get_gui_html() -> str:
         }
       };
 
-      const setOutlineContent = (content) => {
+      const updateOutlinePreview = (content) => {
         outlineWorkspaceContent.innerHTML = renderMarkdown(
           content || 'No outline content available.',
         );
+      };
+
+      const setOutlineContent = (content) => {
+        outlineEditor.value = content || '';
+        updateOutlinePreview(content);
       };
 
       const setBookContent = (content) => {
@@ -1437,6 +1519,23 @@ def get_gui_html() -> str:
           `/api/outline-content?outline_path=${encodeURIComponent(outlinePath)}`,
         );
         return result;
+      };
+
+      const parseRevisionPrompts = (value) =>
+        value
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line);
+
+      const resolveOutlineDir = (outlinePath) => {
+        if (!outlinePath) {
+          return outlineDir.value || 'outlines';
+        }
+        const parts = outlinePath.split('/');
+        if (parts.length <= 1) {
+          return outlineDir.value || 'outlines';
+        }
+        return parts.slice(0, -1).join('/');
       };
 
       const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
@@ -2060,8 +2159,99 @@ def get_gui_html() -> str:
         }
       });
 
+      outlineEditor.addEventListener('input', () => {
+        updateOutlinePreview(outlineEditor.value);
+      });
+
+      outlineReload.addEventListener('click', async () => {
+        const outlinePath = outlineWorkspacePath.textContent;
+        if (!outlinePath) {
+          log('Select an outline before reloading.');
+          return;
+        }
+        try {
+          const result = await loadOutlineContent(outlinePath);
+          setOutlineContent(result.content || '');
+          log('Outline reloaded.');
+        } catch (error) {
+          log(`Outline reload failed: ${error.message}`);
+        }
+      });
+
+      outlineSave.addEventListener('click', async () => {
+        const outlinePath = outlineWorkspacePath.textContent;
+        if (!outlinePath) {
+          log('Select an outline before saving.');
+          return;
+        }
+        try {
+          const payload = {
+            outline_path: outlinePath,
+            content: outlineEditor.value,
+            outlines_dir: resolveOutlineDir(outlinePath),
+          };
+          await postJson('/api/save-outline', payload);
+          log('Outline saved.');
+          await loadCatalog();
+          const outline =
+            catalogState.outlines.find((entry) => entry.path === outlinePath) ||
+            catalogState.completedOutlines.find((entry) => entry.path === outlinePath);
+          if (outline) {
+            await selectEntry(
+              catalogState.completedOutlines.some((entry) => entry.path === outlinePath)
+                ? 'completed-outline'
+                : 'outline',
+              outline,
+            );
+          }
+        } catch (error) {
+          log(`Outline save failed: ${error.message}`);
+        }
+      });
+
       outlineWorkspaceGenerate.addEventListener('click', () => {
         document.getElementById('generateBook').click();
+      });
+
+      generateOutline.addEventListener('click', async () => {
+        const prompt = outlinePrompt.value.trim();
+        if (!prompt) {
+          log('Outline prompt is required.');
+          return;
+        }
+        try {
+          const payload = {
+            prompt,
+            revision_prompts: parseRevisionPrompts(outlineRevisions.value || ''),
+            outline_name: outlineName.value || null,
+            outlines_dir: outlineDir.value || 'outlines',
+            model: outlineModel.value || document.getElementById('modelName').value || 'local-model',
+            base_url:
+              outlineBaseUrl.value ||
+              document.getElementById('baseUrl').value ||
+              'http://localhost:1234',
+          };
+          const result = await postJson('/api/generate-outline', payload);
+          log('Outline generated.');
+          outlinePrompt.value = '';
+          outlineRevisions.value = '';
+          await loadCatalog();
+          const outline =
+            catalogState.outlines.find((entry) => entry.path === result.outline_path) ||
+            catalogState.completedOutlines.find(
+              (entry) => entry.path === result.outline_path,
+            );
+          if (outline) {
+            await selectEntry('outline', outline);
+          } else {
+            outlineWorkspacePath.textContent = result.outline_path;
+            setOutlineContent(result.content || '');
+          }
+          showDetailView();
+          showWorkspace('outline');
+        } catch (error) {
+          log(`Outline generation failed: ${error.message}`);
+        }
       });
 
       bookWorkspaceReader.addEventListener('click', () => {

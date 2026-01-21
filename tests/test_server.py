@@ -2,7 +2,7 @@ import unittest
 from urllib.parse import quote
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from book_writer import server
 
@@ -211,6 +211,38 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(result["title"], "Book One")
         self.assertIn("Chapter One", result["content"])
         self.assertEqual(result["item_count"], 1)
+
+    @patch("book_writer.server.generate_outline")
+    def test_generate_outline_api_writes_file(self, generate_mock: MagicMock) -> None:
+        generate_mock.return_value = "# Book One\n\n## Chapter One\n"
+        with TemporaryDirectory() as tmpdir:
+            outlines_dir = Path(tmpdir) / "outlines"
+            payload = {
+                "prompt": "Write a sci-fi outline.",
+                "outlines_dir": str(outlines_dir),
+                "outline_name": "sci-fi.md",
+            }
+            result = server.generate_outline_api(payload)
+
+            outline_path = Path(result["outline_path"])
+            self.assertTrue(outline_path.exists())
+            self.assertIn("Chapter One", outline_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["item_count"], 1)
+
+    def test_save_outline_api_writes_content(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outlines_dir = Path(tmpdir) / "outlines"
+            payload = {
+                "outline_path": "saved.md",
+                "outlines_dir": str(outlines_dir),
+                "content": "# Book One\n\n## Chapter One\n",
+            }
+            result = server.save_outline_api(payload)
+
+            outline_path = Path(result["outline_path"])
+            self.assertTrue(outline_path.exists())
+            self.assertIn("Chapter One", outline_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["item_count"], 1)
 
     def test_get_chapter_content_includes_media_urls(self) -> None:
         with TemporaryDirectory() as tmpdir:
