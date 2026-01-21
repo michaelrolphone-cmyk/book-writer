@@ -87,6 +87,43 @@ class TestCover(unittest.TestCase):
         self.assertEqual(str(settings.module_path), called_kwargs["cwd"])
 
     @patch("book_writer.cover.subprocess.run")
+    def test_generate_book_cover_renames_nested_output(
+        self, run_mock: Mock
+    ) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            overwrite=True,
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "cover.png"
+            output_path.write_text("old", encoding="utf-8")
+            generated_dir = output_dir / "generated"
+            generated_file = (
+                generated_dir / "illustrate_scene.final.png"
+            )
+
+            def _write_file(*_args: object, **_kwargs: object) -> None:
+                generated_dir.mkdir(parents=True, exist_ok=True)
+                generated_file.write_text("new", encoding="utf-8")
+
+            run_mock.side_effect = _write_file
+
+            result = generate_book_cover(
+                output_dir=output_dir,
+                title="My Book",
+                synopsis="Synopsis text",
+                settings=settings,
+            )
+
+            self.assertTrue(output_path.exists())
+            self.assertFalse(generated_file.exists())
+            self.assertEqual("new", output_path.read_text(encoding="utf-8"))
+            self.assertEqual(result, output_path)
+
+    @patch("book_writer.cover.subprocess.run")
     def test_generate_book_cover_resolves_relative_output_dir(
         self, run_mock: Mock
     ) -> None:

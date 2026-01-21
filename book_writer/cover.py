@@ -191,6 +191,9 @@ def generate_book_cover(
     output_path = output_dir / settings.output_name
     if output_path.exists() and not settings.overwrite:
         return output_path
+    if settings.overwrite and output_path.exists():
+        output_path.unlink()
+    existing_paths = {path.resolve() for path in output_dir.rglob("*.png")}
     if settings.command is None and not settings.model_path:
         inferred_path = _infer_default_model_path(settings.module_path)
         if inferred_path:
@@ -225,9 +228,14 @@ def generate_book_cover(
         raise RuntimeError(message) from exc
     if output_path.exists():
         return output_path
-    candidates = sorted(
-        output_dir.glob("*.png"), key=lambda path: path.stat().st_mtime, reverse=True
-    )
+    candidates = [
+        path
+        for path in output_dir.rglob("*.png")
+        if path.resolve() not in existing_paths
+    ]
+    if not candidates:
+        candidates = list(output_dir.rglob("*.png"))
+    candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
     if candidates:
         candidates[0].replace(output_path)
     return output_path
@@ -247,6 +255,9 @@ def generate_chapter_cover(
     output_path = output_dir / settings.output_name
     if output_path.exists() and not settings.overwrite:
         return output_path
+    if settings.overwrite and output_path.exists():
+        output_path.unlink()
+    existing_paths = {path.resolve() for path in output_dir.rglob("*.png")}
     if settings.command is None and not settings.model_path:
         inferred_path = _infer_default_model_path(settings.module_path)
         if inferred_path:
@@ -284,9 +295,14 @@ def generate_chapter_cover(
         raise RuntimeError(message) from exc
     if output_path.exists():
         return output_path
-    candidates = sorted(
-        output_dir.glob("*.png"), key=lambda path: path.stat().st_mtime, reverse=True
-    )
+    candidates = [
+        path
+        for path in output_dir.rglob("*.png")
+        if path.resolve() not in existing_paths
+    ]
+    if not candidates:
+        candidates = list(output_dir.rglob("*.png"))
+    candidates = sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)
     if candidates:
         candidates[0].replace(output_path)
     return output_path
