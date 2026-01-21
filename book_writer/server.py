@@ -74,13 +74,20 @@ def _build_client(payload: dict[str, Any]) -> LMStudioClient:
 
 
 def _collect_outlines(outlines_dir: Path) -> list[dict[str, Any]]:
-    if not outlines_dir.exists():
+    if not outlines_dir.is_dir():
         return []
     outlines = []
-    for outline_path in sorted(outlines_dir.iterdir()):
+    try:
+        outline_paths = sorted(outlines_dir.iterdir())
+    except OSError:
+        return []
+    for outline_path in outline_paths:
         if outline_path.suffix != ".md":
             continue
-        title, items = parse_outline_with_title(outline_path)
+        try:
+            title, items = parse_outline_with_title(outline_path)
+        except (OSError, UnicodeDecodeError, ValueError):
+            continue
         preview = _outline_preview_text(title, items)
         outlines.append(
             {

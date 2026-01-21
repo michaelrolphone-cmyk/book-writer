@@ -36,7 +36,12 @@ class TestGui(unittest.TestCase):
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
             html,
         )
+        self.assertIn(
+            "outlineWorkspaceSummary.textContent = summaryLines.join(`\n`);",
+            html,
+        )
         self.assertIn("handoffChapterAudioToDetail", html)
+        self.assertIn("restoreChapterAudioToCard", html)
         self.assertIn("No preview available.", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)

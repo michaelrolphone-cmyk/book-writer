@@ -1119,6 +1119,7 @@ def get_gui_html() -> str:
       };
       let currentChapter = null;
       let chapterAudioHandoff = null;
+      let activeChapterAudio = chapterViewAudio;
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
@@ -1225,26 +1226,55 @@ def get_gui_html() -> str:
         }
       };
 
-      const handoffChapterAudioToDetail = (cardAudio, detailAudio, url) => {
-        if (!cardAudio || !detailAudio || !url) {
+      const restoreChapterAudioToDetail = () => {
+        if (!chapterViewAudioBlock.contains(chapterViewAudio)) {
+          chapterViewAudioBlock.replaceChildren(chapterViewAudio);
+        }
+        activeChapterAudio = chapterViewAudio;
+      };
+
+      const handoffChapterAudioToDetail = (cardAudio, url) => {
+        if (!cardAudio || !url) {
           chapterAudioHandoff = null;
+          restoreChapterAudioToDetail();
           return;
         }
         if (cardAudio.dataset.audioUrl !== url) {
           chapterAudioHandoff = null;
+          restoreChapterAudioToDetail();
           return;
         }
-        const state = captureAudioState(cardAudio);
-        cardAudio.pause();
-        applyAudioState(detailAudio, state);
-        chapterAudioHandoff = { cardAudio, url };
+        if (
+          chapterAudioHandoff &&
+          chapterAudioHandoff.cardAudio &&
+          chapterAudioHandoff.cardAudio !== cardAudio
+        ) {
+          restoreChapterAudioToCard();
+        }
+        const cardContainer = cardAudio.parentElement;
+        if (!cardContainer) {
+          chapterAudioHandoff = null;
+          restoreChapterAudioToDetail();
+          return;
+        }
+        chapterAudioHandoff = { cardAudio, cardContainer, url };
+        cardAudio.dataset.mediaUrl = url;
+        chapterViewAudioBlock.classList.remove('hidden');
+        chapterViewAudioBlock.replaceChildren(cardAudio);
+        activeChapterAudio = cardAudio;
       };
 
-      const syncChapterAudioToCard = () => {
-        if (!chapterAudioHandoff || !chapterAudioHandoff.cardAudio) return;
-        if (chapterAudioHandoff.url !== chapterViewAudio.dataset.mediaUrl) return;
-        const state = captureAudioState(chapterViewAudio);
-        applyAudioState(chapterAudioHandoff.cardAudio, state);
+      const restoreChapterAudioToCard = () => {
+        if (!chapterAudioHandoff || !chapterAudioHandoff.cardAudio) {
+          restoreChapterAudioToDetail();
+          return;
+        }
+        const { cardAudio, cardContainer } = chapterAudioHandoff;
+        if (cardContainer && !cardContainer.contains(cardAudio)) {
+          cardContainer.replaceChildren(cardAudio);
+        }
+        chapterAudioHandoff = null;
+        restoreChapterAudioToDetail();
       };
 
       const createChapterCard = (bookDir, chapter) => {
@@ -1340,9 +1370,10 @@ def get_gui_html() -> str:
         );
         chapterReaderTitle.textContent = result.title || 'Chapter preview';
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
+        restoreChapterAudioToDetail();
         setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
         setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
-        handoffChapterAudioToDetail(cardAudio, chapterViewAudio, result.audio_url);
+        handoffChapterAudioToDetail(cardAudio, result.audio_url);
         await loadWorkspaceChapterContent(bookDir, chapterIndex);
         showChapterView();
       };
@@ -1406,7 +1437,7 @@ def get_gui_html() -> str:
           `${entry.item_count || 0} sections`,
           entry.preview || 'No preview available.',
         ];
-        outlineWorkspaceSummary.textContent = summaryLines.join('\n');
+        outlineWorkspaceSummary.textContent = summaryLines.join(`\n`);
         const result = await loadOutlineContent(entry.path);
         setOutlineContent(result.content || '');
       };
@@ -1773,7 +1804,7 @@ def get_gui_html() -> str:
       });
 
       chapterBack.addEventListener('click', () => {
-        syncChapterAudioToCard();
+        restoreChapterAudioToCard();
         showDetailView();
       });
 
