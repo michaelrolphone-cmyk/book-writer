@@ -24,6 +24,11 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"readerPanel\"", html)
         self.assertIn("id=\"chapterAudio\"", html)
         self.assertIn("id=\"chapterVideo\"", html)
+        self.assertIn("Select a book before generating audio.", html)
+        self.assertIn(
+            "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
+            html,
+        )
         self.assertIn("Neumorphic", gui.__doc__ or "")
 
     def test_save_gui_html_writes_file(self) -> None:
