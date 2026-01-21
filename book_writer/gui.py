@@ -38,9 +38,17 @@ def get_gui_html() -> str:
       }
 
       .app {
+        min-height: 100vh;
+        padding: 36px 32px 72px;
+      }
+
+      .home-view {
         max-width: 1280px;
         margin: 0 auto;
-        padding: 40px 32px 72px;
+      }
+
+      .detail-view {
+        width: 100%;
       }
 
       .header {
@@ -105,16 +113,44 @@ def get_gui_html() -> str:
         outline: none;
       }
 
-      .layout {
+      .detail-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .detail-heading h2 {
+        margin: 0;
+        font-size: 26px;
+      }
+
+      .detail-heading p {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+
+      .detail-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
-        gap: 28px;
+        gap: 20px;
+      }
+
+      .home-utilities {
+        margin-top: 32px;
+        display: grid;
+        gap: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       }
 
       .shelf {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
         gap: 20px;
+      }
+
+      .chapter-shelf {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       }
 
       .book-card {
@@ -158,6 +194,17 @@ def get_gui_html() -> str:
         align-items: flex-end;
         box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.4),
           inset -4px -4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .chapter-card .book-cover {
+        height: 110px;
+        font-size: 14px;
+        padding: 16px;
+      }
+
+      .chapter-card h2 {
+        font-size: 16px;
+        margin-bottom: 6px;
       }
 
       .book-meta {
@@ -393,57 +440,6 @@ def get_gui_html() -> str:
         gap: 12px;
       }
 
-      .tree {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 10px;
-      }
-
-      .tree-section {
-        background: var(--surface);
-        border-radius: 16px;
-        padding: 10px 12px;
-        box-shadow: inset 3px 3px 8px rgba(200, 206, 216, 0.7),
-          inset -3px -3px 8px rgba(255, 255, 255, 0.7);
-      }
-
-      .tree-section-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 12px;
-        color: var(--muted);
-        margin-bottom: 8px;
-      }
-
-      .tree-items {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 6px;
-      }
-
-      .tree-item {
-        border: none;
-        width: 100%;
-        text-align: left;
-        background: transparent;
-        font-size: 13px;
-        color: var(--text);
-        padding: 6px 8px;
-        border-radius: 10px;
-        cursor: pointer;
-      }
-
-      .tree-item:hover,
-      .tree-item.active {
-        background: rgba(31, 111, 235, 0.12);
-        color: var(--accent);
-      }
-
       .workspace-empty {
         font-size: 13px;
         color: var(--muted);
@@ -581,125 +577,66 @@ def get_gui_html() -> str:
       }
 
       @media (max-width: 1024px) {
-        .layout {
-          grid-template-columns: 1fr;
+        .detail-header {
+          flex-direction: column;
+          align-items: flex-start;
         }
       }
     </style>
   </head>
   <body>
     <div class="app">
-      <header class="header">
-        <div class="header-title">
-          <h1>Book Writer Studio</h1>
-          <p>Curate outlines, drafts, and finished books in a soft, tactile shelf view.</p>
-        </div>
-        <div class="status-chip">● API Connected</div>
-      </header>
-
-      <section class="search-bar">
-        <span>🔍</span>
-        <input type="text" placeholder="Search by title, genre, or status" />
-        <button class="pill-button">Filters</button>
-      </section>
-
-      <div class="layout">
-        <section>
-          <div class="catalog">
-            <div class="panel">
-              <h3>Library tree</h3>
-              <ul class="tree" id="libraryTree"></ul>
-            </div>
-
-            <section class="shelf-section">
-              <div class="section-header">
-                <div>
-                  <h2>Active outlines</h2>
-                  <p>Ready-to-generate drafts pulled from the outlines directory.</p>
-                </div>
-                <span class="count-pill" id="outlineCount">0 outlines</span>
-              </div>
-              <div class="shelf" id="outlineShelf"></div>
-            </section>
-
-            <section class="shelf-section">
-              <div class="section-header">
-                <div>
-                  <h2>Completed outlines</h2>
-                  <p>Archived outlines already moved to completed_outlines.</p>
-                </div>
-                <span class="count-pill" id="completedOutlineCount">0 outlines</span>
-              </div>
-              <div class="shelf" id="completedOutlineShelf"></div>
-            </section>
-
-            <section class="shelf-section">
-              <div class="section-header">
-                <div>
-                  <h2>Books</h2>
-                  <p>Books tracked from the books directory, including media outputs.</p>
-                </div>
-                <span class="count-pill" id="bookCount">0 books</span>
-              </div>
-              <div class="shelf" id="bookShelf"></div>
-            </section>
+      <main class="home-view" id="homeView">
+        <header class="header">
+          <div class="header-title">
+            <h1>Book Writer Studio</h1>
+            <p>Curate outlines, drafts, and finished books in a soft, tactile shelf view.</p>
           </div>
+          <div class="status-chip">● API Connected</div>
+        </header>
+
+        <section class="search-bar">
+          <span>🔍</span>
+          <input type="text" placeholder="Search by title, genre, or status" />
+          <button class="pill-button">Filters</button>
         </section>
 
-        <aside>
-          <div class="panel" id="workspacePanel">
-            <h3>Workspace</h3>
-            <div class="workspace-empty" id="workspaceEmpty">
-              Select a book or outline to open its workspace view.
+        <section class="catalog">
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Active outlines</h2>
+                <p>Ready-to-generate drafts pulled from the outlines directory.</p>
+              </div>
+              <span class="count-pill" id="outlineCount">0 outlines</span>
             </div>
-            <div class="workspace-view is-hidden" id="outlineWorkspace">
-              <div class="workspace-meta">
-                <span class="tag">Outline</span>
-                <span class="status-chip" id="outlineWorkspaceState"></span>
-              </div>
-              <strong id="outlineWorkspaceTitle">Outline title</strong>
-              <p class="meta-line" id="outlineWorkspacePath"></p>
-              <div class="detail-section">
-                <h4>Outline actions</h4>
-                <div class="workspace-actions">
-                  <button class="pill-button primary" id="outlineWorkspaceGenerate">
-                    Generate book from outline
-                  </button>
-                </div>
-              </div>
-              <div class="detail-section">
-                <h4>Outline content</h4>
-                <div class="detail-content markdown" id="outlineWorkspaceContent"></div>
-              </div>
-            </div>
-            <div class="workspace-view is-hidden" id="bookWorkspace">
-              <div class="workspace-meta">
-                <span class="tag">Book</span>
-                <span class="status-chip" id="bookWorkspaceState"></span>
-              </div>
-              <strong id="bookWorkspaceTitle">Book title</strong>
-              <p class="meta-line" id="bookWorkspacePath"></p>
-              <div class="detail-section">
-                <label for="bookWorkspaceChapterSelect">Chapter</label>
-                <select id="bookWorkspaceChapterSelect"></select>
-              </div>
-              <div class="detail-section">
-                <h4>Book actions</h4>
-                <div class="workspace-actions">
-                  <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
-                  <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
-                  <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
-                  <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
-                  <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
-                </div>
-              </div>
-              <div class="detail-section">
-                <h4>Book content</h4>
-                <div class="detail-content markdown" id="bookWorkspaceContent"></div>
-              </div>
-            </div>
-          </div>
+            <div class="shelf" id="outlineShelf"></div>
+          </section>
 
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Completed outlines</h2>
+                <p>Archived outlines already moved to completed_outlines.</p>
+              </div>
+              <span class="count-pill" id="completedOutlineCount">0 outlines</span>
+            </div>
+            <div class="shelf" id="completedOutlineShelf"></div>
+          </section>
+
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Books</h2>
+                <p>Books tracked from the books directory, including media outputs.</p>
+              </div>
+              <span class="count-pill" id="bookCount">0 books</span>
+            </div>
+            <div class="shelf" id="bookShelf"></div>
+          </section>
+        </section>
+
+        <section class="home-utilities">
           <div class="panel">
             <h3>Generate from outline</h3>
             <label>Outline</label>
@@ -742,23 +679,6 @@ def get_gui_html() -> str:
             </div>
             <button class="pill-button" id="expandBook">Expand</button>
             <button class="pill-button" id="compileBook">Compile PDF</button>
-            <div class="reader-panel" id="readerPanel">
-              <div class="book-meta">
-                <strong id="readerTitle">Chapter preview</strong>
-                <button class="close-reader" id="closeReader">Close</button>
-              </div>
-              <div class="reader-body" id="readerBody"></div>
-              <div class="media-panel" id="mediaPanel">
-                <div class="media-block hidden" id="audioBlock">
-                  <label>Audio narration</label>
-                  <audio controls id="chapterAudio"></audio>
-                </div>
-                <div class="media-block hidden" id="videoBlock">
-                  <label>Chapter video</label>
-                  <video controls id="chapterVideo"></video>
-                </div>
-              </div>
-            </div>
           </div>
 
           <div class="panel">
@@ -781,16 +701,106 @@ def get_gui_html() -> str:
             <h3>Activity log</h3>
             <div class="action-log" id="actionLog">Waiting for actions...</div>
           </div>
-        </aside>
-      </div>
+        </section>
 
-      <section class="footer-panel">
-        <div>
-          <h3>Weekly focus</h3>
-          <p>Schedule two writing sessions and review outlines with your personas.</p>
+        <section class="footer-panel">
+          <div>
+            <h3>Weekly focus</h3>
+            <p>Schedule two writing sessions and review outlines with your personas.</p>
+          </div>
+          <button class="pill-button">Open Planner</button>
+        </section>
+      </main>
+
+      <main class="detail-view is-hidden" id="detailView">
+        <div class="detail-header">
+          <button class="pill-button" id="detailBack">← Back to library</button>
+          <div class="detail-heading">
+            <h2 id="detailHeading">Workspace</h2>
+            <p id="detailSubheading">Open a book or outline to focus on.</p>
+          </div>
         </div>
-        <button class="pill-button">Open Planner</button>
-      </section>
+
+        <div class="detail-layout">
+          <div class="panel" id="workspacePanel">
+            <h3>Workspace</h3>
+            <div class="workspace-empty" id="workspaceEmpty">
+              Select a book or outline to open its workspace view.
+            </div>
+            <div class="workspace-view is-hidden" id="outlineWorkspace">
+              <div class="workspace-meta">
+                <span class="tag">Outline</span>
+                <span class="status-chip" id="outlineWorkspaceState"></span>
+              </div>
+              <strong id="outlineWorkspaceTitle">Outline title</strong>
+              <p class="meta-line" id="outlineWorkspacePath"></p>
+              <div class="detail-section">
+                <h4>Outline actions</h4>
+                <div class="workspace-actions">
+                  <button class="pill-button primary" id="outlineWorkspaceGenerate">
+                    Generate book from outline
+                  </button>
+                </div>
+              </div>
+              <div class="detail-section">
+                <h4>Outline content</h4>
+                <div class="detail-content markdown" id="outlineWorkspaceContent"></div>
+              </div>
+            </div>
+            <div class="workspace-view is-hidden" id="bookWorkspace">
+              <div class="workspace-meta">
+                <span class="tag">Book</span>
+                <span class="status-chip" id="bookWorkspaceState"></span>
+              </div>
+              <strong id="bookWorkspaceTitle">Book title</strong>
+              <p class="meta-line" id="bookWorkspacePath"></p>
+              <div class="detail-section">
+                <h4>Book actions</h4>
+                <div class="workspace-actions">
+                  <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
+                  <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
+                  <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
+                  <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
+                  <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
+                </div>
+              </div>
+              <div class="detail-section">
+                <div class="section-header">
+                  <div>
+                    <h4>Chapters</h4>
+                    <p>Navigate deeper by selecting a chapter card.</p>
+                  </div>
+                  <span class="count-pill" id="chapterCount">0 chapters</span>
+                </div>
+                <div class="shelf chapter-shelf" id="chapterShelf"></div>
+              </div>
+              <div class="detail-section">
+                <h4>Book content</h4>
+                <div class="detail-content markdown" id="bookWorkspaceContent"></div>
+              </div>
+              <div class="detail-section">
+                <div class="reader-panel" id="readerPanel">
+                  <div class="book-meta">
+                    <strong id="readerTitle">Chapter preview</strong>
+                    <button class="close-reader" id="closeReader">Close</button>
+                  </div>
+                  <div class="reader-body" id="readerBody"></div>
+                  <div class="media-panel" id="mediaPanel">
+                    <div class="media-block hidden" id="audioBlock">
+                      <label>Audio narration</label>
+                      <audio controls id="chapterAudio"></audio>
+                    </div>
+                    <div class="media-block hidden" id="videoBlock">
+                      <label>Chapter video</label>
+                      <video controls id="chapterVideo"></video>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
 
     <script>
@@ -891,45 +901,6 @@ def get_gui_html() -> str:
         container.appendChild(empty);
       };
 
-      const renderTreeSection = (title, items, type, countLabel, labelBuilder) => {
-        const section = document.createElement('li');
-        section.className = 'tree-section';
-        const header = document.createElement('div');
-        header.className = 'tree-section-header';
-        const titleEl = document.createElement('span');
-        titleEl.textContent = title;
-        const countEl = document.createElement('span');
-        countEl.textContent = countLabel;
-        header.appendChild(titleEl);
-        header.appendChild(countEl);
-        section.appendChild(header);
-        const list = document.createElement('ul');
-        list.className = 'tree-items';
-        if (!items.length) {
-          const emptyItem = document.createElement('li');
-          emptyItem.className = 'meta-line';
-          emptyItem.textContent = 'No items yet.';
-          list.appendChild(emptyItem);
-        } else {
-          items.forEach((entry) => {
-            const listItem = document.createElement('li');
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'tree-item';
-            button.dataset.type = type;
-            button.dataset.path = entry.path;
-            button.textContent = labelBuilder(entry);
-            button.addEventListener('click', () => {
-              selectEntry(type, entry);
-            });
-            listItem.appendChild(button);
-            list.appendChild(listItem);
-          });
-        }
-        section.appendChild(list);
-        return section;
-      };
-
       const escapeHtml = (value) =>
         value
           .replace(/&/g, '&amp;')
@@ -1002,7 +973,11 @@ def get_gui_html() -> str:
       const videoBlock = document.getElementById('videoBlock');
       const chapterAudio = document.getElementById('chapterAudio');
       const chapterVideo = document.getElementById('chapterVideo');
-      const libraryTree = document.getElementById('libraryTree');
+      const homeView = document.getElementById('homeView');
+      const detailView = document.getElementById('detailView');
+      const detailBack = document.getElementById('detailBack');
+      const detailHeading = document.getElementById('detailHeading');
+      const detailSubheading = document.getElementById('detailSubheading');
       const workspaceEmpty = document.getElementById('workspaceEmpty');
       const outlineWorkspace = document.getElementById('outlineWorkspace');
       const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
@@ -1015,7 +990,8 @@ def get_gui_html() -> str:
       const bookWorkspaceTitle = document.getElementById('bookWorkspaceTitle');
       const bookWorkspacePath = document.getElementById('bookWorkspacePath');
       const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
-      const bookWorkspaceChapterSelect = document.getElementById('bookWorkspaceChapterSelect');
+      const chapterShelf = document.getElementById('chapterShelf');
+      const chapterCount = document.getElementById('chapterCount');
       const bookWorkspaceReader = document.getElementById('bookWorkspaceReader');
       const bookWorkspaceExpand = document.getElementById('bookWorkspaceExpand');
       const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
@@ -1052,6 +1028,18 @@ def get_gui_html() -> str:
         type: null,
         path: null,
       };
+      let currentChapter = null;
+
+      const showHomeView = () => {
+        detailView.classList.add('is-hidden');
+        homeView.classList.remove('is-hidden');
+      };
+
+      const showDetailView = () => {
+        homeView.classList.add('is-hidden');
+        detailView.classList.remove('is-hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
 
       const setSelectedCard = (cardElement) => {
         document.querySelectorAll('.book-card.selected').forEach((card) => {
@@ -1073,6 +1061,11 @@ def get_gui_html() -> str:
         workspaceEmpty.classList.add('is-hidden');
         outlineWorkspace.classList.toggle('is-hidden', type !== 'outline');
         bookWorkspace.classList.toggle('is-hidden', type !== 'book');
+        if (type === 'outline') {
+          detailHeading.textContent = 'Outline workspace';
+        } else if (type === 'book') {
+          detailHeading.textContent = 'Book workspace';
+        }
       };
 
       const setOutlineContent = (content) => {
@@ -1085,18 +1078,51 @@ def get_gui_html() -> str:
         bookWorkspaceContent.innerHTML = renderMarkdown(content || 'No chapter content available.');
       };
 
-      const clearTreeSelection = () => {
-        document.querySelectorAll('.tree-item.active').forEach((item) => {
-          item.classList.remove('active');
+      const setChapterSelection = (chapterIndex) => {
+        document.querySelectorAll('.chapter-card.selected').forEach((card) => {
+          card.classList.remove('selected');
         });
+        if (!chapterIndex) return;
+        const activeCard = chapterShelf.querySelector(`article[data-chapter="${chapterIndex}"]`);
+        if (activeCard) {
+          activeCard.classList.add('selected');
+        }
       };
 
-      const setTreeSelection = (path) => {
-        clearTreeSelection();
-        const activeItem = libraryTree.querySelector(`button[data-path="${path}"]`);
-        if (activeItem) {
-          activeItem.classList.add('active');
+      const createChapterCard = (chapter) => {
+        const title = chapter.title || `Chapter ${chapter.index}`;
+        const detail = chapter.summary || 'Select to preview chapter content.';
+        const card = createCard(
+          title,
+          `Chapter ${chapter.index}`,
+          detail,
+          'Chapter',
+          'Preview',
+          null,
+        );
+        card.classList.add('selectable', 'chapter-card');
+        card.dataset.chapter = String(chapter.index);
+        return card;
+      };
+
+      const renderChapterShelf = (bookDir, chapters) => {
+        chapterShelf.innerHTML = '';
+        chapterCount.textContent = `${chapters.length} chapters`;
+        if (!chapters.length) {
+          renderEmpty(chapterShelf, 'No chapters found for this book yet.');
+          return;
         }
+        chapters.forEach((chapter) => {
+          const card = createChapterCard(chapter);
+          card.addEventListener('click', async () => {
+            currentChapter = chapter;
+            chapterSelect.value = String(chapter.index);
+            openReader.disabled = false;
+            setChapterSelection(chapter.index);
+            await loadWorkspaceChapterContent(bookDir, String(chapter.index));
+          });
+          chapterShelf.appendChild(card);
+        });
       };
 
       const loadOutlineContent = async (outlinePath) => {
@@ -1120,29 +1146,18 @@ def get_gui_html() -> str:
         setBookContent(result.content || '');
       };
 
-      const loadWorkspaceChapters = async (bookDir) => {
-        bookWorkspaceChapterSelect.disabled = true;
-        setSelectOptions(bookWorkspaceChapterSelect, [], 'Select a chapter');
+      const fetchChapters = async (bookDir) => {
         if (!bookDir) return [];
         const result = await fetchJson(`/api/chapters?book_dir=${encodeURIComponent(bookDir)}`);
-        const chapters = result.chapters || [];
-        setSelectOptions(
-          bookWorkspaceChapterSelect,
-          chapters.map((chapter) => ({
-            value: String(chapter.index),
-            label: `${chapter.index}. ${chapter.title}`,
-          })),
-          chapters.length ? 'Select a chapter' : 'No chapters',
-        );
-        bookWorkspaceChapterSelect.disabled = !chapters.length;
-        return chapters;
+        return result.chapters || [];
       };
 
       const selectEntry = async (type, entry, cardElement = null) => {
         if (!entry) return;
         currentSelection = { type, path: entry.path };
         setSelectedCard(cardElement || findCardByPath(type, entry.path));
-        setTreeSelection(entry.path);
+        detailSubheading.textContent = entry.title || entry.path.split('/').pop();
+        showDetailView();
 
         if (type === 'book') {
           showWorkspace('book');
@@ -1156,11 +1171,13 @@ def get_gui_html() -> str:
           bookWorkspaceState.textContent = statusLabel;
           bookWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
           bookWorkspacePath.textContent = entry.path;
-          await loadChapters(entry.path);
-          const chapters = await loadWorkspaceChapters(entry.path);
+          const chapters = await loadChapters(entry.path);
+          renderChapterShelf(entry.path, chapters);
           if (chapters.length) {
-            bookWorkspaceChapterSelect.value = String(chapters[0].index);
-            await loadWorkspaceChapterContent(entry.path, bookWorkspaceChapterSelect.value);
+            currentChapter = chapters[0];
+            chapterSelect.value = String(chapters[0].index);
+            setChapterSelection(chapters[0].index);
+            await loadWorkspaceChapterContent(entry.path, chapterSelect.value);
           } else {
             setBookContent('No chapters found for this book.');
           }
@@ -1184,18 +1201,20 @@ def get_gui_html() -> str:
         openReader.disabled = true;
         setSelectOptions(chapterSelect, [], 'Select a chapter');
         readerPanel.classList.remove('active');
-        if (!bookDir) return;
+        if (!bookDir) return [];
         try {
-          const result = await fetchJson(`/api/chapters?book_dir=${encodeURIComponent(bookDir)}`);
-          const chapters = (result.chapters || []).map((chapter) => ({
+          const rawChapters = await fetchChapters(bookDir);
+          const chapters = rawChapters.map((chapter) => ({
             value: String(chapter.index),
             label: `${chapter.index}. ${chapter.title}`,
           }));
           setSelectOptions(chapterSelect, chapters, 'Select a chapter');
           chapterSelect.disabled = !chapters.length;
+          return rawChapters;
         } catch (error) {
           log(`Chapter list failed: ${error.message}`);
         }
+        return [];
       };
 
       const closeReaderPanel = () => {
@@ -1242,7 +1261,6 @@ def get_gui_html() -> str:
           outlineShelf.innerHTML = '';
           completedShelf.innerHTML = '';
           bookShelf.innerHTML = '';
-          libraryTree.innerHTML = '';
 
           document.getElementById('outlineCount').textContent = `${outlines.length} outlines`;
           document.getElementById('completedOutlineCount').textContent = `${completed.length} outlines`;
@@ -1330,31 +1348,6 @@ def get_gui_html() -> str:
               bookShelf.appendChild(card);
             });
           }
-
-          const outlineTree = renderTreeSection(
-            'Outlines',
-            outlines,
-            'outline',
-            `${outlines.length}`,
-            (outline) => outline.title || outline.path.split('/').pop(),
-          );
-          const completedTree = renderTreeSection(
-            'Completed outlines',
-            completed,
-            'completed-outline',
-            `${completed.length}`,
-            (outline) => outline.title || outline.path.split('/').pop(),
-          );
-          const bookTree = renderTreeSection(
-            'Books',
-            books,
-            'book',
-            `${books.length}`,
-            (book) => book.title,
-          );
-          libraryTree.appendChild(outlineTree);
-          libraryTree.appendChild(completedTree);
-          libraryTree.appendChild(bookTree);
 
           setSelectOptions(
             outlineSelect,
@@ -1509,6 +1502,11 @@ def get_gui_html() -> str:
           if (!expandOnlyInput.value || /^[0-9]+$/.test(expandOnlyInput.value)) {
             expandOnlyInput.value = event.target.value;
           }
+          if (currentSelection.type === 'book' && currentSelection.path === bookSelect.value) {
+            currentChapter = { index: Number(event.target.value) };
+            setChapterSelection(event.target.value);
+            loadWorkspaceChapterContent(currentSelection.path, event.target.value);
+          }
         }
       });
 
@@ -1517,6 +1515,13 @@ def get_gui_html() -> str:
         const chapter = chapterSelect.value;
         if (!bookDir || !chapter) return;
         try {
+          const book = catalogState.books.find((entry) => entry.path === bookDir);
+          if (book && (currentSelection.type !== 'book' || currentSelection.path !== bookDir)) {
+            await selectEntry('book', book);
+          } else {
+            showDetailView();
+            showWorkspace('book');
+          }
           const audioDir = document.getElementById('audioDir').value || 'audio';
           const videoDir = document.getElementById('videoDir').value || 'video';
           const result = await fetchJson(
@@ -1526,6 +1531,8 @@ def get_gui_html() -> str:
               audioDir,
             )}&video_dirname=${encodeURIComponent(videoDir)}`,
           );
+          currentChapter = { index: Number(chapter) };
+          setChapterSelection(chapter);
           readerTitle.textContent = result.title || 'Chapter preview';
           readerBody.innerHTML = renderMarkdown(result.content || '');
           setMediaSource(audioBlock, chapterAudio, result.audio_url);
@@ -1540,10 +1547,8 @@ def get_gui_html() -> str:
         closeReaderPanel();
       });
 
-      bookWorkspaceChapterSelect.addEventListener('change', async (event) => {
-        const chapterValue = event.target.value;
-        if (!chapterValue || currentSelection.type !== 'book') return;
-        await loadWorkspaceChapterContent(currentSelection.path, chapterValue);
+      detailBack.addEventListener('click', () => {
+        showHomeView();
       });
 
       outlineWorkspaceGenerate.addEventListener('click', () => {
