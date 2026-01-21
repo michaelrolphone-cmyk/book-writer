@@ -1442,6 +1442,10 @@ def get_gui_html() -> str:
 
       document.getElementById('generateAudio').addEventListener('click', async () => {
         try {
+          if (!bookSelect.value) {
+            log('Select a book before generating audio.');
+            return;
+          }
           const payload = {
             book_dir: bookSelect.value,
             tts_settings: {
@@ -1450,6 +1454,7 @@ def get_gui_html() -> str:
             },
           };
           await postJson('/api/generate-audio', payload);
+          await loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);
           log('Audio generation complete.');
         } catch (error) {
           log(`Audio failed: ${error.message}`);
