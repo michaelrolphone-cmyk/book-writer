@@ -202,14 +202,23 @@ def get_gui_html() -> str:
         display: flex;
         align-items: flex-end;
         overflow: hidden;
+        position: relative;
         box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.4),
           inset -4px -4px 12px rgba(0, 0, 0, 0.1);
       }
 
       .book-cover.has-image {
-        padding: 0;
-        color: transparent;
+        padding: 16px;
+        color: #f8f9fb;
         background: none;
+      }
+
+      .book-cover.has-image::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.55) 100%);
+        z-index: 1;
       }
 
       .book-cover-image {
@@ -217,6 +226,15 @@ def get_gui_html() -> str:
         height: 100%;
         object-fit: cover;
         display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+
+      .book-cover-title {
+        position: relative;
+        z-index: 2;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
       }
 
       .chapter-card .book-cover {
@@ -416,6 +434,9 @@ def get_gui_html() -> str:
 
       .media-block img {
         width: 100%;
+        height: auto;
+        max-height: 66vh;
+        object-fit: contain;
         border-radius: 10px;
         display: block;
       }
@@ -1154,8 +1175,11 @@ def get_gui_html() -> str:
           cover.appendChild(coverImage);
         } else {
           cover.style.background = gradientFor(title);
-          cover.textContent = title;
         }
+        const coverTitle = document.createElement('span');
+        coverTitle.className = 'book-cover-title';
+        coverTitle.textContent = title;
+        cover.appendChild(coverTitle);
 
         const content = document.createElement('div');
         const heading = document.createElement('h2');
@@ -2074,6 +2098,8 @@ def get_gui_html() -> str:
           setCoverProgress(true, 'Generating book cover art...');
           const payload = {
             book_dir: bookSelect.value,
+            base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
+            model: document.getElementById('modelName').value || 'local-model',
             cover_settings: buildCoverSettings(),
           };
           await postJson('/api/generate-cover', payload);
@@ -2096,6 +2122,8 @@ def get_gui_html() -> str:
           const payload = {
             book_dir: bookSelect.value,
             chapter_cover_dir: getChapterCoverDir(),
+            base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
+            model: document.getElementById('modelName').value || 'local-model',
             cover_settings: buildCoverSettings(),
           };
           await postJson('/api/generate-chapter-covers', payload);
@@ -2232,6 +2260,8 @@ def get_gui_html() -> str:
             book_dir: currentChapter.bookDir,
             chapter: currentChapter.index,
             chapter_cover_dir: getChapterCoverDir(),
+            base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
+            model: document.getElementById('modelName').value || 'local-model',
             cover_settings: buildCoverSettings(),
           };
           await postJson('/api/generate-chapter-covers', payload);

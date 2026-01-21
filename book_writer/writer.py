@@ -789,9 +789,26 @@ def _read_cover_synopsis(output_dir: Path) -> str:
     return ""
 
 
+def _summarize_cover_text(
+    client: LMStudioClient, text: str, context_label: str
+) -> str:
+    if not text.strip():
+        return ""
+    prompt = (
+        f"Summarize the following {context_label} into a concise visual description "
+        "for cover art. Focus on vivid imagery, setting, characters, and mood. "
+        "Keep it under 400 characters and limit to 2-3 sentences. "
+        "Return plain text only.\n\n"
+        f"{text}"
+    )
+    summary = client.generate(prompt).strip()
+    return summary or text
+
+
 def generate_book_cover_asset(
     output_dir: Path,
     cover_settings: CoverSettings,
+    client: Optional[LMStudioClient] = None,
 ) -> Optional[Path]:
     if not cover_settings.enabled:
         return None
@@ -800,6 +817,10 @@ def generate_book_cover_asset(
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
     book_metadata, _ = _read_book_metadata(output_dir, chapter_files)
     synopsis = _read_cover_synopsis(output_dir)
+    if client:
+        synopsis = _summarize_cover_text(
+            client, synopsis, "book synopsis"
+        )
     return generate_book_cover(
         output_dir=output_dir,
         title=book_metadata.title,
@@ -813,6 +834,7 @@ def generate_chapter_cover_assets(
     cover_settings: CoverSettings,
     chapter_cover_dir: str = "chapter_covers",
     chapter_files: Optional[Iterable[Path]] = None,
+    client: Optional[LMStudioClient] = None,
 ) -> List[Path]:
     if not cover_settings.enabled:
         return []
@@ -844,6 +866,10 @@ def generate_chapter_cover_assets(
     for chapter_file in selected_chapters:
         content = chapter_file.read_text(encoding="utf-8")
         chapter_title = _chapter_title_from_content(content, chapter_file.stem)
+        if client:
+            content = _summarize_cover_text(
+                client, content, f"chapter {chapter_title}"
+            )
         settings = replace(
             cover_settings, output_name=f"{chapter_file.stem}.png"
         )
@@ -984,7 +1010,7 @@ def expand_book(
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
     if cover_settings.enabled:
-        generate_book_cover_asset(output_dir, cover_settings)
+        generate_book_cover_asset(output_dir, cover_settings, client=client)
         if verbose:
             print("[expand] Generated cover image.")
     return selected_chapters
@@ -1178,10 +1204,13 @@ def write_book(
     if verbose:
         print("[write] Wrote back-cover-synopsis.md.")
     if cover_settings.enabled:
+        cover_synopsis = _summarize_cover_text(
+            client, synopsis, "book synopsis"
+        )
         generate_book_cover(
             output_dir=output_dir,
             title=book_title,
-            synopsis=synopsis,
+            synopsis=cover_synopsis,
             settings=cover_settings,
         )
         if verbose:

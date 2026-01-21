@@ -1242,12 +1242,14 @@ def main() -> int:
             generate_book_cover_asset(
                 output_dir=args.cover_book,
                 cover_settings=cover_settings,
+                client=client,
             )
         if args.chapter_covers_book:
             generate_chapter_cover_assets(
                 output_dir=args.chapter_covers_book,
                 cover_settings=cover_settings,
                 chapter_cover_dir=args.chapter_cover_dir,
+                client=client,
             )
         return 0
     if args.expand_book:
@@ -1365,12 +1367,14 @@ def main() -> int:
                     generate_book_cover_asset(
                         output_dir=book.path,
                         cover_settings=task_selection.cover_settings,
+                        client=client,
                     )
                 if task_selection.generate_chapter_covers:
                     generate_chapter_cover_assets(
                         output_dir=book.path,
                         cover_settings=task_selection.cover_settings,
                         chapter_cover_dir=task_selection.chapter_cover_dir,
+                        client=client,
                     )
             return 0
         if not outline_files and not args.outline.exists():

@@ -342,6 +342,7 @@ class TestServerApi(unittest.TestCase):
                 )
 
         cover_mock.assert_called_once()
+        self.assertIsNotNone(cover_mock.call_args.kwargs["client"])
         self.assertEqual(response["status"], "cover_generated")
 
     def test_generate_chapter_covers_api_invokes_generation(self) -> None:
@@ -365,6 +366,7 @@ class TestServerApi(unittest.TestCase):
                 )
 
         cover_mock.assert_called_once()
+        self.assertIsNotNone(cover_mock.call_args.kwargs["client"])
         self.assertEqual(response["status"], "chapter_covers_generated")
 
 

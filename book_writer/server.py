@@ -499,7 +499,8 @@ def generate_cover_api(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError("book_dir is required")
     book_dir = Path(book_dir_value)
     cover_settings = _parse_cover_settings(payload)
-    generate_book_cover_asset(book_dir, cover_settings)
+    client = _build_client(payload)
+    generate_book_cover_asset(book_dir, cover_settings, client=client)
     return {"status": "cover_generated", "book_dir": str(book_dir)}
 
 
@@ -511,6 +512,7 @@ def generate_chapter_covers_api(payload: dict[str, Any]) -> dict[str, Any]:
     chapter_value = payload.get("chapter")
     chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
     cover_settings = _parse_cover_settings(payload)
+    client = _build_client(payload)
     chapter_files = None
     if chapter_value:
         chapter_files = [_find_chapter_file(book_dir, str(chapter_value))]
@@ -519,6 +521,7 @@ def generate_chapter_covers_api(payload: dict[str, Any]) -> dict[str, Any]:
         cover_settings=cover_settings,
         chapter_cover_dir=chapter_cover_dir,
         chapter_files=chapter_files,
+        client=client,
     )
     return {
         "status": "chapter_covers_generated",
