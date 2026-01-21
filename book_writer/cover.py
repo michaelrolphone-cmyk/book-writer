@@ -49,7 +49,7 @@ DEFAULT_NEGATIVE_PROMPT = (
     "text, letters, typography, watermark, logo, signature"
 )
 DEFAULT_COVER_GUIDANCE = (
-    "Cover art illustration, not a book cover. "
+    "Cinematic scene illustration. "
     "No text, no typography, no letters, no watermark, no logo."
 )
 
@@ -57,9 +57,9 @@ DEFAULT_COVER_GUIDANCE = (
 def build_cover_prompt(title: str, synopsis: str) -> str:
     synopsis_text = _truncate_prompt_text(synopsis)
     prompt = (
-        f"Cover art illustration for '{title}'. "
+        "Illustrate a cinematic scene. "
         f"Visualize: {synopsis_text} "
-        "Cinematic lighting, highly detailed."
+        "Moody lighting, highly detailed."
     ).strip()
     return _ensure_cover_prompt(prompt)
 
@@ -75,9 +75,9 @@ def build_chapter_cover_prompt(
     summary = " ".join(lines) or chapter_title
     summary_text = _truncate_prompt_text(summary)
     prompt = (
-        f"Cover art illustration for chapter '{chapter_title}' in '{book_title}'. "
+        "Illustrate a cinematic scene inspired by the chapter. "
         f"Visualize: {summary_text} "
-        "Cinematic lighting, highly detailed."
+        "Moody lighting, highly detailed."
     ).strip()
     return _ensure_cover_prompt(prompt)
 
@@ -302,7 +302,9 @@ def _truncate_prompt_text(text: str) -> str:
 def _ensure_cover_prompt(prompt: str) -> str:
     prompt_value = prompt.strip()
     prompt_lower = prompt_value.lower()
-    if "not a book cover" in prompt_lower and "no text" in prompt_lower:
+    if "no text" in prompt_lower and (
+        "no typography" in prompt_lower or "no letters" in prompt_lower
+    ):
         return prompt_value
     return f"{prompt_value} {DEFAULT_COVER_GUIDANCE}".strip()
 

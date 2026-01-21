@@ -46,7 +46,7 @@ class LMStudioClient:
         self.base_prompt = base_prompt if base_prompt is not None else _base_prompt(author)
 
     def generate(self, prompt: str) -> str:
-        prompt = f"{self.base_prompt}\n\n{prompt}".strip()
+        prompt = self.render_prompt(prompt)
         payload = {
             "model": self.model,
             "messages": [
@@ -72,6 +72,9 @@ class LMStudioClient:
             body = response.read().decode("utf-8")
         parsed = json.loads(body)
         return parsed["choices"][0]["message"]["content"].strip()
+
+    def render_prompt(self, prompt: str) -> str:
+        return f"{self.base_prompt}\n\n{prompt}".strip()
 
     def set_author(self, author: Optional[str]) -> None:
         self.base_prompt = _base_prompt(author)
@@ -178,6 +181,17 @@ def build_prompt(
 ) -> str:
     outline_text = outline_to_text(items)
     context_parts = []
+    focus_parts = []
+    if current.level == 1:
+        sections = [
+            item.title for item in items if item.parent_title == current.title
+        ]
+        if sections:
+            focus_parts.append(
+                "Chapter focus checklist:\n- " + "\n- ".join(sections)
+            )
+    else:
+        focus_parts.append(f"Section focus: {current.title}")
     if current.parent_title:
         context_parts.append(
             f"The current section belongs to the chapter '{current.parent_title}'."
@@ -190,18 +204,28 @@ def build_prompt(
             "Carry forward characters, narratives, and themes from the previous chapter."
         )
     context = "\n\n".join(context_parts)
+    focus_text = "\n\n".join(focus_parts)
     return (
         f"{_tone_preface(tone)}"
-        "Write the next part of the book based on the outline. "
+        "Write the next part of the book based strictly on the outline. "
+        "Cover the themes and plot beats listed for the current item. "
+        "Do not introduce new plot threads that are not supported by the outline. "
+        "Do not jump ahead to future outline items. "
         "Return only markdown content for the requested item.\n\n"
         f"Outline:\n{outline_text}\n\n"
         f"Current item: {current.title} ({current.type_label}).\n"
+        f"{focus_text}\n\n"
         f"{context}".strip()
     )
 
 
-def build_chapter_context_prompt(title: str, content: str) -> str:
+def build_chapter_context_prompt(
+    title: str,
+    content: str,
+    tone: Optional[str] = None,
+) -> str:
     return (
+        f"{_tone_preface(tone)}"
         "Generate a concise context summary for the next chapter. "
         "Focus on characters, narratives, themes, and unresolved threads. "
         "Return only the summary text.\n\n"
@@ -821,6 +845,7 @@ def generate_book_cover_asset(
         synopsis = _summarize_cover_text(
             client, synopsis, "book synopsis"
         )
+    cover_settings = replace(cover_settings, output_name="cover.png")
     return generate_book_cover(
         output_dir=output_dir,
         title=book_metadata.title,
@@ -1028,6 +1053,7 @@ def write_book(
     byline: str = "Marissa Bard",
     tone: Optional[str] = None,
     resume: bool = False,
+    log_prompts: bool = False,
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -1084,6 +1110,12 @@ def write_book(
                 f"Generating {item.type_label} '{item.title}'."
             )
         prompt = build_prompt(items, item, previous_chapter, tone=tone)
+        if log_prompts:
+            full_prompt = client.render_prompt(prompt)
+            print(
+                f"[prompt] {item.type_label.title()} {index + 1}/{len(items)}: "
+                f"{item.title}\n{full_prompt}\n"
+            )
         content = client.generate(prompt)
         heading = f"{item.heading_prefix} {item.title}"
         if _is_implementation_details(item.title):
@@ -1130,8 +1162,15 @@ def write_book(
                 print(f"[write] Wrote {file_path.name}.")
             if item.level == 1:
                 context_prompt = build_chapter_context_prompt(
-                    item.title, file_body or content
+                    item.title, file_body or content, tone=tone
                 )
+                if log_prompts:
+                    full_prompt = client.render_prompt(context_prompt)
+                    print(
+                        "[prompt] Chapter context summary "
+                        f"{index + 1}/{len(items)}: {item.title}\n"
+                        f"{full_prompt}\n"
+                    )
                 context_summary = client.generate(context_prompt)
                 previous_chapter = ChapterContext(
                     title=item.title, content=context_summary
@@ -1207,6 +1246,7 @@ def write_book(
         cover_synopsis = _summarize_cover_text(
             client, synopsis, "book synopsis"
         )
+        cover_settings = replace(cover_settings, output_name="cover.png")
         generate_book_cover(
             output_dir=output_dir,
             title=book_title,

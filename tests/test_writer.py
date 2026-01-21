@@ -56,6 +56,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Outline:", prompt)
         self.assertIn("Current item: Section A", prompt)
         self.assertIn("chapter 'Chapter One'", prompt)
+        self.assertIn("Section focus: Section A", prompt)
 
     def test_build_prompt_includes_previous_chapter_for_next_chapter(self) -> None:
         items = [
@@ -180,6 +181,44 @@ class TestWriter(unittest.TestCase):
             "[write] Step 1/1: Generating chapter 'Chapter One'."
         )
         print_mock.assert_any_call("[write] Generated book.pdf from chapters.")
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_logs_prompts_when_enabled(
+        self, run_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+
+        class DummyClient:
+            def __init__(self) -> None:
+                self.base_prompt = "BASE PROMPT"
+                self._responses = iter(
+                    ["Chapter content", "Chapter summary", "Synopsis text"]
+                )
+
+            def render_prompt(self, prompt: str) -> str:
+                return f"{self.base_prompt}\n\n{prompt}".strip()
+
+            def generate(self, _prompt: str) -> str:
+                return next(self._responses)
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            with patch("builtins.print") as print_mock:
+                write_book(
+                    items,
+                    output_dir,
+                    DummyClient(),
+                    log_prompts=True,
+                )
+
+        self.assertTrue(
+            any(
+                "[prompt] Chapter 1/1: Chapter One" in call.args[0]
+                for call in print_mock.mock_calls
+                if call.args
+            )
+        )
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
@@ -348,6 +387,9 @@ class TestWriter(unittest.TestCase):
         cover_mock.assert_called_once()
         self.assertEqual(
             cover_mock.call_args.kwargs["synopsis"], "Short summary."
+        )
+        self.assertEqual(
+            cover_mock.call_args.kwargs["settings"].output_name, "cover.png"
         )
         client.generate.assert_called_once()
 
@@ -800,6 +842,13 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn("Chapter title: Chapter One", prompt)
         self.assertIn("Chapter content:", prompt)
+
+    def test_build_chapter_context_prompt_includes_tone(self) -> None:
+        prompt = build_chapter_context_prompt(
+            "Chapter One", "Some chapter text.", tone="novel"
+        )
+
+        self.assertIn("novel", prompt)
 
     def test_build_synopsis_prompt_mentions_outline_and_content(self) -> None:
         prompt = build_synopsis_prompt(

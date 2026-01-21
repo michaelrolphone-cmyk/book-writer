@@ -841,6 +841,7 @@ def write_books_from_outlines(
     outline_files: Optional[list[Path]] = None,
     tone_decider: Optional[Callable[[Path], str]] = None,
     author_decider: Optional[Callable[[Path], Optional[str]]] = None,
+    log_prompts: bool = False,
 ) -> list[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -894,6 +895,7 @@ def write_books_from_outlines(
                 byline=byline,
                 tone=outline_tone,
                 resume=resume,
+                log_prompts=log_prompts,
             )
         )
         reset_supported = client.reset_context()
@@ -1431,6 +1433,7 @@ def main() -> int:
                     outline_files=[info.path for info in selected_outlines],
                     tone_decider=lambda path: tone_map[path],
                     author_decider=lambda path: author_map[path],
+                    log_prompts=True,
                 )
             except ValueError as exc:
                 parser.error(str(exc))
@@ -1478,6 +1481,7 @@ def main() -> int:
             byline=byline,
             tone=selected_tone,
             resume=resume,
+            log_prompts=True,
         )
         return 0
     if outline_files:
@@ -1496,6 +1500,7 @@ def main() -> int:
                 resume_decider=lambda outline, output, progress: _prompt_for_resume(
                     output, progress
                 ),
+                log_prompts=True,
             )
         except ValueError as exc:
             parser.error(str(exc))
@@ -1526,6 +1531,7 @@ def main() -> int:
         byline=args.byline,
         tone=args.tone,
         resume=resume,
+        log_prompts=True,
     )
     return 0
 
