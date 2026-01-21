@@ -297,9 +297,15 @@ class BookTaskSelection:
 
 
 def _book_chapter_files(book_dir: Path) -> list[Path]:
+    if not book_dir.is_dir():
+        return []
+    try:
+        entries = list(book_dir.iterdir())
+    except OSError:
+        return []
     return sorted(
         path
-        for path in book_dir.iterdir()
+        for path in entries
         if path.suffix == ".md"
         and path.name not in {"book.md", "back-cover-synopsis.md", "nextsteps.md"}
     )
@@ -381,13 +387,19 @@ def _prompt_for_expand_only(
 def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
     book_md = book_dir / "book.md"
     if book_md.exists():
-        for line in book_md.read_text(encoding="utf-8").splitlines():
-            if line.startswith("# "):
-                return line[2:].strip()
+        try:
+            for line in book_md.read_text(encoding="utf-8").splitlines():
+                if line.startswith("# "):
+                    return line[2:].strip()
+        except (OSError, UnicodeDecodeError):
+            pass
     for chapter in chapter_files:
-        for line in chapter.read_text(encoding="utf-8").splitlines():
-            if line.startswith("# "):
-                return line[2:].strip()
+        try:
+            for line in chapter.read_text(encoding="utf-8").splitlines():
+                if line.startswith("# "):
+                    return line[2:].strip()
+        except (OSError, UnicodeDecodeError):
+            continue
     return book_dir.name
 
 
@@ -396,13 +408,19 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
     has_text = bool(chapter_files)
     title = _book_title(book_dir, chapter_files)
     audio_dir = book_dir / tts_audio_dir
-    has_audio = audio_dir.exists() and any(
-        path.suffix == ".mp3" for path in audio_dir.iterdir()
-    )
+    has_audio = False
+    if audio_dir.is_dir():
+        try:
+            has_audio = any(path.suffix == ".mp3" for path in audio_dir.iterdir())
+        except OSError:
+            has_audio = False
     video_dir_path = book_dir / video_dir
-    has_video = video_dir_path.exists() and any(
-        path.suffix == ".mp4" for path in video_dir_path.iterdir()
-    )
+    has_video = False
+    if video_dir_path.is_dir():
+        try:
+            has_video = any(path.suffix == ".mp4" for path in video_dir_path.iterdir())
+        except OSError:
+            has_video = False
     has_compilation = (book_dir / "book.pdf").exists()
     return BookInfo(
         path=book_dir,
@@ -415,7 +433,7 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
 
 
 def _book_directories(books_dir: Path, tts_audio_dir: str, video_dir: str) -> list[BookInfo]:
-    if not books_dir.exists():
+    if not books_dir.is_dir():
         return []
     book_dirs = sorted(path for path in books_dir.iterdir() if path.is_dir())
     return [

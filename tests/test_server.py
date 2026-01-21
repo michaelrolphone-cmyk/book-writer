@@ -39,6 +39,20 @@ class TestServerApi(unittest.TestCase):
         self.assertIn("Chapter One", result["outlines"][0]["preview"])
         self.assertEqual(result["outlines"][0]["item_count"], 1)
 
+    def test_list_outlines_skips_unreadable_files(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outlines_dir = Path(tmpdir) / "outlines"
+            outlines_dir.mkdir()
+            good_outline = outlines_dir / "good.md"
+            bad_outline = outlines_dir / "bad.md"
+            good_outline.write_text("# Book One\n\n## Chapter One\n", encoding="utf-8")
+            bad_outline.write_bytes(b"\xff\xfe\xfd")
+
+            result = server.list_outlines({"outlines_dir": str(outlines_dir)})
+
+        self.assertEqual(len(result["outlines"]), 1)
+        self.assertEqual(result["outlines"][0]["path"], str(good_outline))
+
     def test_list_completed_outlines_returns_preview(self) -> None:
         with TemporaryDirectory() as tmpdir:
             outlines_dir = Path(tmpdir) / "completed_outlines"
@@ -67,6 +81,25 @@ class TestServerApi(unittest.TestCase):
         self.assertTrue(result["books"][0]["has_text"])
         self.assertEqual(result["books"][0]["chapter_count"], 1)
         self.assertIsNone(result["books"][0]["book_audio_url"])
+
+    def test_list_books_handles_unreadable_chapters(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            good_dir = books_dir / "good"
+            bad_dir = books_dir / "bad"
+            good_dir.mkdir(parents=True)
+            bad_dir.mkdir(parents=True)
+            (good_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nContent", encoding="utf-8"
+            )
+            (bad_dir / "001-chapter-one.md").write_bytes(b"\xff\xfe\xfd")
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        book_paths = {entry["path"] for entry in result["books"]}
+        self.assertEqual(book_paths, {str(good_dir), str(bad_dir)})
+        titles = {entry["path"]: entry["title"] for entry in result["books"]}
+        self.assertEqual(titles[str(bad_dir)], bad_dir.name)
 
     def test_list_books_includes_book_audio_url(self) -> None:
         with TemporaryDirectory() as tmpdir:
