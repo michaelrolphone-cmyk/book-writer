@@ -174,6 +174,7 @@ def generate_book_cover(
 ) -> Optional[Path]:
     if not settings.enabled:
         return None
+    output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / settings.output_name
     if output_path.exists() and not settings.overwrite:
@@ -223,6 +224,7 @@ def generate_chapter_cover(
 ) -> Optional[Path]:
     if not settings.enabled:
         return None
+    output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / settings.output_name
     if output_path.exists() and not settings.overwrite:
