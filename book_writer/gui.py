@@ -170,6 +170,7 @@ def get_gui_html() -> str:
         display: flex;
         flex-direction: column;
         gap: 16px;
+        overflow: hidden;
       }
 
       .book-card.selectable {
@@ -193,7 +194,8 @@ def get_gui_html() -> str:
       }
 
       .book-cover {
-        border-radius: 18px;
+        border-radius: 24px 24px 18px 18px;
+        margin: -22px -22px 0;
         padding: 20px;
         background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
         color: #1c1c1c;
@@ -208,9 +210,14 @@ def get_gui_html() -> str:
       }
 
       .book-cover.has-image {
-        padding: 16px;
+        padding: 0;
         color: #f8f9fb;
         background: none;
+      }
+
+      .book-cover.has-image .book-cover-title {
+        display: block;
+        padding: 16px;
       }
 
       .book-cover.has-image::after {
@@ -241,6 +248,14 @@ def get_gui_html() -> str:
         height: 110px;
         font-size: 14px;
         padding: 16px;
+      }
+
+      .chapter-card .book-cover.has-image {
+        padding: 0;
+      }
+
+      .chapter-card .book-cover.has-image .book-cover-title {
+        padding: 12px;
       }
 
       .chapter-card h2 {
@@ -723,14 +738,14 @@ def get_gui_html() -> str:
         <header class="header">
           <div class="header-title">
             <h1>Book Writer Studio</h1>
-            <p>Curate outlines, drafts, and finished books in a soft, tactile shelf view.</p>
+            <p>Plan outlines, generate drafts, and manage finished books from one workspace.</p>
           </div>
           <div class="status-chip">● API Connected</div>
         </header>
 
         <section class="search-bar">
           <span>🔍</span>
-          <input type="text" placeholder="Search by title, genre, or status" />
+          <input id="searchInput" type="text" placeholder="Search by title or file name" />
           <button class="pill-button">Filters</button>
         </section>
 
@@ -1323,6 +1338,7 @@ def get_gui_html() -> str:
 
       const displayChapterTitle = (title) => sanitizeTitleForDisplay(title, 'chapter');
 
+      const searchInput = document.getElementById('searchInput');
       const outlineSelect = document.getElementById('outlineSelect');
       const bookSelect = document.getElementById('bookSelect');
       const chapterSelect = document.getElementById('chapterSelect');
@@ -1419,6 +1435,16 @@ def get_gui_html() -> str:
         outlines: [],
         completedOutlines: [],
         books: [],
+      };
+
+      const getSearchTerm = () => (searchInput?.value || '').trim().toLowerCase();
+
+      const filterEntries = (entries, getFields) => {
+        const term = getSearchTerm();
+        if (!term) return entries;
+        return entries.filter((entry) =>
+          getFields(entry).some((field) => String(field || '').toLowerCase().includes(term)),
+        );
       };
 
       let currentSelection = {
@@ -1919,6 +1945,138 @@ def get_gui_html() -> str:
         toggleCoverActions(active);
       };
 
+      const renderCatalog = () => {
+        const term = getSearchTerm();
+        const outlines = filterEntries(catalogState.outlines, (outline) => [
+          outline.title || '',
+          outline.path || '',
+        ]);
+        const completed = filterEntries(catalogState.completedOutlines, (outline) => [
+          outline.title || '',
+          outline.path || '',
+        ]);
+        const books = filterEntries(catalogState.books, (book) => [
+          displayBookTitle(book.title || ''),
+          book.path || '',
+        ]);
+
+        const outlineShelf = document.getElementById('outlineShelf');
+        const completedShelf = document.getElementById('completedOutlineShelf');
+        const bookShelf = document.getElementById('bookShelf');
+
+        outlineShelf.innerHTML = '';
+        completedShelf.innerHTML = '';
+        bookShelf.innerHTML = '';
+
+        document.getElementById('outlineCount').textContent = `${outlines.length} outlines`;
+        document.getElementById('completedOutlineCount').textContent = `${completed.length} outlines`;
+        document.getElementById('bookCount').textContent = `${books.length} books`;
+
+        const outlineEmptyMessage = term
+          ? 'No outlines match this search.'
+          : 'No outlines found in the outlines directory.';
+        const completedEmptyMessage = term
+          ? 'No completed outlines match this search.'
+          : 'No completed outlines archived yet.';
+        const bookEmptyMessage = term
+          ? 'No books match this search.'
+          : 'No books found in the books directory.';
+
+        if (!outlines.length) {
+          renderEmpty(outlineShelf, outlineEmptyMessage);
+        } else {
+          outlines.forEach((outline) => {
+            const title = outline.title || outline.path.split('/').pop();
+            const detail = `${outline.item_count || 0} sections`;
+            const card = createCard(
+              title,
+              'Outline ready',
+              detail,
+              'Outline',
+              'Next: Generate book',
+              15,
+            );
+            card.classList.add('selectable');
+            card.dataset.type = 'outline';
+            card.dataset.path = outline.path;
+            card.addEventListener('click', () => {
+              outlineSelect.value = outline.path;
+              selectEntry('outline', outline, card);
+            });
+            outlineShelf.appendChild(card);
+          });
+        }
+
+        if (!completed.length) {
+          renderEmpty(completedShelf, completedEmptyMessage);
+        } else {
+          completed.forEach((outline) => {
+            const title = outline.title || outline.path.split('/').pop();
+            const detail = `${outline.item_count || 0} sections`;
+            const card = createCard(
+              title,
+              'Archived outline',
+              detail,
+              'Completed',
+              'Stored in completed_outlines',
+              100,
+            );
+            card.classList.add('selectable');
+            card.dataset.type = 'completed-outline';
+            card.dataset.path = outline.path;
+            card.addEventListener('click', () => {
+              selectEntry('completed-outline', outline, card);
+            });
+            completedShelf.appendChild(card);
+          });
+        }
+
+        if (!books.length) {
+          renderEmpty(bookShelf, bookEmptyMessage);
+        } else {
+          books.forEach((book) => {
+            const statusFlags = [];
+            if (book.has_text) statusFlags.push('Text');
+            if (book.has_audio) statusFlags.push('Audio');
+            if (book.has_video) statusFlags.push('Video');
+            if (book.has_compilation) statusFlags.push('Compiled');
+            const status = book.has_compilation
+              ? 'Compiled'
+              : book.has_text
+                ? 'Drafting'
+                : 'No chapters';
+            const detail = `${book.chapter_count || 0} chapters\\n${
+              statusFlags.join(' • ') || 'No media yet'
+            }`;
+            const progress = (statusFlags.length / 4) * 100;
+            const displayTitle = displayBookTitle(book.title);
+            const card = createCard(
+              book.title,
+              status,
+              detail,
+              'Book',
+              book.path.split('/').pop(),
+              progress,
+              book.cover_url || null,
+              displayTitle,
+            );
+            card.classList.add('selectable');
+            card.dataset.type = 'book';
+            card.dataset.path = book.path;
+            card.addEventListener('click', () => {
+              bookSelect.value = book.path;
+              loadChapters(book.path);
+              selectEntry('book', book, card);
+            });
+            bookShelf.appendChild(card);
+          });
+        }
+
+        if (currentSelection.type && currentSelection.path) {
+          setSelectedCard(findCardByPath(currentSelection.type, currentSelection.path));
+        }
+      };
+
       const loadCatalog = async () => {
         try {
           const previousOutline = outlineSelect.value;
@@ -1936,101 +2094,7 @@ def get_gui_html() -> str:
           catalogState.completedOutlines = completed;
           catalogState.books = books;
 
-          const outlineShelf = document.getElementById('outlineShelf');
-          const completedShelf = document.getElementById('completedOutlineShelf');
-          const bookShelf = document.getElementById('bookShelf');
-
-          outlineShelf.innerHTML = '';
-          completedShelf.innerHTML = '';
-          bookShelf.innerHTML = '';
-
-          document.getElementById('outlineCount').textContent = `${outlines.length} outlines`;
-          document.getElementById('completedOutlineCount').textContent = `${completed.length} outlines`;
-          document.getElementById('bookCount').textContent = `${books.length} books`;
-
-          if (!outlines.length) {
-            renderEmpty(outlineShelf, 'No outlines found in the outlines directory.');
-          } else {
-            outlines.forEach((outline) => {
-              const title = outline.title || outline.path.split('/').pop();
-              const detail = `${outline.item_count || 0} sections`;
-              const card = createCard(
-                title,
-                'Outline ready',
-                detail,
-                'Outline',
-                'Next: Generate book',
-                15,
-              );
-              card.classList.add('selectable');
-              card.dataset.type = 'outline';
-              card.dataset.path = outline.path;
-              card.addEventListener('click', () => {
-                outlineSelect.value = outline.path;
-                selectEntry('outline', outline, card);
-              });
-              outlineShelf.appendChild(card);
-            });
-          }
-
-          if (!completed.length) {
-            renderEmpty(completedShelf, 'No completed outlines archived yet.');
-          } else {
-            completed.forEach((outline) => {
-              const title = outline.title || outline.path.split('/').pop();
-              const detail = `${outline.item_count || 0} sections`;
-              const card = createCard(
-                title,
-                'Archived outline',
-                detail,
-                'Completed',
-                'Stored in completed_outlines',
-                100,
-              );
-              card.classList.add('selectable');
-              card.dataset.type = 'completed-outline';
-              card.dataset.path = outline.path;
-              card.addEventListener('click', () => {
-                selectEntry('completed-outline', outline, card);
-              });
-              completedShelf.appendChild(card);
-            });
-          }
-
-          if (!books.length) {
-            renderEmpty(bookShelf, 'No books found in the books directory.');
-          } else {
-            books.forEach((book) => {
-              const statusFlags = [];
-              if (book.has_text) statusFlags.push('Text');
-              if (book.has_audio) statusFlags.push('Audio');
-              if (book.has_video) statusFlags.push('Video');
-              if (book.has_compilation) statusFlags.push('Compiled');
-              const status = book.has_compilation ? 'Compiled' : book.has_text ? 'Drafting' : 'No chapters';
-              const detail = `${book.chapter_count || 0} chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
-              const progress = (statusFlags.length / 4) * 100;
-              const displayTitle = displayBookTitle(book.title);
-              const card = createCard(
-                book.title,
-                status,
-                detail,
-                'Book',
-                book.path.split('/').pop(),
-                progress,
-                book.cover_url || null,
-                displayTitle,
-              );
-              card.classList.add('selectable');
-              card.dataset.type = 'book';
-              card.dataset.path = book.path;
-              card.addEventListener('click', () => {
-                bookSelect.value = book.path;
-                loadChapters(book.path);
-                selectEntry('book', book, card);
-              });
-              bookShelf.appendChild(card);
-            });
-          }
+          renderCatalog();
 
           setSelectOptions(
             outlineSelect,
@@ -2296,6 +2360,12 @@ def get_gui_html() -> str:
         restoreChapterAudioToCard();
         showDetailView();
       });
+
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          renderCatalog();
+        });
+      }
 
       chapterExpand.addEventListener('click', () => {
         if (!currentChapter) {
