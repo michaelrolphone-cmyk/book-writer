@@ -48,6 +48,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"bookWorkspaceCover\"", html)
         self.assertIn("id=\"chapterGenerateCover\"", html)
         self.assertIn("id=\"chapterCoverDir\"", html)
+        self.assertIn("id=\"coverProgress\"", html)
+        self.assertIn("id=\"coverProgressLabel\"", html)
         self.assertIn("Select a book before generating audio.", html)
         self.assertIn("Select a book before generating a cover.", html)
         self.assertIn(
@@ -60,6 +62,7 @@ class TestGui(unittest.TestCase):
         )
         self.assertIn("handoffChapterAudioToDetail", html)
         self.assertIn("restoreChapterAudioToCard", html)
+        self.assertIn("setCoverProgress(true", html)
         self.assertIn("No preview available.", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)
