@@ -80,6 +80,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("cleaned = cleaned.replace(/^[\\-–—]+\\s*/, '');", html)
         self.assertIn("renderCatalog", html)
         self.assertIn("filterEntries", html)
+        self.assertIn("loadCatalog({ selectCurrent: false });", html)
+        self.assertIn("chapterBack.addEventListener('click', async () => {", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)
         self.assertIn("width: auto;", html)

@@ -2114,8 +2114,9 @@ def get_gui_html() -> str:
         }
       };
 
-      const loadCatalog = async () => {
+      const loadCatalog = async (options = {}) => {
         try {
+          const { selectCurrent = true } = options;
           const previousOutline = outlineSelect.value;
           const previousBook = bookSelect.value;
           const [
@@ -2196,7 +2197,7 @@ def get_gui_html() -> str:
             chapterSelect.disabled = true;
           }
 
-          if (currentSelection.type && currentSelection.path) {
+          if (selectCurrent && currentSelection.type && currentSelection.path) {
             const activeEntry =
               catalogState.outlines.find((outline) => outline.path === currentSelection.path) ||
               catalogState.completedOutlines.find(
@@ -2428,13 +2429,17 @@ def get_gui_html() -> str:
         closeReaderPanel();
       });
 
-      detailBack.addEventListener('click', () => {
+      detailBack.addEventListener('click', async () => {
+        await loadCatalog({ selectCurrent: false });
         showHomeView();
       });
 
-      chapterBack.addEventListener('click', () => {
+      chapterBack.addEventListener('click', async () => {
         restoreChapterAudioToCard();
-        showDetailView();
+        await loadCatalog();
+        if (detailView.classList.contains('is-hidden')) {
+          showDetailView();
+        }
       });
 
       if (searchInput) {
