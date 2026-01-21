@@ -1587,7 +1587,7 @@ def get_gui_html() -> str:
 
       const parseRevisionPrompts = (value) =>
         value
-          .split('\n')
+          .split(`\\n`)
           .map((line) => line.trim())
           .filter((line) => line);
 
