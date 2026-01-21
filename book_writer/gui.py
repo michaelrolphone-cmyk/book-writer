@@ -165,12 +165,38 @@ def get_gui_html() -> str:
       .book-card {
         padding: 22px;
         border-radius: 24px;
-        background: var(--bg);
+        background: transparent;
         box-shadow: 12px 12px 24px var(--shadow-dark), -12px -12px 24px var(--shadow-light);
         display: flex;
         flex-direction: column;
         gap: 16px;
         overflow: hidden;
+        position: relative;
+        color: var(--card-text, var(--text));
+      }
+
+      .book-card.cover-filled::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--card-cover, var(--bg));
+        background-size: cover;
+        background-position: center;
+        z-index: 0;
+        transform: scale(1.02);
+      }
+
+      .book-card.cover-filled::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--card-overlay, rgba(255, 255, 255, 0.7));
+        z-index: 1;
+      }
+
+      .book-card.cover-filled > * {
+        position: relative;
+        z-index: 2;
       }
 
       .book-card.selectable {
@@ -197,45 +223,22 @@ def get_gui_html() -> str:
         border-radius: 24px 24px 18px 18px;
         margin: -22px -22px 0;
         padding: 20px;
-        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-        color: #1c1c1c;
+        background: rgba(12, 16, 24, 0.4);
+        color: inherit;
         font-weight: 600;
         height: 150px;
         display: flex;
         align-items: flex-end;
         overflow: hidden;
         position: relative;
-        box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.4),
-          inset -4px -4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.08),
+          inset -4px -4px 12px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(6px);
       }
 
       .book-cover.has-image {
-        padding: 0;
-        color: #f8f9fb;
-        background: none;
-      }
-
-      .book-cover.has-image .book-cover-title {
-        display: block;
-        padding: 16px;
-      }
-
-      .book-cover.has-image::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.55) 100%);
-        z-index: 1;
-      }
-
-      .book-cover-image {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-        position: absolute;
-        inset: 0;
-        z-index: 0;
+        padding: 20px;
       }
 
       .book-cover-title {
@@ -250,12 +253,26 @@ def get_gui_html() -> str:
         padding: 16px;
       }
 
-      .chapter-card .book-cover.has-image {
-        padding: 0;
+      .book-card.cover-filled .meta-line {
+        color: rgba(248, 249, 251, 0.78);
       }
 
-      .chapter-card .book-cover.has-image .book-cover-title {
-        padding: 12px;
+      .book-card.cover-filled h2 {
+        color: rgba(255, 255, 255, 0.96);
+      }
+
+      .book-card.cover-filled .tag {
+        background: rgba(8, 12, 20, 0.35);
+        color: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .book-card.cover-filled .book-meta strong {
+        color: rgba(255, 255, 255, 0.92);
+      }
+
+      .book-card.cover-filled .progress {
+        background: rgba(255, 255, 255, 0.2);
       }
 
       .chapter-card h2 {
@@ -1200,20 +1217,21 @@ def get_gui_html() -> str:
         displayTitle = null,
       ) => {
         const card = document.createElement('article');
-        card.className = 'book-card';
+        card.className = 'book-card cover-filled';
         const resolvedTitle = displayTitle || title;
+        const coverBackground = coverUrl ? `url("${coverUrl}")` : gradientFor(resolvedTitle);
+        const overlayBackground = coverUrl
+          ? 'linear-gradient(180deg, rgba(8, 12, 20, 0.1) 0%, rgba(8, 12, 20, 0.78) 100%)'
+          : 'linear-gradient(180deg, rgba(8, 12, 20, 0.05) 0%, rgba(8, 12, 20, 0.45) 100%)';
+
+        card.style.setProperty('--card-cover', coverBackground);
+        card.style.setProperty('--card-overlay', overlayBackground);
+        card.style.setProperty('--card-text', '#f8f9fb');
 
         const cover = document.createElement('div');
         cover.className = 'book-cover';
         if (coverUrl) {
           cover.classList.add('has-image');
-          const coverImage = document.createElement('img');
-          coverImage.className = 'book-cover-image';
-          coverImage.src = coverUrl;
-          coverImage.alt = resolvedTitle;
-          cover.appendChild(coverImage);
-        } else {
-          cover.style.background = gradientFor(resolvedTitle);
         }
         const coverTitle = document.createElement('span');
         coverTitle.className = 'book-cover-title';
