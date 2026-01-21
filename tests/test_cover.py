@@ -81,6 +81,35 @@ class TestCover(unittest.TestCase):
         self.assertEqual(str(settings.module_path), called_kwargs["cwd"])
 
     @patch("book_writer.cover.subprocess.run")
+    def test_generate_book_cover_resolves_relative_output_dir(
+        self, run_mock: Mock
+    ) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+        )
+        with TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                output_dir = Path("relative-output")
+                result = generate_book_cover(
+                    output_dir=output_dir,
+                    title="My Book",
+                    synopsis="Synopsis text",
+                    settings=settings,
+                )
+            finally:
+                os.chdir(original_cwd)
+
+        run_mock.assert_called_once()
+        called_args = run_mock.call_args.args[0]
+        expected_dir = (Path(tmpdir) / "relative-output").resolve()
+        self.assertIn(str(expected_dir), called_args)
+        self.assertEqual(result, expected_dir / settings.output_name)
+
+    @patch("book_writer.cover.subprocess.run")
     def test_generate_chapter_cover_runs_command(self, run_mock: Mock) -> None:
         settings = CoverSettings(
             enabled=True,
@@ -102,6 +131,37 @@ class TestCover(unittest.TestCase):
         called_args = run_mock.call_args.args[0]
         self.assertIn("StableDiffusionSample", called_args)
         self.assertEqual(result, output_dir / settings.output_name)
+
+    @patch("book_writer.cover.subprocess.run")
+    def test_generate_chapter_cover_resolves_relative_output_dir(
+        self, run_mock: Mock
+    ) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            output_name="chapter.png",
+        )
+        with TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                output_dir = Path("relative-output")
+                result = generate_chapter_cover(
+                    output_dir=output_dir,
+                    book_title="My Book",
+                    chapter_title="Chapter One",
+                    chapter_content="Some content.",
+                    settings=settings,
+                )
+            finally:
+                os.chdir(original_cwd)
+
+        run_mock.assert_called_once()
+        called_args = run_mock.call_args.args[0]
+        expected_dir = (Path(tmpdir) / "relative-output").resolve()
+        self.assertIn(str(expected_dir), called_args)
+        self.assertEqual(result, expected_dir / settings.output_name)
 
     @patch("book_writer.cover.subprocess.run")
     def test_generate_book_cover_infers_model_path_when_present(
