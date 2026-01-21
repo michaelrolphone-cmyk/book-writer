@@ -2117,8 +2117,21 @@ def get_gui_html() -> str:
       const loadCatalog = async (options = {}) => {
         try {
           const { selectCurrent = true } = options;
+          const refreshMode = options.refreshMode || 'full';
           const previousOutline = outlineSelect.value;
           const previousBook = bookSelect.value;
+          const shouldFetchOutlines =
+            refreshMode === 'full' || catalogState.outlines.length === 0;
+          const shouldFetchCompleted =
+            refreshMode === 'full' || catalogState.completedOutlines.length === 0;
+          const shouldFetchBooks =
+            refreshMode === 'full' ||
+            refreshMode === 'books' ||
+            catalogState.books.length === 0;
+          const shouldFetchAuthors =
+            refreshMode === 'full' || catalogState.authors.length === 0;
+          const shouldFetchTones =
+            refreshMode === 'full' || catalogState.tones.length === 0;
           const [
             outlineResponse,
             completedResponse,
@@ -2126,11 +2139,21 @@ def get_gui_html() -> str:
             authorsResponse,
             tonesResponse,
           ] = await Promise.all([
-            fetchJson('/api/outlines'),
-            fetchJson('/api/completed-outlines'),
-            fetchJson('/api/books'),
-            fetchJson('/api/authors'),
-            fetchJson('/api/tones'),
+            shouldFetchOutlines
+              ? fetchJson('/api/outlines')
+              : Promise.resolve({ outlines: catalogState.outlines }),
+            shouldFetchCompleted
+              ? fetchJson('/api/completed-outlines')
+              : Promise.resolve({ outlines: catalogState.completedOutlines }),
+            shouldFetchBooks
+              ? fetchJson('/api/books')
+              : Promise.resolve({ books: catalogState.books }),
+            shouldFetchAuthors
+              ? fetchJson('/api/authors')
+              : Promise.resolve({ authors: catalogState.authors }),
+            shouldFetchTones
+              ? fetchJson('/api/tones')
+              : Promise.resolve({ tones: catalogState.tones }),
           ]);
 
           const outlines = outlineResponse.outlines || [];
@@ -2322,7 +2345,7 @@ def get_gui_html() -> str:
           };
           await postJson('/api/generate-cover', payload);
           log('Book cover generation complete.');
-          await loadCatalog();
+          await loadCatalog({ refreshMode: 'books' });
         } catch (error) {
           log(`Cover generation failed: ${error.message}`);
         } finally {
@@ -2347,7 +2370,7 @@ def get_gui_html() -> str:
           };
           await postJson('/api/generate-chapter-covers', payload);
           log('Chapter cover generation complete.');
-          await loadCatalog();
+          await loadCatalog({ refreshMode: 'books' });
         } catch (error) {
           log(`Chapter covers failed: ${error.message}`);
         } finally {
@@ -2430,13 +2453,13 @@ def get_gui_html() -> str:
       });
 
       detailBack.addEventListener('click', async () => {
-        await loadCatalog({ selectCurrent: false });
+        await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
         showHomeView();
       });
 
       chapterBack.addEventListener('click', async () => {
         restoreChapterAudioToCard();
-        await loadCatalog();
+        await loadCatalog({ refreshMode: 'books' });
         if (detailView.classList.contains('is-hidden')) {
           showDetailView();
         }
