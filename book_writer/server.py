@@ -420,6 +420,7 @@ def generate_book(payload: dict[str, Any]) -> dict[str, Any]:
         byline=payload.get("byline", "Marissa Bard"),
         tone=payload.get("tone", "instructive self help guide"),
         resume=bool(payload.get("resume", False)),
+        log_prompts=True,
     )
     return {
         "written_files": [str(path) for path in written_files],

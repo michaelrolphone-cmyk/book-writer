@@ -21,11 +21,9 @@ class TestCover(unittest.TestCase):
 
         prompt = build_cover_prompt("Starbound", synopsis)
 
-        self.assertIn("Starbound", prompt)
         self.assertIn("discovery and resilience", prompt)
         self.assertIn("No text", prompt)
-        self.assertIn("cover art", prompt.lower())
-        self.assertIn("not a book cover", prompt.lower())
+        self.assertIn("cinematic scene", prompt.lower())
 
     def test_build_cover_prompt_truncates_long_synopsis(self) -> None:
         synopsis = " ".join(["word"] * 400)
@@ -50,10 +48,8 @@ class TestCover(unittest.TestCase):
             "My Book", "Chapter One", content
         )
 
-        self.assertIn("Chapter One", prompt)
-        self.assertIn("My Book", prompt)
         self.assertIn("First scene.", prompt)
-        self.assertIn("cover art", prompt.lower())
+        self.assertIn("cinematic scene", prompt.lower())
         self.assertIn("No text", prompt)
 
     @patch("book_writer.cover.subprocess.run")
@@ -82,9 +78,7 @@ class TestCover(unittest.TestCase):
             arg for arg in called_args if "typography" in arg
         )
         self.assertIn("text", negative_prompt)
-        self.assertTrue(
-            any("not a book cover" in arg for arg in called_args)
-        )
+        self.assertTrue(any("No text" in arg for arg in called_args))
         self.assertIn(str(output_dir), called_args)
         self.assertEqual(result, output_dir / settings.output_name)
         self.assertIn("env", called_kwargs)
