@@ -150,6 +150,28 @@ def _collect_outlines(outlines_dir: Path) -> list[dict[str, Any]]:
     return outlines
 
 
+def _collect_named_files(directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return []
+    try:
+        paths = sorted(directory.iterdir())
+    except OSError:
+        return []
+    return [path.stem for path in paths if path.suffix == ".md"]
+
+
+def list_authors(payload: dict[str, Any]) -> dict[str, Any]:
+    default_dir = Path(__file__).resolve().parents[1] / "authors"
+    authors_dir = Path(payload.get("authors_dir", default_dir))
+    return {"authors": _collect_named_files(authors_dir)}
+
+
+def list_tones(payload: dict[str, Any]) -> dict[str, Any]:
+    default_dir = Path(__file__).parent / "tones"
+    tones_dir = Path(payload.get("tones_dir", default_dir))
+    return {"tones": _collect_named_files(tones_dir)}
+
+
 def _resolve_outline_path(
     outlines_dir: Path,
     outline_path_value: str | None,
@@ -609,6 +631,14 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             return
         if path == "/api/books":
             response = list_books(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/authors":
+            response = list_authors(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/tones":
+            response = list_tones(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
         if path == "/api/chapters":

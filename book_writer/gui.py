@@ -643,6 +643,10 @@ def get_gui_html() -> str:
         gap: 10px;
       }
 
+      .workspace-actions .row {
+        flex: 1 1 100%;
+      }
+
       .workspace-actions .pill-button {
         width: auto;
       }
@@ -975,6 +979,16 @@ def get_gui_html() -> str:
               <div class="detail-section">
                 <h4>Outline actions</h4>
                 <div class="workspace-actions">
+                  <div class="row">
+                    <div>
+                      <label>Author</label>
+                      <select id="outlineWorkspaceAuthor"></select>
+                    </div>
+                    <div>
+                      <label>Tone</label>
+                      <select id="outlineWorkspaceTone"></select>
+                    </div>
+                  </div>
                   <button class="pill-button primary" id="outlineWorkspaceGenerate">
                     Generate book from outline
                   </button>
@@ -1368,6 +1382,8 @@ def get_gui_html() -> str:
       const outlineWorkspaceSummary = document.getElementById('outlineWorkspaceSummary');
       const outlineWorkspaceContent = document.getElementById('outlineWorkspaceContent');
       const outlineWorkspaceGenerate = document.getElementById('outlineWorkspaceGenerate');
+      const outlineWorkspaceAuthor = document.getElementById('outlineWorkspaceAuthor');
+      const outlineWorkspaceTone = document.getElementById('outlineWorkspaceTone');
       const outlineEditor = document.getElementById('outlineEditor');
       const outlineSave = document.getElementById('outlineSave');
       const outlineReload = document.getElementById('outlineReload');
@@ -1419,6 +1435,8 @@ def get_gui_html() -> str:
         outlines: [],
         completedOutlines: [],
         books: [],
+        authors: [],
+        tones: [],
       };
 
       let currentSelection = {
@@ -1923,18 +1941,30 @@ def get_gui_html() -> str:
         try {
           const previousOutline = outlineSelect.value;
           const previousBook = bookSelect.value;
-          const [outlineResponse, completedResponse, booksResponse] = await Promise.all([
+          const [
+            outlineResponse,
+            completedResponse,
+            booksResponse,
+            authorsResponse,
+            tonesResponse,
+          ] = await Promise.all([
             fetchJson('/api/outlines'),
             fetchJson('/api/completed-outlines'),
             fetchJson('/api/books'),
+            fetchJson('/api/authors'),
+            fetchJson('/api/tones'),
           ]);
 
           const outlines = outlineResponse.outlines || [];
           const completed = completedResponse.outlines || [];
           const books = booksResponse.books || [];
+          const authors = authorsResponse.authors || [];
+          const tones = tonesResponse.tones || [];
           catalogState.outlines = outlines;
           catalogState.completedOutlines = completed;
           catalogState.books = books;
+          catalogState.authors = authors;
+          catalogState.tones = tones;
 
           const outlineShelf = document.getElementById('outlineShelf');
           const completedShelf = document.getElementById('completedOutlineShelf');
@@ -2041,6 +2071,27 @@ def get_gui_html() -> str:
             'Select an outline',
           );
           setSelectOptions(
+            outlineWorkspaceAuthor,
+            authors.map((author) => ({
+              value: author,
+              label: `${author} (authors/${author}.md)`,
+            })),
+            'Default author (PROMPT.md)',
+          );
+          setSelectOptions(
+            outlineWorkspaceTone,
+            tones.map((tone) => ({
+              value: tone,
+              label: tone,
+            })),
+            'Select a tone',
+          );
+          if (!outlineWorkspaceTone.value && tones.length) {
+            outlineWorkspaceTone.value = tones.includes('instructive self help guide')
+              ? 'instructive self help guide'
+              : tones[0];
+          }
+          setSelectOptions(
             bookSelect,
             books.map((book) => ({
               value: book.path,
@@ -2080,14 +2131,20 @@ def get_gui_html() -> str:
         }
       };
 
-      const buildGenerateBookPayload = (outlinePath) => ({
-        outline_path: outlinePath || 'OUTLINE.md',
-        output_dir: document.getElementById('outputDir').value || 'output',
-        base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
-        model: document.getElementById('modelName').value || 'local-model',
-        tone: document.getElementById('tone').value || 'instructive self help guide',
-        byline: document.getElementById('byline').value || 'Marissa Bard',
-      });
+      const buildGenerateBookPayload = (outlinePath, overrides = {}) => {
+        const defaultTone =
+          document.getElementById('tone').value || 'instructive self help guide';
+        const resolvedTone = overrides.tone ? overrides.tone : defaultTone;
+        return {
+          outline_path: outlinePath || 'OUTLINE.md',
+          output_dir: document.getElementById('outputDir').value || 'output',
+          base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
+          model: document.getElementById('modelName').value || 'local-model',
+          tone: resolvedTone,
+          byline: document.getElementById('byline').value || 'Marissa Bard',
+          author: overrides.author ? overrides.author : null,
+        };
+      };
 
       document.getElementById('generateBook').addEventListener('click', async () => {
         try {
@@ -2422,7 +2479,10 @@ def get_gui_html() -> str:
           return;
         }
         try {
-          const payload = buildGenerateBookPayload(outlinePath);
+          const payload = buildGenerateBookPayload(outlinePath, {
+            tone: outlineWorkspaceTone.value,
+            author: outlineWorkspaceAuthor.value,
+          });
           const result = await postJson('/api/generate-book', payload);
           log(`Generated book with ${result.written_files.length} files.`);
         } catch (error) {

@@ -63,6 +63,28 @@ class TestServerApi(unittest.TestCase):
         self.assertIn("Chapter One", result["outlines"][0]["preview"])
         self.assertEqual(result["outlines"][0]["item_count"], 1)
 
+    def test_list_authors_returns_markdown_stems(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            authors_dir = Path(tmpdir) / "authors"
+            authors_dir.mkdir()
+            (authors_dir / "curious.md").write_text("persona", encoding="utf-8")
+            (authors_dir / "ignore.txt").write_text("skip", encoding="utf-8")
+
+            result = server.list_authors({"authors_dir": str(authors_dir)})
+
+        self.assertEqual(result["authors"], ["curious"])
+
+    def test_list_tones_returns_markdown_stems(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tones_dir = Path(tmpdir) / "tones"
+            tones_dir.mkdir()
+            (tones_dir / "warm.md").write_text("tone", encoding="utf-8")
+            (tones_dir / "note.txt").write_text("skip", encoding="utf-8")
+
+            result = server.list_tones({"tones_dir": str(tones_dir)})
+
+        self.assertEqual(result["tones"], ["warm"])
+
     def test_list_outlines_skips_unreadable_files(self) -> None:
         with TemporaryDirectory() as tmpdir:
             outlines_dir = Path(tmpdir) / "outlines"
