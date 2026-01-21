@@ -402,6 +402,7 @@ def generate_book(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError("outline_path is required")
     outline_path = Path(outline_path_value)
     output_dir = Path(payload.get("output_dir", "output"))
+    output_dir.mkdir(parents=True, exist_ok=True)
     title, items = parse_outline_with_title(outline_path)
     if not items:
         raise ApiError("No outline items found in the outline file.")

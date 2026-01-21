@@ -292,18 +292,20 @@ class TestServerApi(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             outline_path = Path(tmpdir) / "outline.md"
             outline_path.write_text("# Book One\n\n## Chapter One\n", encoding="utf-8")
+            output_dir = Path(tmpdir) / "output"
 
             with patch("book_writer.server.write_book") as write_book:
                 write_book.return_value = [Path(tmpdir) / "001.md"]
                 response = server.generate_book(
                     {
                         "outline_path": str(outline_path),
-                        "output_dir": str(Path(tmpdir) / "output"),
+                        "output_dir": str(output_dir),
                     }
                 )
 
-        self.assertEqual(response["written_files"], [str(Path(tmpdir) / "001.md")])
-        write_book.assert_called_once()
+                self.assertEqual(response["written_files"], [str(Path(tmpdir) / "001.md")])
+                self.assertTrue(output_dir.exists())
+                write_book.assert_called_once()
 
     def test_expand_book_supports_expand_only(self) -> None:
         with TemporaryDirectory() as tmpdir:

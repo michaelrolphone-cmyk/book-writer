@@ -8,6 +8,10 @@ class TestGui(unittest.TestCase):
         html = gui.get_gui_html()
 
         self.assertIn("Book Writer Studio", html)
+        self.assertIn(
+            "Plan outlines, generate drafts, and manage finished books from one workspace.", html
+        )
+        self.assertIn("id=\"searchInput\"", html)
         self.assertIn("id=\"outlineShelf\"", html)
         self.assertIn("id=\"completedOutlineShelf\"", html)
         self.assertIn("id=\"bookShelf\"", html)
@@ -71,6 +75,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("sanitizeTitleForDisplay", html)
         self.assertIn("displayBookTitle", html)
         self.assertIn("displayChapterTitle", html)
+        self.assertIn("renderCatalog", html)
+        self.assertIn("filterEntries", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)
         self.assertIn("width: auto;", html)
