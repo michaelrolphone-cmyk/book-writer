@@ -103,10 +103,41 @@ class TestCover(unittest.TestCase):
         self.assertIn("StableDiffusionSample", called_args)
         self.assertEqual(result, output_dir / settings.output_name)
 
-    def test_generate_book_cover_requires_model_path_for_default(self) -> None:
-        settings = CoverSettings(enabled=True, module_path=Path("/tmp/coreml"))
+    @patch("book_writer.cover.subprocess.run")
+    def test_generate_book_cover_infers_model_path_when_present(
+        self, run_mock: Mock
+    ) -> None:
         with TemporaryDirectory() as tmpdir:
-            output_dir = Path(tmpdir)
+            tmp_path = Path(tmpdir)
+            module_path = tmp_path / "swift-package"
+            module_path.mkdir()
+            resource_path = (
+                tmp_path
+                / "coreml-stable-diffusion-v1-4"
+                / "original"
+                / "compiled"
+            )
+            resource_path.mkdir(parents=True)
+            settings = CoverSettings(enabled=True, module_path=module_path)
+            output_dir = tmp_path / "output"
+            result = generate_book_cover(
+                output_dir=output_dir,
+                title="My Book",
+                synopsis="Synopsis text",
+                settings=settings,
+            )
+
+        run_mock.assert_called_once()
+        called_args = run_mock.call_args.args[0]
+        self.assertIn(str(resource_path.resolve()), called_args)
+        self.assertEqual(result, output_dir / settings.output_name)
+
+    def test_generate_book_cover_requires_model_path_for_default(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            settings = CoverSettings(
+                enabled=True, module_path=Path(tmpdir) / "coreml"
+            )
+            output_dir = Path(tmpdir) / "output"
             with self.assertRaises(ValueError):
                 generate_book_cover(
                     output_dir=output_dir,

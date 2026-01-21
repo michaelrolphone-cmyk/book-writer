@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -109,14 +109,19 @@ def _render_command(
 
 
 def _resolve_command(
-    settings: CoverSettings, prompt: str, output_path: Path, output_dir: Path
+    settings: CoverSettings,
+    prompt: str,
+    output_path: Path,
+    output_dir: Path,
+    *,
+    model_path: Optional[Path] = None,
 ) -> list[str]:
     template = settings.command or DEFAULT_COVER_COMMAND
     return _render_command(
         template,
         prompt=prompt,
         negative_prompt=settings.negative_prompt,
-        model_path=settings.model_path,
+        model_path=model_path if model_path is not None else settings.model_path,
         seed=settings.seed,
         steps=settings.steps,
         guidance_scale=settings.guidance_scale,
@@ -146,6 +151,21 @@ def parse_cover_command(command: Optional[str]) -> Optional[list[str]]:
     return shlex.split(command)
 
 
+def _infer_default_model_path(module_path: Optional[Path]) -> Optional[Path]:
+    if not module_path:
+        return None
+    candidate = (
+        module_path
+        / ".."
+        / "coreml-stable-diffusion-v1-4"
+        / "original"
+        / "compiled"
+    ).resolve()
+    if candidate.exists():
+        return candidate
+    return None
+
+
 def generate_book_cover(
     output_dir: Path,
     title: str,
@@ -159,10 +179,16 @@ def generate_book_cover(
     if output_path.exists() and not settings.overwrite:
         return output_path
     if settings.command is None and not settings.model_path:
-        raise ValueError(
-            "Cover generation requires a --cover-model-path when using the default "
-            "swift command."
-        )
+        inferred_path = _infer_default_model_path(settings.module_path)
+        if inferred_path:
+            settings = replace(settings, model_path=inferred_path)
+        else:
+            raise ValueError(
+                "Cover generation requires a --cover-model-path when using the "
+                "default swift command. Place the Core ML resources at "
+                "../coreml-stable-diffusion-v1-4/original/compiled or pass "
+                "--cover-model-path explicitly."
+            )
     prompt = settings.prompt or build_cover_prompt(title, synopsis)
     command = _resolve_command(settings, prompt, output_path, output_dir)
     try:
@@ -202,10 +228,16 @@ def generate_chapter_cover(
     if output_path.exists() and not settings.overwrite:
         return output_path
     if settings.command is None and not settings.model_path:
-        raise ValueError(
-            "Cover generation requires a --cover-model-path when using the default "
-            "swift command."
-        )
+        inferred_path = _infer_default_model_path(settings.module_path)
+        if inferred_path:
+            settings = replace(settings, model_path=inferred_path)
+        else:
+            raise ValueError(
+                "Cover generation requires a --cover-model-path when using the "
+                "default swift command. Place the Core ML resources at "
+                "../coreml-stable-diffusion-v1-4/original/compiled or pass "
+                "--cover-model-path explicitly."
+            )
     prompt = settings.prompt or build_chapter_cover_prompt(
         book_title, chapter_title, chapter_content
     )
