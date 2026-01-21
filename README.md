@@ -9,6 +9,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
 - [`ffmpeg`](https://ffmpeg.org/) for generating chapter MP4 videos when `--video` is enabled.
 - [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).
+- [`python_coreml_stable_diffusion`](https://github.com/apple/ml-stable-diffusion) for generating book covers when `--cover` is enabled.
 
 ## Commands
 
@@ -39,6 +40,12 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
+- `--cover`: Generate a book cover image using `python_coreml_stable_diffusion`.
+- `--cover-model-path`: Path to the compiled Core ML resource folder for cover generation.
+- `--cover-module-path`: Path to the `python_coreml_stable_diffusion` module (default: `../ml-stable-diffusion`).
+- `--cover-prompt`: Override the generated cover prompt.
+- `--cover-negative-prompt`: Negative prompt to avoid unwanted elements.
+- `--cover-command`: Custom command template for cover generation (uses placeholders like `{prompt}` and `{output_path}`).
 - `--byline`: Byline shown on the book title page (default `Marissa Bard`).
 - `--author`: Author persona to load from the `authors/` folder (omit to use `PROMPT.md`).
 
@@ -47,6 +54,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `book.md`: Compiled markdown containing the title, outline, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
+- `cover.png`: Generated cover image (when `--cover` is enabled).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 
@@ -60,7 +68,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - `outlines/`: Directory containing one or more outline markdown files.
 
 **Outputs**
-- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, and `back-cover-synopsis.md`.
+- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `back-cover-synopsis.md`, and `cover.png` when enabled.
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
@@ -84,6 +92,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 - Updated `book.md` and regenerated `book.pdf`.
 - Regenerated `audio/*.mp3` files when `--tts` is enabled.
 - Regenerated `video/*.mp4` files when `--video` is enabled.
+- Updated `cover.png` when `--cover` is enabled.
 
 ## Outline format
 
