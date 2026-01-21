@@ -28,6 +28,7 @@ from book_writer.writer import (
     expand_book,
     expand_chapter_content,
     generate_book_audio,
+    generate_book_cover_asset,
     generate_book_title,
     generate_book_pdf,
     generate_book_videos,
@@ -325,6 +326,56 @@ class TestWriter(unittest.TestCase):
         first_call = cover_mock.call_args_list[0].kwargs
         self.assertEqual(first_call["book_title"], "Chapter One")
         self.assertEqual(first_call["chapter_title"], "Chapter One")
+
+    @patch("book_writer.writer.generate_book_cover")
+    def test_generate_book_cover_asset_summarizes_synopsis(
+        self, cover_mock: Mock
+    ) -> None:
+        settings = CoverSettings(enabled=True)
+        client = Mock(spec=LMStudioClient)
+        client.generate.return_value = "Short summary."
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# The Adventure\n\nContent", encoding="utf-8")
+            synopsis_path = output_dir / "back-cover-synopsis.md"
+            synopsis_path.write_text(
+                "A long synopsis that needs to be shortened.", encoding="utf-8"
+            )
+
+            generate_book_cover_asset(output_dir, settings, client=client)
+
+        cover_mock.assert_called_once()
+        self.assertEqual(
+            cover_mock.call_args.kwargs["synopsis"], "Short summary."
+        )
+        client.generate.assert_called_once()
+
+    @patch("book_writer.writer.generate_chapter_cover")
+    def test_generate_chapter_cover_assets_uses_summary(
+        self, cover_mock: Mock
+    ) -> None:
+        settings = CoverSettings(enabled=True)
+        client = Mock(spec=LMStudioClient)
+        client.generate.return_value = "Condensed scene."
+        cover_mock.return_value = Path("chapter_covers/001-chapter-one.png")
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nLong content", encoding="utf-8")
+
+            generate_chapter_cover_assets(
+                output_dir=output_dir,
+                cover_settings=settings,
+                client=client,
+            )
+
+        cover_mock.assert_called_once()
+        self.assertEqual(
+            cover_mock.call_args.kwargs["chapter_content"], "Condensed scene."
+        )
+        client.generate.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
