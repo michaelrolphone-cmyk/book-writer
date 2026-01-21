@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSynthesisError, TTSSettings
 from book_writer.video import VideoSettings
+from book_writer.cover import CoverSettings
 from book_writer.writer import (
     ChapterContext,
     LMStudioClient,
@@ -28,6 +29,7 @@ from book_writer.writer import (
     generate_book_title,
     generate_book_pdf,
     generate_book_videos,
+    generate_chapter_cover_assets,
     save_book_progress,
     write_book,
 )
@@ -264,6 +266,35 @@ class TestWriter(unittest.TestCase):
                 ),
             ]
         )
+
+    @patch("book_writer.writer.generate_chapter_cover")
+    def test_generate_chapter_cover_assets_creates_outputs(
+        self, cover_mock: Mock
+    ) -> None:
+        settings = CoverSettings(enabled=True)
+        cover_mock.side_effect = [
+            Path("chapter_covers/001-chapter-one.png"),
+            Path("chapter_covers/002-chapter-two.png"),
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_one = output_dir / "001-chapter-one.md"
+            chapter_two = output_dir / "002-chapter-two.md"
+            chapter_one.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            chapter_two.write_text("# Chapter Two\n\nContent", encoding="utf-8")
+
+            generated = generate_chapter_cover_assets(
+                output_dir=output_dir,
+                cover_settings=settings,
+                chapter_cover_dir="chapter_covers",
+            )
+
+        self.assertEqual(len(generated), 2)
+        self.assertEqual(cover_mock.call_count, 2)
+        first_call = cover_mock.call_args_list[0].kwargs
+        self.assertEqual(first_call["book_title"], "Chapter One")
+        self.assertEqual(first_call["chapter_title"], "Chapter One")
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")

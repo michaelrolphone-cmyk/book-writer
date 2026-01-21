@@ -4,13 +4,17 @@ import json
 import re
 import subprocess
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, List, Optional
 from urllib import request
 from urllib.error import HTTPError
 
-from book_writer.cover import CoverSettings, generate_book_cover
+from book_writer.cover import (
+    CoverSettings,
+    generate_book_cover,
+    generate_chapter_cover,
+)
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
     TTSSynthesisError,
@@ -731,6 +735,16 @@ def _read_book_metadata(
     return ChapterContext(title=title, content=outline), "Marissa Bard"
 
 
+def _chapter_title_from_content(content: str, fallback: str) -> str:
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            candidate = stripped.lstrip("#").strip()
+            if candidate:
+                return candidate
+    return fallback
+
+
 def _read_cover_synopsis(output_dir: Path) -> str:
     synopsis_path = output_dir / "back-cover-synopsis.md"
     if synopsis_path.exists():
@@ -755,6 +769,57 @@ def generate_book_cover_asset(
         synopsis=synopsis,
         settings=cover_settings,
     )
+
+
+def generate_chapter_cover_assets(
+    output_dir: Path,
+    cover_settings: CoverSettings,
+    chapter_cover_dir: str = "chapter_covers",
+    chapter_files: Optional[Iterable[Path]] = None,
+) -> List[Path]:
+    if not cover_settings.enabled:
+        return []
+    all_chapter_files = _chapter_files(output_dir)
+    if not all_chapter_files:
+        raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    if chapter_files is None:
+        selected_chapters = list(all_chapter_files)
+    else:
+        resolved_all = {path.resolve() for path in all_chapter_files}
+        resolved_selected = {path.resolve() for path in chapter_files}
+        missing = [path for path in resolved_selected if path not in resolved_all]
+        if missing:
+            missing_names = ", ".join(sorted(path.name for path in missing))
+            raise ValueError(
+                f"Cover selection did not match chapter files: {missing_names}"
+            )
+        selected_chapters = [
+            path
+            for path in all_chapter_files
+            if path.resolve() in resolved_selected
+        ]
+        if not selected_chapters:
+            raise ValueError("Cover selection did not match any chapter files.")
+
+    book_metadata, _ = _read_book_metadata(output_dir, all_chapter_files)
+    cover_output_dir = output_dir / chapter_cover_dir
+    generated: List[Path] = []
+    for chapter_file in selected_chapters:
+        content = chapter_file.read_text(encoding="utf-8")
+        chapter_title = _chapter_title_from_content(content, chapter_file.stem)
+        settings = replace(
+            cover_settings, output_name=f"{chapter_file.stem}.png"
+        )
+        output_path = generate_chapter_cover(
+            output_dir=cover_output_dir,
+            book_title=book_metadata.title,
+            chapter_title=chapter_title,
+            chapter_content=content,
+            settings=settings,
+        )
+        if output_path:
+            generated.append(output_path)
+    return generated
 
 
 def expand_book(

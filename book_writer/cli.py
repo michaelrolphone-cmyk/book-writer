@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Optional
 from pathlib import Path
 
@@ -18,6 +18,7 @@ from book_writer.writer import (
     expand_book,
     generate_book_audio,
     generate_book_cover_asset,
+    generate_chapter_cover_assets,
     generate_book_title,
     generate_book_videos,
     load_book_progress,
@@ -323,6 +324,8 @@ class BookTaskSelection:
     generate_audio: bool
     generate_video: bool
     generate_cover: bool
+    generate_chapter_covers: bool
+    chapter_cover_dir: str
 
 
 def _book_chapter_files(book_dir: Path) -> list[Path]:
@@ -679,6 +682,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         questionary.Choice("Generate audio narration", value="audio"),
         questionary.Choice("Generate videos", value="video"),
         questionary.Choice("Generate book cover", value="cover"),
+        questionary.Choice("Generate chapter covers", value="chapter-cover"),
     ]
     selected = questionary.checkbox(
         "Select tasks for the selected books:",
@@ -721,8 +725,9 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         video_settings = _prompt_for_video_settings(args)
 
     generate_cover = "cover" in selected_tasks
+    generate_chapter_covers = "chapter-cover" in selected_tasks
     cover_settings = CoverSettings(
-        enabled=False,
+        enabled=generate_cover or generate_chapter_covers,
         prompt=args.cover_prompt,
         negative_prompt=args.cover_negative_prompt,
         model_path=args.cover_model_path,
@@ -736,10 +741,18 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         overwrite=args.cover_overwrite,
         command=parse_cover_command(args.cover_command),
     )
-    if generate_cover:
+    if generate_cover or generate_chapter_covers:
         cover_settings = _prompt_for_cover_settings(args, cover_settings)
 
     compile_book_assets = "compile" in selected_tasks
+    chapter_cover_dir = args.chapter_cover_dir
+    if generate_chapter_covers:
+        chapter_cover_dir_response = questionary.text(
+            "Chapter cover output directory:",
+            default=args.chapter_cover_dir,
+        ).ask()
+        if chapter_cover_dir_response:
+            chapter_cover_dir = chapter_cover_dir_response
     return BookTaskSelection(
         expand=expand,
         expand_passes=expand_passes,
@@ -750,6 +763,8 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         generate_audio=generate_audio,
         generate_video=generate_video,
         generate_cover=generate_cover,
+        generate_chapter_covers=generate_chapter_covers,
+        chapter_cover_dir=chapter_cover_dir,
     )
 
 
@@ -1058,6 +1073,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--cover-book",
+        type=Path,
+        default=None,
+        help="Generate a cover for an existing book directory.",
+    )
+    parser.add_argument(
+        "--chapter-covers-book",
+        type=Path,
+        default=None,
+        help="Generate chapter covers for an existing book directory.",
+    )
+    parser.add_argument(
+        "--chapter-cover-dir",
+        default="chapter_covers",
+        help="Directory name for storing generated chapter covers.",
+    )
+    parser.add_argument(
         "--byline",
         default="Marissa Bard",
         help="Byline shown on the book title page.",
@@ -1164,8 +1196,23 @@ def main() -> int:
         overwrite=args.cover_overwrite,
         command=parse_cover_command(args.cover_command),
     )
+    if args.cover_book or args.chapter_covers_book:
+        cover_settings = replace(cover_settings, enabled=True)
     tone_options = _tone_options()
     author_options = _author_options()
+    if args.cover_book or args.chapter_covers_book:
+        if args.cover_book:
+            generate_book_cover_asset(
+                output_dir=args.cover_book,
+                cover_settings=cover_settings,
+            )
+        if args.chapter_covers_book:
+            generate_chapter_cover_assets(
+                output_dir=args.chapter_covers_book,
+                cover_settings=cover_settings,
+                chapter_cover_dir=args.chapter_cover_dir,
+            )
+        return 0
     if args.expand_book:
         selected_author = _prompt_for_author(
             args.expand_book.name, author_options, args.author
@@ -1253,6 +1300,12 @@ def main() -> int:
                     generate_book_cover_asset(
                         output_dir=book.path,
                         cover_settings=task_selection.cover_settings,
+                    )
+                if task_selection.generate_chapter_covers:
+                    generate_chapter_cover_assets(
+                        output_dir=book.path,
+                        cover_settings=task_selection.cover_settings,
+                        chapter_cover_dir=task_selection.chapter_cover_dir,
                     )
             return 0
         if not outline_files and not args.outline.exists():

@@ -205,6 +205,14 @@ def get_gui_html() -> str:
           inset -4px -4px 12px rgba(0, 0, 0, 0.1);
       }
 
+      .book-cover.has-image {
+        padding: 0;
+        color: transparent;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
       .chapter-card .book-cover {
         height: 110px;
         font-size: 14px;
@@ -398,6 +406,12 @@ def get_gui_html() -> str:
       .media-block video {
         width: 100%;
         border-radius: 10px;
+      }
+
+      .media-block img {
+        width: 100%;
+        border-radius: 10px;
+        display: block;
       }
 
       .progress {
@@ -721,6 +735,60 @@ def get_gui_html() -> str:
           </div>
 
           <div class="panel">
+            <h3>Cover generation</h3>
+            <label>Cover prompt override</label>
+            <textarea id="coverPrompt" placeholder="Leave blank for auto-generated prompts"></textarea>
+            <label>Negative prompt</label>
+            <textarea id="coverNegativePrompt" placeholder="Avoid unwanted elements"></textarea>
+            <label>Core ML model path</label>
+            <input id="coverModelPath" placeholder="/path/to/model" />
+            <label>python_coreml_stable_diffusion module path</label>
+            <input id="coverModulePath" placeholder="../ml-stable-diffusion" />
+            <div class="row">
+              <div>
+                <label>Inference steps</label>
+                <input id="coverSteps" placeholder="30" />
+              </div>
+              <div>
+                <label>Guidance scale</label>
+                <input id="coverGuidanceScale" placeholder="7.5" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>Seed</label>
+                <input id="coverSeed" placeholder="Optional" />
+              </div>
+              <div>
+                <label>Output filename</label>
+                <input id="coverOutputName" placeholder="cover.png" />
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>Image width</label>
+                <input id="coverWidth" placeholder="768" />
+              </div>
+              <div>
+                <label>Image height</label>
+                <input id="coverHeight" placeholder="1024" />
+              </div>
+            </div>
+            <label>Cover command template</label>
+            <input id="coverCommand" placeholder="swift run StableDiffusionSample {prompt} ..." />
+            <label>Chapter cover output dir</label>
+            <input id="chapterCoverDir" placeholder="chapter_covers" />
+            <label class="checkbox">
+              <input type="checkbox" id="coverOverwrite" />
+              Overwrite existing cover images
+            </label>
+            <div class="workspace-actions">
+              <button class="pill-button" id="generateBookCover">Generate Book Cover</button>
+              <button class="pill-button" id="generateChapterCovers">Generate Chapter Covers</button>
+            </div>
+          </div>
+
+          <div class="panel">
             <h3>Activity log</h3>
             <div class="action-log" id="actionLog">Waiting for actions...</div>
           </div>
@@ -781,6 +849,10 @@ def get_gui_html() -> str:
               <div class="detail-section">
                 <h4>Book playback</h4>
                 <div class="media-panel">
+                  <div class="media-block hidden" id="bookCoverBlock">
+                    <label>Book cover</label>
+                    <img id="bookCoverImage" alt="Book cover" />
+                  </div>
                   <div class="media-block hidden" id="bookAudioBlock">
                     <label>Full book audio</label>
                     <audio controls id="bookAudio"></audio>
@@ -795,6 +867,10 @@ def get_gui_html() -> str:
                   <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
                   <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
                   <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
+                  <button class="pill-button" id="bookWorkspaceCover">Generate cover</button>
+                  <button class="pill-button" id="bookWorkspaceChapterCovers">
+                    Generate chapter covers
+                  </button>
                 </div>
               </div>
               <div class="detail-section">
@@ -851,6 +927,7 @@ def get_gui_html() -> str:
               <button class="pill-button" id="chapterExpand">Expand chapter</button>
               <button class="pill-button" id="chapterGenerateAudio">Generate audio</button>
               <button class="pill-button" id="chapterGenerateVideo">Generate video</button>
+              <button class="pill-button" id="chapterGenerateCover">Generate cover</button>
             </div>
           </div>
           <div class="panel">
@@ -860,6 +937,10 @@ def get_gui_html() -> str:
                 <strong id="chapterReaderTitle">Chapter preview</strong>
               </div>
               <div class="media-panel" id="chapterMediaPanel">
+                <div class="media-block hidden" id="chapterCoverBlock">
+                  <label>Chapter cover</label>
+                  <img id="chapterCoverImage" alt="Chapter cover" />
+                </div>
                 <div class="media-block hidden" id="chapterViewAudioBlock">
                   <label>Chapter audio</label>
                   <audio controls id="chapterViewAudio"></audio>
@@ -923,14 +1004,20 @@ def get_gui_html() -> str:
         return `linear-gradient(135deg, ${start} 0%, ${end} 100%)`;
       };
 
-      const createCard = (title, status, detail, tag, accentLabel, progress) => {
+      const createCard = (title, status, detail, tag, accentLabel, progress, coverUrl = null) => {
         const card = document.createElement('article');
         card.className = 'book-card';
 
         const cover = document.createElement('div');
         cover.className = 'book-cover';
-        cover.style.background = gradientFor(title);
-        cover.textContent = title;
+        if (coverUrl) {
+          cover.classList.add('has-image');
+          cover.style.backgroundImage = `url(${coverUrl})`;
+          cover.textContent = '';
+        } else {
+          cover.style.background = gradientFor(title);
+          cover.textContent = title;
+        }
 
         const content = document.createElement('div');
         const heading = document.createElement('h2');
@@ -1048,6 +1135,8 @@ def get_gui_html() -> str:
       const chapterVideo = document.getElementById('chapterVideo');
       const bookAudioBlock = document.getElementById('bookAudioBlock');
       const bookAudio = document.getElementById('bookAudio');
+      const bookCoverBlock = document.getElementById('bookCoverBlock');
+      const bookCoverImage = document.getElementById('bookCoverImage');
       const homeView = document.getElementById('homeView');
       const detailView = document.getElementById('detailView');
       const detailBack = document.getElementById('detailBack');
@@ -1063,9 +1152,12 @@ def get_gui_html() -> str:
       const chapterViewVideoBlock = document.getElementById('chapterViewVideoBlock');
       const chapterViewAudio = document.getElementById('chapterViewAudio');
       const chapterViewVideo = document.getElementById('chapterViewVideo');
+      const chapterCoverBlock = document.getElementById('chapterCoverBlock');
+      const chapterCoverImage = document.getElementById('chapterCoverImage');
       const chapterExpand = document.getElementById('chapterExpand');
       const chapterGenerateAudio = document.getElementById('chapterGenerateAudio');
       const chapterGenerateVideo = document.getElementById('chapterGenerateVideo');
+      const chapterGenerateCover = document.getElementById('chapterGenerateCover');
       const workspaceEmpty = document.getElementById('workspaceEmpty');
       const outlineWorkspace = document.getElementById('outlineWorkspace');
       const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
@@ -1086,6 +1178,8 @@ def get_gui_html() -> str:
       const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
       const bookWorkspaceAudio = document.getElementById('bookWorkspaceAudio');
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
+      const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
+      const bookWorkspaceChapterCovers = document.getElementById('bookWorkspaceChapterCovers');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -1287,6 +1381,7 @@ def get_gui_html() -> str:
           'Chapter',
           'Preview',
           null,
+          chapter.cover_url || null,
         );
         card.classList.add('selectable', 'chapter-card');
         card.dataset.chapter = String(chapter.index);
@@ -1339,12 +1434,15 @@ def get_gui_html() -> str:
         if (!bookDir || !chapterValue) return;
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
+        const chapterCoverDir = document.getElementById('chapterCoverDir').value || 'chapter_covers';
         const result = await fetchJson(
           `/api/chapter-content?book_dir=${encodeURIComponent(
             bookDir,
           )}&chapter=${encodeURIComponent(chapterValue)}&audio_dirname=${encodeURIComponent(
             audioDir,
-          )}&video_dirname=${encodeURIComponent(videoDir)}`,
+          )}&video_dirname=${encodeURIComponent(videoDir)}&chapter_cover_dir=${encodeURIComponent(
+            chapterCoverDir,
+          )}`,
         );
         setBookContent(result.content || '');
       };
@@ -1361,16 +1459,20 @@ def get_gui_html() -> str:
         chapterSubheading.textContent = `Book: ${bookDir.split('/').pop()}`;
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
+        const chapterCoverDir = document.getElementById('chapterCoverDir').value || 'chapter_covers';
         const result = await fetchJson(
           `/api/chapter-content?book_dir=${encodeURIComponent(
             bookDir,
           )}&chapter=${encodeURIComponent(chapterIndex)}&audio_dirname=${encodeURIComponent(
             audioDir,
-          )}&video_dirname=${encodeURIComponent(videoDir)}`,
+          )}&video_dirname=${encodeURIComponent(videoDir)}&chapter_cover_dir=${encodeURIComponent(
+            chapterCoverDir,
+          )}`,
         );
         chapterReaderTitle.textContent = result.title || 'Chapter preview';
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         restoreChapterAudioToDetail();
+        setImageSource(chapterCoverBlock, chapterCoverImage, result.cover_url);
         setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
         setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
         handoffChapterAudioToDetail(cardAudio, result.audio_url);
@@ -1382,12 +1484,13 @@ def get_gui_html() -> str:
         if (!bookDir) return [];
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
+        const chapterCoverDir = document.getElementById('chapterCoverDir').value || 'chapter_covers';
         const result = await fetchJson(
           `/api/chapters?book_dir=${encodeURIComponent(
             bookDir,
           )}&audio_dirname=${encodeURIComponent(audioDir)}&video_dirname=${encodeURIComponent(
             videoDir,
-          )}`,
+          )}&chapter_cover_dir=${encodeURIComponent(chapterCoverDir)}`,
         );
         return result.chapters || [];
       };
@@ -1412,6 +1515,7 @@ def get_gui_html() -> str:
           bookWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
           bookWorkspacePath.textContent = entry.path;
           setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
+          setImageSource(bookCoverBlock, bookCoverImage, entry.cover_url);
           const chapters = await loadChapters(entry.path);
           renderChapterShelf(entry.path, chapters);
           if (chapters.length) {
@@ -1484,6 +1588,47 @@ def get_gui_html() -> str:
         element.dataset.mediaUrl = url;
         element.load();
       };
+
+      const setImageSource = (block, element, url) => {
+        if (!url) {
+          block.classList.add('hidden');
+          element.removeAttribute('src');
+          element.dataset.mediaUrl = '';
+          return;
+        }
+        block.classList.remove('hidden');
+        element.src = url;
+        element.dataset.mediaUrl = url;
+      };
+
+      const parseOptionalNumber = (value) => {
+        if (value === null || value === undefined) return null;
+        const trimmed = String(value).trim();
+        if (!trimmed) return null;
+        const parsed = Number(trimmed);
+        return Number.isNaN(parsed) ? null : parsed;
+      };
+
+      const buildCoverSettings = () => ({
+        enabled: true,
+        prompt: document.getElementById('coverPrompt').value || null,
+        negative_prompt: document.getElementById('coverNegativePrompt').value || null,
+        model_path: document.getElementById('coverModelPath').value || null,
+        module_path: document.getElementById('coverModulePath').value || null,
+        steps: parseOptionalNumber(document.getElementById('coverSteps').value),
+        guidance_scale: parseOptionalNumber(
+          document.getElementById('coverGuidanceScale').value,
+        ),
+        seed: parseOptionalNumber(document.getElementById('coverSeed').value),
+        width: parseOptionalNumber(document.getElementById('coverWidth').value),
+        height: parseOptionalNumber(document.getElementById('coverHeight').value),
+        output_name: document.getElementById('coverOutputName').value || null,
+        overwrite: document.getElementById('coverOverwrite').checked,
+        command: document.getElementById('coverCommand').value || null,
+      });
+
+      const getChapterCoverDir = () =>
+        document.getElementById('chapterCoverDir').value || 'chapter_covers';
 
       const loadCatalog = async () => {
         try {
@@ -1582,6 +1727,7 @@ def get_gui_html() -> str:
                 'Book',
                 book.path.split('/').pop(),
                 progress,
+                book.cover_url || null,
               );
               card.classList.add('selectable');
               card.dataset.type = 'book';
@@ -1726,6 +1872,43 @@ def get_gui_html() -> str:
         }
       });
 
+      document.getElementById('generateBookCover').addEventListener('click', async () => {
+        try {
+          if (!bookSelect.value) {
+            log('Select a book before generating a cover.');
+            return;
+          }
+          const payload = {
+            book_dir: bookSelect.value,
+            cover_settings: buildCoverSettings(),
+          };
+          await postJson('/api/generate-cover', payload);
+          log('Book cover generation complete.');
+          await loadCatalog();
+        } catch (error) {
+          log(`Cover generation failed: ${error.message}`);
+        }
+      });
+
+      document.getElementById('generateChapterCovers').addEventListener('click', async () => {
+        try {
+          if (!bookSelect.value) {
+            log('Select a book before generating chapter covers.');
+            return;
+          }
+          const payload = {
+            book_dir: bookSelect.value,
+            chapter_cover_dir: getChapterCoverDir(),
+            cover_settings: buildCoverSettings(),
+          };
+          await postJson('/api/generate-chapter-covers', payload);
+          log('Chapter cover generation complete.');
+          await loadCatalog();
+        } catch (error) {
+          log(`Chapter covers failed: ${error.message}`);
+        }
+      });
+
       bookSelect.addEventListener('change', async (event) => {
         const value = event.target.value;
         await loadChapters(value);
@@ -1839,6 +2022,35 @@ def get_gui_html() -> str:
         document.getElementById('generateVideo').click();
       });
 
+      chapterGenerateCover.addEventListener('click', async () => {
+        if (!currentChapter) {
+          log('Select a chapter before generating a cover.');
+          return;
+        }
+        try {
+          const payload = {
+            book_dir: currentChapter.bookDir,
+            chapter: currentChapter.index,
+            chapter_cover_dir: getChapterCoverDir(),
+            cover_settings: buildCoverSettings(),
+          };
+          await postJson('/api/generate-chapter-covers', payload);
+          log('Chapter cover generation complete.');
+          if (currentChapter.bookDir) {
+            const chapters = await loadChapters(currentChapter.bookDir);
+            const updated = chapters.find(
+              (entry) => entry.index === currentChapter.index,
+            );
+            if (updated) {
+              currentChapter = { ...updated, bookDir: currentChapter.bookDir };
+              setImageSource(chapterCoverBlock, chapterCoverImage, updated.cover_url);
+            }
+          }
+        } catch (error) {
+          log(`Chapter cover failed: ${error.message}`);
+        }
+      });
+
       outlineWorkspaceGenerate.addEventListener('click', () => {
         document.getElementById('generateBook').click();
       });
@@ -1861,6 +2073,14 @@ def get_gui_html() -> str:
 
       bookWorkspaceVideo.addEventListener('click', () => {
         document.getElementById('generateVideo').click();
+      });
+
+      bookWorkspaceCover.addEventListener('click', () => {
+        document.getElementById('generateBookCover').click();
+      });
+
+      bookWorkspaceChapterCovers.addEventListener('click', () => {
+        document.getElementById('generateChapterCovers').click();
       });
 
       loadCatalog();
