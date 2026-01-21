@@ -1669,6 +1669,14 @@ def get_gui_html() -> str:
         return parts.slice(0, -1).join('/');
       };
 
+      const resolveOutlinePath = () => {
+        const workspacePath = outlineWorkspacePath.textContent.trim();
+        if (workspacePath) {
+          return workspacePath;
+        }
+        return outlineSelect.value || '';
+      };
+
       const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
         if (!bookDir || !chapterValue) return;
         const audioDir = document.getElementById('audioDir').value || 'audio';
@@ -2408,7 +2416,7 @@ def get_gui_html() -> str:
       });
 
       outlineWorkspaceGenerate.addEventListener('click', async () => {
-        const outlinePath = outlineWorkspacePath.textContent;
+        const outlinePath = resolveOutlinePath();
         if (!outlinePath) {
           log('Select an outline before generating a book.');
           return;
