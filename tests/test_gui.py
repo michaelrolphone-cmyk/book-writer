@@ -22,6 +22,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"bookWorkspace\"", html)
         self.assertIn("id=\"chapterShelf\"", html)
         self.assertIn("id=\"readerPanel\"", html)
+        self.assertIn("id=\"outlineWorkspaceSummary\"", html)
         self.assertIn("id=\"chapterAudio\"", html)
         self.assertIn("id=\"chapterVideo\"", html)
         self.assertIn("id=\"bookAudio\"", html)
@@ -35,9 +36,14 @@ class TestGui(unittest.TestCase):
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
             html,
         )
+        self.assertIn("handoffChapterAudioToDetail", html)
+        self.assertIn("No preview available.", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)
         self.assertIn("width: auto;", html)
+        book_shelf_index = html.index("id=\"bookShelf\"")
+        outline_shelf_index = html.index("id=\"outlineShelf\"")
+        self.assertLess(book_shelf_index, outline_shelf_index)
         reader_panel_index = html.index("id=\"readerPanel\"")
         media_panel_index = html.index("id=\"mediaPanel\"", reader_panel_index)
         reader_body_index = html.index("id=\"readerBody\"", reader_panel_index)
