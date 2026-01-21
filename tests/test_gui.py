@@ -60,7 +60,7 @@ class TestGui(unittest.TestCase):
             "outlineWorkspaceSummary.textContent = summaryLines.join(`\n`);",
             html,
         )
-        self.assertIn("split(`\\n`)", html)
+        self.assertIn("split(`\n`)", html)
         self.assertIn("handoffChapterAudioToDetail", html)
         self.assertIn("restoreChapterAudioToCard", html)
         self.assertIn("setCoverProgress(true", html)
