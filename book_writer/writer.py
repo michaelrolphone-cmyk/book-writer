@@ -232,6 +232,43 @@ def build_book_title_prompt(outline_text: str, first_chapter_title: str) -> str:
     )
 
 
+def build_outline_prompt(prompt: str) -> str:
+    return (
+        "Create a detailed book outline in markdown. "
+        "Include a book title, chapters, and optional sections. "
+        "Use # for the title, ## for chapters, and ### for sections. "
+        "Return only markdown.\n\n"
+        f"Prompt:\n{prompt.strip()}"
+    )
+
+
+def build_outline_revision_prompt(outline_text: str, revision_prompt: str) -> str:
+    return (
+        "Revise the following book outline based on the revision prompt. "
+        "Return the full updated outline in markdown with the same structure. "
+        "Do not include commentary.\n\n"
+        f"Revision prompt:\n{revision_prompt.strip()}\n\n"
+        f"Current outline:\n{outline_text.strip()}"
+    )
+
+
+def generate_outline(
+    prompt: str,
+    client: LMStudioClient,
+    revision_prompts: Optional[Iterable[str]] = None,
+) -> str:
+    if not prompt.strip():
+        raise ValueError("Outline prompt cannot be empty.")
+    outline_text = client.generate(build_outline_prompt(prompt))
+    for revision_prompt in revision_prompts or []:
+        if not revision_prompt or not revision_prompt.strip():
+            continue
+        outline_text = client.generate(
+            build_outline_revision_prompt(outline_text, revision_prompt)
+        )
+    return outline_text.strip()
+
+
 def _clean_generated_title(title: str) -> str:
     cleaned = title.strip()
     if cleaned.startswith(("\"", "'")) and cleaned.endswith(("\"", "'")):

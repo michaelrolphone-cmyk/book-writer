@@ -21,6 +21,7 @@ from book_writer.writer import (
     generate_chapter_cover_assets,
     generate_book_title,
     generate_book_videos,
+    generate_outline,
     load_book_progress,
     write_book,
 )
@@ -783,10 +784,46 @@ def _prompt_for_primary_action() -> str:
         choices=[
             questionary.Choice("Create new books", value="create"),
             questionary.Choice("Modify existing books", value="modify"),
+            questionary.Choice("Create a new outline", value="outline"),
             questionary.Choice("Launch GUI server", value="gui"),
         ],
     ).ask()
     return response or "create"
+
+
+def _normalize_outline_name(filename: str) -> str:
+    cleaned = filename.strip() or "outline.md"
+    if not cleaned.endswith(".md"):
+        cleaned = f"{cleaned}.md"
+    return cleaned
+
+
+def _prompt_for_outline_revisions() -> list[str]:
+    questionary = _questionary()
+    revisions: list[str] = []
+    while _prompt_yes_no("Add a revision prompt?", False):
+        response = questionary.text("Revision prompt:").ask()
+        if response and response.strip():
+            revisions.append(response.strip())
+    return revisions
+
+
+def write_outline_from_prompt(
+    outlines_dir: Path,
+    client: LMStudioClient,
+    prompt: str,
+    outline_name: str,
+    revision_prompts: Optional[list[str]] = None,
+) -> Path:
+    outlines_dir.mkdir(parents=True, exist_ok=True)
+    outline_path = outlines_dir / _normalize_outline_name(outline_name)
+    outline_text = generate_outline(
+        prompt=prompt,
+        client=client,
+        revision_prompts=revision_prompts,
+    )
+    outline_path.write_text(outline_text + "\n", encoding="utf-8")
+    return outline_path
 
 
 def write_books_from_outlines(
@@ -1246,6 +1283,34 @@ def main() -> int:
             from book_writer.server import run_server
 
             run_server(host=args.gui_host, port=args.gui_port)
+            return 0
+        if primary_action == "outline":
+            questionary = _questionary()
+            outline_prompt = questionary.text("Outline prompt:").ask() or ""
+            if not outline_prompt.strip():
+                parser.error("Outline prompt cannot be empty.")
+            outline_name = questionary.text(
+                "Outline filename:",
+                default="outline.md",
+            ).ask() or "outline.md"
+            outlines_dir_value = questionary.text(
+                "Outlines directory:",
+                default=str(args.outlines_dir),
+            ).ask()
+            outlines_dir = Path(outlines_dir_value) if outlines_dir_value else args.outlines_dir
+            selected_author = _prompt_for_author(
+                outline_name, author_options, args.author
+            )
+            client.set_author(selected_author)
+            revision_prompts = _prompt_for_outline_revisions()
+            outline_path = write_outline_from_prompt(
+                outlines_dir=outlines_dir,
+                client=client,
+                prompt=outline_prompt,
+                outline_name=outline_name,
+                revision_prompts=revision_prompts,
+            )
+            print(f"Saved outline to {outline_path}.")
             return 0
         book_info = _book_directories(
             args.books_dir, args.tts_audio_dir, args.video_dir

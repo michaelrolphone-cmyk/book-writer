@@ -17,6 +17,8 @@ from book_writer.writer import (
     build_book_markdown,
     build_book_title_prompt,
     build_chapter_context_prompt,
+    build_outline_prompt,
+    build_outline_revision_prompt,
     build_expand_paragraph_prompt,
     build_prompt,
     build_synopsis_prompt,
@@ -30,6 +32,7 @@ from book_writer.writer import (
     generate_book_pdf,
     generate_book_videos,
     generate_chapter_cover_assets,
+    generate_outline,
     save_book_progress,
     write_book,
 )
@@ -81,6 +84,33 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn("Current item: Epilogue (epilogue).", prompt)
         self.assertIn("Previous chapter context:", prompt)
+
+    def test_generate_outline_applies_revision_prompts(self) -> None:
+        client = MagicMock()
+        client.generate.side_effect = [
+            "# Title\n\n## Chapter One",
+            "# Title\n\n## Chapter One\n\n## Chapter Two",
+        ]
+
+        result = generate_outline(
+            "A story about growth.",
+            client,
+            revision_prompts=["Add a second chapter."],
+        )
+
+        self.assertIn("Chapter Two", result)
+        self.assertEqual(
+            client.generate.mock_calls,
+            [
+                call(build_outline_prompt("A story about growth.")),
+                call(
+                    build_outline_revision_prompt(
+                        "# Title\n\n## Chapter One",
+                        "Add a second chapter.",
+                    )
+                ),
+            ],
+        )
 
     def test_sanitize_markdown_for_latex_escapes_commands_outside_math(self) -> None:
         text = "We measure \\frac{d\\Psi}{dt} over time."
