@@ -24,6 +24,12 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"readerPanel\"", html)
         self.assertIn("id=\"chapterAudio\"", html)
         self.assertIn("id=\"chapterVideo\"", html)
+        self.assertIn("id=\"bookAudio\"", html)
+        self.assertIn("id=\"chapterView\"", html)
+        self.assertIn("id=\"chapterBack\"", html)
+        self.assertIn("id=\"chapterReaderBody\"", html)
+        self.assertIn("id=\"chapterViewAudio\"", html)
+        self.assertIn("id=\"chapterViewVideo\"", html)
         self.assertIn("Select a book before generating audio.", html)
         self.assertIn(
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",

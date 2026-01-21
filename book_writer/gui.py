@@ -51,6 +51,10 @@ def get_gui_html() -> str:
         width: 100%;
       }
 
+      .chapter-view {
+        width: 100%;
+      }
+
       .header {
         display: flex;
         align-items: center;
@@ -132,6 +136,11 @@ def get_gui_html() -> str:
       }
 
       .detail-layout {
+        display: grid;
+        gap: 20px;
+      }
+
+      .chapter-layout {
         display: grid;
         gap: 20px;
       }
@@ -358,6 +367,14 @@ def get_gui_html() -> str:
         margin-top: 16px;
         display: grid;
         gap: 12px;
+      }
+
+      .card-media {
+        margin-top: 12px;
+      }
+
+      .card-media audio {
+        width: 100%;
       }
 
       .media-block {
@@ -759,6 +776,15 @@ def get_gui_html() -> str:
               <strong id="bookWorkspaceTitle">Book title</strong>
               <p class="meta-line" id="bookWorkspacePath"></p>
               <div class="detail-section">
+                <h4>Book playback</h4>
+                <div class="media-panel">
+                  <div class="media-block hidden" id="bookAudioBlock">
+                    <label>Full book audio</label>
+                    <audio controls id="bookAudio"></audio>
+                  </div>
+                </div>
+              </div>
+              <div class="detail-section">
                 <h4>Book actions</h4>
                 <div class="workspace-actions">
                   <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
@@ -799,6 +825,46 @@ def get_gui_html() -> str:
                       <video controls id="chapterVideo"></video>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <main class="chapter-view is-hidden" id="chapterView">
+        <div class="detail-header">
+          <button class="pill-button" id="chapterBack">← Back to book</button>
+          <div class="detail-heading">
+            <h2 id="chapterHeading">Chapter view</h2>
+            <p id="chapterSubheading">Select a chapter to read and play media.</p>
+          </div>
+        </div>
+
+        <div class="chapter-layout">
+          <div class="panel">
+            <h3>Chapter controls</h3>
+            <div class="workspace-actions">
+              <button class="pill-button" id="chapterExpand">Expand chapter</button>
+              <button class="pill-button" id="chapterGenerateAudio">Generate audio</button>
+              <button class="pill-button" id="chapterGenerateVideo">Generate video</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Reader view</h3>
+            <div class="reader-panel active" id="chapterReaderPanel">
+              <div class="book-meta">
+                <strong id="chapterReaderTitle">Chapter preview</strong>
+              </div>
+              <div class="reader-body" id="chapterReaderBody"></div>
+              <div class="media-panel" id="chapterMediaPanel">
+                <div class="media-block hidden" id="chapterViewAudioBlock">
+                  <label>Chapter audio</label>
+                  <audio controls id="chapterViewAudio"></audio>
+                </div>
+                <div class="media-block hidden" id="chapterViewVideoBlock">
+                  <label>Chapter video</label>
+                  <video controls id="chapterViewVideo"></video>
                 </div>
               </div>
             </div>
@@ -977,11 +1043,26 @@ def get_gui_html() -> str:
       const videoBlock = document.getElementById('videoBlock');
       const chapterAudio = document.getElementById('chapterAudio');
       const chapterVideo = document.getElementById('chapterVideo');
+      const bookAudioBlock = document.getElementById('bookAudioBlock');
+      const bookAudio = document.getElementById('bookAudio');
       const homeView = document.getElementById('homeView');
       const detailView = document.getElementById('detailView');
       const detailBack = document.getElementById('detailBack');
       const detailHeading = document.getElementById('detailHeading');
       const detailSubheading = document.getElementById('detailSubheading');
+      const chapterView = document.getElementById('chapterView');
+      const chapterBack = document.getElementById('chapterBack');
+      const chapterHeading = document.getElementById('chapterHeading');
+      const chapterSubheading = document.getElementById('chapterSubheading');
+      const chapterReaderTitle = document.getElementById('chapterReaderTitle');
+      const chapterReaderBody = document.getElementById('chapterReaderBody');
+      const chapterViewAudioBlock = document.getElementById('chapterViewAudioBlock');
+      const chapterViewVideoBlock = document.getElementById('chapterViewVideoBlock');
+      const chapterViewAudio = document.getElementById('chapterViewAudio');
+      const chapterViewVideo = document.getElementById('chapterViewVideo');
+      const chapterExpand = document.getElementById('chapterExpand');
+      const chapterGenerateAudio = document.getElementById('chapterGenerateAudio');
+      const chapterGenerateVideo = document.getElementById('chapterGenerateVideo');
       const workspaceEmpty = document.getElementById('workspaceEmpty');
       const outlineWorkspace = document.getElementById('outlineWorkspace');
       const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
@@ -1036,12 +1117,21 @@ def get_gui_html() -> str:
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
+        chapterView.classList.add('is-hidden');
         homeView.classList.remove('is-hidden');
       };
 
       const showDetailView = () => {
         homeView.classList.add('is-hidden');
+        chapterView.classList.add('is-hidden');
         detailView.classList.remove('is-hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const showChapterView = () => {
+        homeView.classList.add('is-hidden');
+        detailView.classList.add('is-hidden');
+        chapterView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
@@ -1093,7 +1183,7 @@ def get_gui_html() -> str:
         }
       };
 
-      const createChapterCard = (chapter) => {
+      const createChapterCard = (bookDir, chapter) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
         const detail = chapter.summary || 'Select to preview chapter content.';
         const card = createCard(
@@ -1106,6 +1196,24 @@ def get_gui_html() -> str:
         );
         card.classList.add('selectable', 'chapter-card');
         card.dataset.chapter = String(chapter.index);
+        if (chapter.audio_url) {
+          const media = document.createElement('div');
+          media.className = 'card-media';
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.src = chapter.audio_url;
+          audio.addEventListener('click', (event) => {
+            event.stopPropagation();
+          });
+          audio.addEventListener('play', (event) => {
+            event.stopPropagation();
+          });
+          media.addEventListener('click', (event) => {
+            event.stopPropagation();
+          });
+          media.appendChild(audio);
+          card.appendChild(media);
+        }
         return card;
       };
 
@@ -1117,13 +1225,9 @@ def get_gui_html() -> str:
           return;
         }
         chapters.forEach((chapter) => {
-          const card = createChapterCard(chapter);
+          const card = createChapterCard(bookDir, chapter);
           card.addEventListener('click', async () => {
-            currentChapter = chapter;
-            chapterSelect.value = String(chapter.index);
-            openReader.disabled = false;
-            setChapterSelection(chapter.index);
-            await loadWorkspaceChapterContent(bookDir, String(chapter.index));
+            await openChapterView(bookDir, chapter);
           });
           chapterShelf.appendChild(card);
         });
@@ -1150,9 +1254,43 @@ def get_gui_html() -> str:
         setBookContent(result.content || '');
       };
 
+      const openChapterView = async (bookDir, chapter) => {
+        if (!bookDir || !chapter) return;
+        const chapterIndex = String(chapter.index);
+        currentChapter = { ...chapter, bookDir };
+        chapterSelect.value = chapterIndex;
+        openReader.disabled = false;
+        setChapterSelection(chapterIndex);
+        chapterHeading.textContent = chapter.title || `Chapter ${chapter.index}`;
+        chapterSubheading.textContent = `Book: ${bookDir.split('/').pop()}`;
+        const audioDir = document.getElementById('audioDir').value || 'audio';
+        const videoDir = document.getElementById('videoDir').value || 'video';
+        const result = await fetchJson(
+          `/api/chapter-content?book_dir=${encodeURIComponent(
+            bookDir,
+          )}&chapter=${encodeURIComponent(chapterIndex)}&audio_dirname=${encodeURIComponent(
+            audioDir,
+          )}&video_dirname=${encodeURIComponent(videoDir)}`,
+        );
+        chapterReaderTitle.textContent = result.title || 'Chapter preview';
+        chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
+        setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
+        setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
+        await loadWorkspaceChapterContent(bookDir, chapterIndex);
+        showChapterView();
+      };
+
       const fetchChapters = async (bookDir) => {
         if (!bookDir) return [];
-        const result = await fetchJson(`/api/chapters?book_dir=${encodeURIComponent(bookDir)}`);
+        const audioDir = document.getElementById('audioDir').value || 'audio';
+        const videoDir = document.getElementById('videoDir').value || 'video';
+        const result = await fetchJson(
+          `/api/chapters?book_dir=${encodeURIComponent(
+            bookDir,
+          )}&audio_dirname=${encodeURIComponent(audioDir)}&video_dirname=${encodeURIComponent(
+            videoDir,
+          )}`,
+        );
         return result.chapters || [];
       };
 
@@ -1175,10 +1313,11 @@ def get_gui_html() -> str:
           bookWorkspaceState.textContent = statusLabel;
           bookWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
           bookWorkspacePath.textContent = entry.path;
+          setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
           const chapters = await loadChapters(entry.path);
           renderChapterShelf(entry.path, chapters);
           if (chapters.length) {
-            currentChapter = chapters[0];
+            currentChapter = { ...chapters[0], bookDir: entry.path };
             chapterSelect.value = String(chapters[0].index);
             setChapterSelection(chapters[0].index);
             await loadWorkspaceChapterContent(entry.path, chapterSelect.value);
@@ -1513,7 +1652,7 @@ def get_gui_html() -> str:
             expandOnlyInput.value = event.target.value;
           }
           if (currentSelection.type === 'book' && currentSelection.path === bookSelect.value) {
-            currentChapter = { index: Number(event.target.value) };
+            currentChapter = { index: Number(event.target.value), bookDir: bookSelect.value };
             setChapterSelection(event.target.value);
             loadWorkspaceChapterContent(currentSelection.path, event.target.value);
           }
@@ -1541,7 +1680,7 @@ def get_gui_html() -> str:
               audioDir,
             )}&video_dirname=${encodeURIComponent(videoDir)}`,
           );
-          currentChapter = { index: Number(chapter) };
+          currentChapter = { index: Number(chapter), bookDir };
           setChapterSelection(chapter);
           readerTitle.textContent = result.title || 'Chapter preview';
           readerBody.innerHTML = renderMarkdown(result.content || '');
@@ -1559,6 +1698,41 @@ def get_gui_html() -> str:
 
       detailBack.addEventListener('click', () => {
         showHomeView();
+      });
+
+      chapterBack.addEventListener('click', () => {
+        showDetailView();
+      });
+
+      chapterExpand.addEventListener('click', () => {
+        if (!currentChapter) {
+          log('Select a chapter before expanding.');
+          return;
+        }
+        document.getElementById('expandOnly').value = String(currentChapter.index);
+        document.getElementById('expandBook').click();
+      });
+
+      chapterGenerateAudio.addEventListener('click', () => {
+        if (!currentChapter) {
+          log('Select a chapter before generating audio.');
+          return;
+        }
+        if (currentChapter.bookDir) {
+          bookSelect.value = currentChapter.bookDir;
+        }
+        document.getElementById('generateAudio').click();
+      });
+
+      chapterGenerateVideo.addEventListener('click', () => {
+        if (!currentChapter) {
+          log('Select a chapter before generating video.');
+          return;
+        }
+        if (currentChapter.bookDir) {
+          bookSelect.value = currentChapter.bookDir;
+        }
+        document.getElementById('generateVideo').click();
       });
 
       outlineWorkspaceGenerate.addEventListener('click', () => {
