@@ -201,6 +201,7 @@ def get_gui_html() -> str:
         height: 150px;
         display: flex;
         align-items: flex-end;
+        overflow: hidden;
         box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.4),
           inset -4px -4px 12px rgba(0, 0, 0, 0.1);
       }
@@ -208,9 +209,14 @@ def get_gui_html() -> str:
       .book-cover.has-image {
         padding: 0;
         color: transparent;
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
+        background: none;
+      }
+
+      .book-cover-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
       }
 
       .chapter-card .book-cover {
@@ -1012,8 +1018,11 @@ def get_gui_html() -> str:
         cover.className = 'book-cover';
         if (coverUrl) {
           cover.classList.add('has-image');
-          cover.style.backgroundImage = `url(${coverUrl})`;
-          cover.textContent = '';
+          const coverImage = document.createElement('img');
+          coverImage.className = 'book-cover-image';
+          coverImage.src = coverUrl;
+          coverImage.alt = title;
+          cover.appendChild(coverImage);
         } else {
           cover.style.background = gradientFor(title);
           cover.textContent = title;
