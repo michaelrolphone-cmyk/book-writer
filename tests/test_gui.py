@@ -35,6 +35,17 @@ class TestGui(unittest.TestCase):
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
             html,
         )
+        self.assertIn(".workspace-actions {", html)
+        self.assertIn("display: flex;", html)
+        self.assertIn("width: auto;", html)
+        reader_panel_index = html.index("id=\"readerPanel\"")
+        media_panel_index = html.index("id=\"mediaPanel\"", reader_panel_index)
+        reader_body_index = html.index("id=\"readerBody\"", reader_panel_index)
+        self.assertLess(media_panel_index, reader_body_index)
+        chapter_panel_index = html.index("id=\"chapterReaderPanel\"")
+        chapter_media_index = html.index("id=\"chapterMediaPanel\"", chapter_panel_index)
+        chapter_body_index = html.index("id=\"chapterReaderBody\"", chapter_panel_index)
+        self.assertLess(chapter_media_index, chapter_body_index)
         self.assertIn("Neumorphic", gui.__doc__ or "")
 
     def test_save_gui_html_writes_file(self) -> None:

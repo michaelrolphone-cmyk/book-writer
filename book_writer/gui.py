@@ -543,12 +543,14 @@ def get_gui_html() -> str:
       }
 
       .workspace-actions {
-        display: grid;
-        gap: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
       }
 
       .workspace-actions .pill-button {
-        width: 100%;
+        width: auto;
       }
 
       .status-chip {
@@ -814,7 +816,6 @@ def get_gui_html() -> str:
                     <strong id="readerTitle">Chapter preview</strong>
                     <button class="close-reader" id="closeReader">Close</button>
                   </div>
-                  <div class="reader-body" id="readerBody"></div>
                   <div class="media-panel" id="mediaPanel">
                     <div class="media-block hidden" id="audioBlock">
                       <label>Audio narration</label>
@@ -825,6 +826,7 @@ def get_gui_html() -> str:
                       <video controls id="chapterVideo"></video>
                     </div>
                   </div>
+                  <div class="reader-body" id="readerBody"></div>
                 </div>
               </div>
             </div>
@@ -856,7 +858,6 @@ def get_gui_html() -> str:
               <div class="book-meta">
                 <strong id="chapterReaderTitle">Chapter preview</strong>
               </div>
-              <div class="reader-body" id="chapterReaderBody"></div>
               <div class="media-panel" id="chapterMediaPanel">
                 <div class="media-block hidden" id="chapterViewAudioBlock">
                   <label>Chapter audio</label>
@@ -867,6 +868,7 @@ def get_gui_html() -> str:
                   <video controls id="chapterViewVideo"></video>
                 </div>
               </div>
+              <div class="reader-body" id="chapterReaderBody"></div>
             </div>
           </div>
         </div>
