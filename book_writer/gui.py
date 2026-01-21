@@ -624,6 +624,17 @@ def get_gui_html() -> str:
           <section class="shelf-section">
             <div class="section-header">
               <div>
+                <h2>Books</h2>
+                <p>Books tracked from the books directory, including media outputs.</p>
+              </div>
+              <span class="count-pill" id="bookCount">0 books</span>
+            </div>
+            <div class="shelf" id="bookShelf"></div>
+          </section>
+
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
                 <h2>Active outlines</h2>
                 <p>Ready-to-generate drafts pulled from the outlines directory.</p>
               </div>
@@ -641,17 +652,6 @@ def get_gui_html() -> str:
               <span class="count-pill" id="completedOutlineCount">0 outlines</span>
             </div>
             <div class="shelf" id="completedOutlineShelf"></div>
-          </section>
-
-          <section class="shelf-section">
-            <div class="section-header">
-              <div>
-                <h2>Books</h2>
-                <p>Books tracked from the books directory, including media outputs.</p>
-              </div>
-              <span class="count-pill" id="bookCount">0 books</span>
-            </div>
-            <div class="shelf" id="bookShelf"></div>
           </section>
         </section>
 
@@ -757,6 +757,7 @@ def get_gui_html() -> str:
               </div>
               <strong id="outlineWorkspaceTitle">Outline title</strong>
               <p class="meta-line" id="outlineWorkspacePath"></p>
+              <p class="meta-line" id="outlineWorkspaceSummary"></p>
               <div class="detail-section">
                 <h4>Outline actions</h4>
                 <div class="workspace-actions">
@@ -1070,6 +1071,7 @@ def get_gui_html() -> str:
       const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
       const outlineWorkspaceTitle = document.getElementById('outlineWorkspaceTitle');
       const outlineWorkspacePath = document.getElementById('outlineWorkspacePath');
+      const outlineWorkspaceSummary = document.getElementById('outlineWorkspaceSummary');
       const outlineWorkspaceContent = document.getElementById('outlineWorkspaceContent');
       const outlineWorkspaceGenerate = document.getElementById('outlineWorkspaceGenerate');
       const bookWorkspace = document.getElementById('bookWorkspace');
@@ -1116,6 +1118,7 @@ def get_gui_html() -> str:
         path: null,
       };
       let currentChapter = null;
+      let chapterAudioHandoff = null;
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
@@ -1185,6 +1188,65 @@ def get_gui_html() -> str:
         }
       };
 
+      const getChapterCardAudio = (chapterIndex) => {
+        const card = chapterShelf.querySelector(`article[data-chapter="${chapterIndex}"]`);
+        if (!card) return null;
+        return card.querySelector('audio');
+      };
+
+      const captureAudioState = (audio) => ({
+        currentTime: audio.currentTime || 0,
+        paused: audio.paused,
+        playbackRate: audio.playbackRate,
+        volume: audio.volume,
+        muted: audio.muted,
+      });
+
+      const applyAudioState = (audio, state) => {
+        if (!audio || !state) return;
+        audio.playbackRate = state.playbackRate;
+        audio.volume = state.volume;
+        audio.muted = state.muted;
+        const applyTime = () => {
+          const duration = Number.isFinite(audio.duration) ? audio.duration : null;
+          const nextTime =
+            duration !== null ? Math.min(state.currentTime, duration) : state.currentTime;
+          audio.currentTime = nextTime;
+          if (state.paused) {
+            audio.pause();
+          } else {
+            audio.play().catch(() => {});
+          }
+        };
+        if (audio.readyState >= 1) {
+          applyTime();
+        } else {
+          audio.addEventListener('loadedmetadata', applyTime, { once: true });
+        }
+      };
+
+      const handoffChapterAudioToDetail = (cardAudio, detailAudio, url) => {
+        if (!cardAudio || !detailAudio || !url) {
+          chapterAudioHandoff = null;
+          return;
+        }
+        if (cardAudio.dataset.audioUrl !== url) {
+          chapterAudioHandoff = null;
+          return;
+        }
+        const state = captureAudioState(cardAudio);
+        cardAudio.pause();
+        applyAudioState(detailAudio, state);
+        chapterAudioHandoff = { cardAudio, url };
+      };
+
+      const syncChapterAudioToCard = () => {
+        if (!chapterAudioHandoff || !chapterAudioHandoff.cardAudio) return;
+        if (chapterAudioHandoff.url !== chapterViewAudio.dataset.mediaUrl) return;
+        const state = captureAudioState(chapterViewAudio);
+        applyAudioState(chapterAudioHandoff.cardAudio, state);
+      };
+
       const createChapterCard = (bookDir, chapter) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
         const detail = chapter.summary || 'Select to preview chapter content.';
@@ -1204,6 +1266,7 @@ def get_gui_html() -> str:
           const audio = document.createElement('audio');
           audio.controls = true;
           audio.src = chapter.audio_url;
+          audio.dataset.audioUrl = chapter.audio_url;
           audio.addEventListener('click', (event) => {
             event.stopPropagation();
           });
@@ -1259,6 +1322,7 @@ def get_gui_html() -> str:
       const openChapterView = async (bookDir, chapter) => {
         if (!bookDir || !chapter) return;
         const chapterIndex = String(chapter.index);
+        const cardAudio = getChapterCardAudio(chapterIndex);
         currentChapter = { ...chapter, bookDir };
         chapterSelect.value = chapterIndex;
         openReader.disabled = false;
@@ -1278,6 +1342,7 @@ def get_gui_html() -> str:
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
         setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
+        handoffChapterAudioToDetail(cardAudio, chapterViewAudio, result.audio_url);
         await loadWorkspaceChapterContent(bookDir, chapterIndex);
         showChapterView();
       };
@@ -1337,6 +1402,11 @@ def get_gui_html() -> str:
           type === 'completed-outline' ? 'Completed outline' : 'Active outline';
         outlineWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
         outlineWorkspacePath.textContent = entry.path;
+        const summaryLines = [
+          `${entry.item_count || 0} sections`,
+          entry.preview || 'No preview available.',
+        ];
+        outlineWorkspaceSummary.textContent = summaryLines.join('\n');
         const result = await loadOutlineContent(entry.path);
         setOutlineContent(result.content || '');
       };
@@ -1375,10 +1445,12 @@ def get_gui_html() -> str:
         if (!url) {
           block.classList.add('hidden');
           element.removeAttribute('src');
+          element.dataset.mediaUrl = '';
           return;
         }
         block.classList.remove('hidden');
         element.src = url;
+        element.dataset.mediaUrl = url;
         element.load();
       };
 
@@ -1416,8 +1488,7 @@ def get_gui_html() -> str:
           } else {
             outlines.forEach((outline) => {
               const title = outline.title || outline.path.split('/').pop();
-              const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
-              const detail = `${outline.item_count || 0} sections${previewText}`;
+              const detail = `${outline.item_count || 0} sections`;
               const card = createCard(
                 title,
                 'Outline ready',
@@ -1442,8 +1513,7 @@ def get_gui_html() -> str:
           } else {
             completed.forEach((outline) => {
               const title = outline.title || outline.path.split('/').pop();
-              const previewText = outline.preview ? `\\n\\n${outline.preview}` : '\\n\\nNo preview available.';
-              const detail = `${outline.item_count || 0} sections${previewText}`;
+              const detail = `${outline.item_count || 0} sections`;
               const card = createCard(
                 title,
                 'Archived outline',
@@ -1703,6 +1773,7 @@ def get_gui_html() -> str:
       });
 
       chapterBack.addEventListener('click', () => {
+        syncChapterAudioToCard();
         showDetailView();
       });
 
