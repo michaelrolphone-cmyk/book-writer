@@ -462,6 +462,8 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                     "",
                     "",
                     "",
+                    False,
+                    False,
                     "curious-storyteller",
                     "instructive self help guide",
                     lambda choices, **kwargs: [choices[1].value],

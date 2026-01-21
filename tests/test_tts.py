@@ -238,7 +238,7 @@ class TestTTS(unittest.TestCase):
             self.assertTrue(output_path.exists())
             self.assertEqual(output_path.read_bytes(), b"ok")
 
-    def test_edge_tts_keeps_partial_audio_when_chunk_fails(self) -> None:
+    def test_edge_tts_raises_when_chunk_fails(self) -> None:
         class FakeChunkError(Exception):
             pass
 
@@ -260,14 +260,14 @@ class TestTTS(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "chapter.mp3"
             with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
-                _synthesize_with_edge_tts(
-                    text=long_text,
-                    output_path=output_path,
-                    settings=TTSSettings(enabled=True),
-                )
+                with self.assertRaises(TTSSynthesisError):
+                    _synthesize_with_edge_tts(
+                        text=long_text,
+                        output_path=output_path,
+                        settings=TTSSettings(enabled=True),
+                    )
 
-            self.assertTrue(output_path.exists())
-            self.assertEqual(output_path.read_bytes(), b"part")
+            self.assertFalse(output_path.exists())
 
 if __name__ == "__main__":
     unittest.main()

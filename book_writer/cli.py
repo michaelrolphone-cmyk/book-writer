@@ -196,6 +196,7 @@ def _prompt_for_task_settings(
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
+        book_only=args.tts_book_only,
     )
     if audio_enabled:
         voice = questionary.text(
@@ -225,6 +226,7 @@ def _prompt_for_task_settings(
             pitch=pitch or args.tts_pitch,
             audio_dirname=audio_dir or args.tts_audio_dir,
             overwrite_audio=overwrite_audio,
+            book_only=args.tts_book_only,
         )
 
     video_enabled = "video" in selected
@@ -478,6 +480,10 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         "Overwrite existing audio files?",
         args.tts_overwrite,
     )
+    book_only = _prompt_yes_no(
+        "Generate only the full book audiobook (skip chapter audio)?",
+        args.tts_book_only,
+    )
     return TTSSettings(
         enabled=True,
         voice=voice or args.tts_voice,
@@ -485,6 +491,7 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         pitch=pitch or args.tts_pitch,
         audio_dirname=audio_dir or args.tts_audio_dir,
         overwrite_audio=overwrite_audio,
+        book_only=book_only,
     )
 
 
@@ -544,6 +551,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
+        book_only=args.tts_book_only,
     )
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
@@ -772,6 +780,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Overwrite existing audio files when generating narration.",
     )
     parser.add_argument(
+        "--tts-book-only",
+        action="store_true",
+        help="Generate only the full book MP3 when producing audio narration.",
+    )
+    parser.add_argument(
         "--video",
         action="store_true",
         help="Enable MP4 chapter videos using a background video and chapter audio.",
@@ -871,6 +884,7 @@ def main() -> int:
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
+        book_only=args.tts_book_only,
     )
     video_settings = VideoSettings(
         enabled=args.video,

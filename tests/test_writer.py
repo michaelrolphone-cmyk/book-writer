@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem
-from book_writer.tts import TTSSettings
+from book_writer.tts import TTSSynthesisError, TTSSettings
 from book_writer.video import VideoSettings
 from book_writer.writer import (
     ChapterContext,
@@ -196,6 +196,7 @@ class TestWriter(unittest.TestCase):
                     / "book.mp3",
                     settings=tts_settings,
                     verbose=False,
+                    raise_on_error=True,
                 ),
                 call(
                     text="Synopsis text",
@@ -251,6 +252,7 @@ class TestWriter(unittest.TestCase):
                     / "book.mp3",
                     settings=tts_settings,
                     verbose=False,
+                    raise_on_error=True,
                 ),
                 call(
                     text="Synopsis",
@@ -313,6 +315,7 @@ class TestWriter(unittest.TestCase):
                     output_path=audio_dir / "book.mp3",
                     settings=tts_settings,
                     verbose=False,
+                    raise_on_error=True,
                 ),
                 call(
                     text="Synopsis",
@@ -322,6 +325,67 @@ class TestWriter(unittest.TestCase):
                 ),
             ]
         )
+
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    def test_generate_book_audio_book_only_skips_chapters_and_synopsis(
+        self,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        tts_settings = TTSSettings(enabled=True, book_only=True)
+        synthesize_text_mock.return_value = Path("book.mp3")
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+            synopsis_path = output_dir / "back-cover-synopsis.md"
+            synopsis_path.write_text("Synopsis", encoding="utf-8")
+            audiobook_text = build_audiobook_text(
+                "Chapter One",
+                "Marissa Bard",
+                [chapter_path.read_text(encoding="utf-8")],
+            )
+
+            generate_book_audio(output_dir, tts_settings)
+
+        synthesize_chapter_mock.assert_not_called()
+        synthesize_text_mock.assert_called_once_with(
+            text=audiobook_text,
+            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            settings=tts_settings,
+            verbose=False,
+            raise_on_error=True,
+        )
+
+    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.synthesize_chapter_audio")
+    def test_generate_book_audio_raises_when_book_audio_fails(
+        self,
+        synthesize_chapter_mock: Mock,
+        synthesize_text_mock: Mock,
+    ) -> None:
+        tts_settings = TTSSettings(enabled=True)
+        synthesize_chapter_mock.return_value = Path("audio/001-chapter-one.mp3")
+        synthesize_text_mock.side_effect = TTSSynthesisError("no audio")
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            (output_dir / "book.md").write_text("# Title\n", encoding="utf-8")
+            (output_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n", encoding="utf-8"
+            )
+
+            with self.assertRaises(TTSSynthesisError) as context:
+                generate_book_audio(output_dir, tts_settings)
+
+            self.assertIn(
+                "Failed to generate full audiobook audio",
+                str(context.exception),
+            )
 
     @patch("book_writer.writer.synthesize_chapter_video")
     def test_generate_book_videos_uses_existing_audio(
@@ -426,6 +490,7 @@ class TestWriter(unittest.TestCase):
                     / "book.mp3",
                     settings=tts_settings,
                     verbose=False,
+                    raise_on_error=True,
                 ),
                 call(
                     text="Synopsis text",
@@ -942,6 +1007,7 @@ class TestWriter(unittest.TestCase):
             output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
             settings=tts_settings,
             verbose=False,
+            raise_on_error=True,
         )
         run_mock.assert_called_once()
 

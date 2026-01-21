@@ -15,6 +15,7 @@ class TestServerHelpers(unittest.TestCase):
         self.assertEqual(settings.voice, "en-US-JennyNeural")
         self.assertEqual(settings.audio_dirname, "audio")
         self.assertFalse(settings.overwrite_audio)
+        self.assertFalse(settings.book_only)
 
     def test_parse_video_settings_defaults(self) -> None:
         settings = server._parse_video_settings({})

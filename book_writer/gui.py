@@ -689,6 +689,10 @@ def get_gui_html() -> str:
               <input type="checkbox" id="audioOverwrite" />
               Overwrite existing audio
             </label>
+            <label class="checkbox">
+              <input type="checkbox" id="audioBookOnly" />
+              Only generate full book audio
+            </label>
             <label>Video output dir</label>
             <input id="videoDir" placeholder="video" />
             <label>Background video path</label>
@@ -1451,6 +1455,7 @@ def get_gui_html() -> str:
             tts_settings: {
               audio_dirname: document.getElementById('audioDir').value || 'audio',
               overwrite_audio: document.getElementById('audioOverwrite').checked,
+              book_only: document.getElementById('audioBookOnly').checked,
             },
           };
           await postJson('/api/generate-audio', payload);

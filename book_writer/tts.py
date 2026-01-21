@@ -21,6 +21,7 @@ class TTSSettings:
     pitch: str = "+0Hz"
     audio_dirname: str = "audio"
     overwrite_audio: bool = False
+    book_only: bool = False
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -200,12 +201,12 @@ def _synthesize_with_edge_tts(
                     break
                 part_paths.append(part_path)
 
+            if chunk_error is not None:
+                raise chunk_error
             if part_paths:
                 _concat_audio_files(part_paths, output_path)
                 return
-            if chunk_error is None:
-                return
-            raise chunk_error
+            return
     except TTSSynthesisError as error:
         async def _fallback() -> None:
             try:
@@ -252,6 +253,7 @@ def synthesize_text_audio(
     output_path: Path,
     settings: TTSSettings,
     verbose: bool = False,
+    raise_on_error: bool = False,
 ) -> Path | None:
     if not settings.enabled:
         return None
@@ -266,6 +268,8 @@ def synthesize_text_audio(
     except TTSSynthesisError as error:
         if output_path.exists():
             output_path.unlink()
+        if raise_on_error:
+            raise
         if verbose:
             print(f"[tts] Skipped {output_path.name}: {error}")
         return None
