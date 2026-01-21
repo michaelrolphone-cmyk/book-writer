@@ -434,6 +434,59 @@ def get_gui_html() -> str:
         background: var(--accent);
       }
 
+      .cover-progress {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: inset 4px 4px 10px var(--shadow-dark),
+          inset -4px -4px 10px var(--shadow-light);
+      }
+
+      .cover-progress.hidden {
+        display: none;
+      }
+
+      .cover-progress-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 14px;
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+
+      .cover-progress-bar {
+        position: relative;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(31, 111, 235, 0.12);
+        overflow: hidden;
+      }
+
+      .cover-progress-bar span {
+        position: absolute;
+        top: 0;
+        left: -40%;
+        height: 100%;
+        width: 40%;
+        background: var(--accent);
+        border-radius: 999px;
+        animation: cover-progress 1.2s ease-in-out infinite;
+      }
+
+      @keyframes cover-progress {
+        0% {
+          left: -40%;
+        }
+        50% {
+          left: 30%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+
       .panel {
         padding: 22px;
         border-radius: 24px;
@@ -791,6 +844,15 @@ def get_gui_html() -> str:
             <div class="workspace-actions">
               <button class="pill-button" id="generateBookCover">Generate Book Cover</button>
               <button class="pill-button" id="generateChapterCovers">Generate Chapter Covers</button>
+            </div>
+            <div class="cover-progress hidden" id="coverProgress">
+              <div class="cover-progress-header">
+                <strong id="coverProgressLabel">Generating cover art</strong>
+                <span>In progress</span>
+              </div>
+              <div class="cover-progress-bar">
+                <span></span>
+              </div>
             </div>
           </div>
 
@@ -1189,6 +1251,8 @@ def get_gui_html() -> str:
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
       const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
       const bookWorkspaceChapterCovers = document.getElementById('bookWorkspaceChapterCovers');
+      const coverProgress = document.getElementById('coverProgress');
+      const coverProgressLabel = document.getElementById('coverProgressLabel');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -1639,6 +1703,27 @@ def get_gui_html() -> str:
       const getChapterCoverDir = () =>
         document.getElementById('chapterCoverDir').value || 'chapter_covers';
 
+      const toggleCoverActions = (disabled) => {
+        [
+          document.getElementById('generateBookCover'),
+          document.getElementById('generateChapterCovers'),
+          bookWorkspaceCover,
+          bookWorkspaceChapterCovers,
+          chapterGenerateCover,
+        ].forEach((button) => {
+          if (button) {
+            button.disabled = disabled;
+          }
+        });
+      };
+
+      const setCoverProgress = (active, label) => {
+        if (!coverProgress) return;
+        coverProgress.classList.toggle('hidden', !active);
+        coverProgressLabel.textContent = label || 'Generating cover art';
+        toggleCoverActions(active);
+      };
+
       const loadCatalog = async () => {
         try {
           const previousOutline = outlineSelect.value;
@@ -1887,6 +1972,7 @@ def get_gui_html() -> str:
             log('Select a book before generating a cover.');
             return;
           }
+          setCoverProgress(true, 'Generating book cover art...');
           const payload = {
             book_dir: bookSelect.value,
             cover_settings: buildCoverSettings(),
@@ -1896,6 +1982,8 @@ def get_gui_html() -> str:
           await loadCatalog();
         } catch (error) {
           log(`Cover generation failed: ${error.message}`);
+        } finally {
+          setCoverProgress(false);
         }
       });
 
@@ -1905,6 +1993,7 @@ def get_gui_html() -> str:
             log('Select a book before generating chapter covers.');
             return;
           }
+          setCoverProgress(true, 'Generating chapter cover art...');
           const payload = {
             book_dir: bookSelect.value,
             chapter_cover_dir: getChapterCoverDir(),
@@ -1915,6 +2004,8 @@ def get_gui_html() -> str:
           await loadCatalog();
         } catch (error) {
           log(`Chapter covers failed: ${error.message}`);
+        } finally {
+          setCoverProgress(false);
         }
       });
 
@@ -2037,6 +2128,7 @@ def get_gui_html() -> str:
           return;
         }
         try {
+          setCoverProgress(true, 'Generating chapter cover art...');
           const payload = {
             book_dir: currentChapter.bookDir,
             chapter: currentChapter.index,
@@ -2057,6 +2149,8 @@ def get_gui_html() -> str:
           }
         } catch (error) {
           log(`Chapter cover failed: ${error.message}`);
+        } finally {
+          setCoverProgress(false);
         }
       });
 

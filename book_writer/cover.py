@@ -35,6 +35,8 @@ DEFAULT_COVER_COMMAND = [
     "run",
     "StableDiffusionSample",
     "{prompt}",
+    "{negative_prompt_flag}",
+    "{negative_prompt}",
     "--resource-path",
     "{model_path}",
     "{seed_flag}",
@@ -43,14 +45,23 @@ DEFAULT_COVER_COMMAND = [
     "{output_dir}",
 ]
 
+DEFAULT_NEGATIVE_PROMPT = (
+    "text, letters, typography, watermark, logo, signature"
+)
+DEFAULT_COVER_GUIDANCE = (
+    "Cover art illustration, not a book cover. "
+    "No text, no typography, no letters, no watermark, no logo."
+)
+
 
 def build_cover_prompt(title: str, synopsis: str) -> str:
     synopsis_text = _truncate_prompt_text(synopsis)
-    return (
-        f"Book cover illustration for '{title}'. "
+    prompt = (
+        f"Cover art illustration for '{title}'. "
         f"Visualize: {synopsis_text} "
-        "No text, no typography, cinematic lighting, highly detailed."
+        "Cinematic lighting, highly detailed."
     ).strip()
+    return _ensure_cover_prompt(prompt)
 
 
 def build_chapter_cover_prompt(
@@ -63,11 +74,12 @@ def build_chapter_cover_prompt(
     ]
     summary = " ".join(lines) or chapter_title
     summary_text = _truncate_prompt_text(summary)
-    return (
-        f"Chapter cover illustration for '{chapter_title}' in '{book_title}'. "
+    prompt = (
+        f"Cover art illustration for chapter '{chapter_title}' in '{book_title}'. "
         f"Visualize: {summary_text} "
-        "No text, no typography, cinematic lighting, highly detailed."
+        "Cinematic lighting, highly detailed."
     ).strip()
+    return _ensure_cover_prompt(prompt)
 
 
 def _render_command(
@@ -190,8 +202,14 @@ def generate_book_cover(
                 "../coreml-stable-diffusion-v1-4/original/compiled or pass "
                 "--cover-model-path explicitly."
             )
-    prompt = settings.prompt or build_cover_prompt(title, synopsis)
-    command = _resolve_command(settings, prompt, output_path, output_dir)
+    prompt = _ensure_cover_prompt(settings.prompt or build_cover_prompt(title, synopsis))
+    negative_prompt = _merge_negative_prompt(settings.negative_prompt)
+    command = _resolve_command(
+        replace(settings, negative_prompt=negative_prompt),
+        prompt,
+        output_path,
+        output_dir,
+    )
     try:
         subprocess.run(
             command,
@@ -240,10 +258,17 @@ def generate_chapter_cover(
                 "../coreml-stable-diffusion-v1-4/original/compiled or pass "
                 "--cover-model-path explicitly."
             )
-    prompt = settings.prompt or build_chapter_cover_prompt(
-        book_title, chapter_title, chapter_content
+    prompt = _ensure_cover_prompt(
+        settings.prompt
+        or build_chapter_cover_prompt(book_title, chapter_title, chapter_content)
     )
-    command = _resolve_command(settings, prompt, output_path, output_dir)
+    negative_prompt = _merge_negative_prompt(settings.negative_prompt)
+    command = _resolve_command(
+        replace(settings, negative_prompt=negative_prompt),
+        prompt,
+        output_path,
+        output_dir,
+    )
     try:
         subprocess.run(
             command,
@@ -272,3 +297,20 @@ def _truncate_prompt_text(text: str) -> str:
     if len(text_value) > 600:
         return text_value[:597].rstrip() + "..."
     return text_value
+
+
+def _ensure_cover_prompt(prompt: str) -> str:
+    prompt_value = prompt.strip()
+    prompt_lower = prompt_value.lower()
+    if "not a book cover" in prompt_lower and "no text" in prompt_lower:
+        return prompt_value
+    return f"{prompt_value} {DEFAULT_COVER_GUIDANCE}".strip()
+
+
+def _merge_negative_prompt(negative_prompt: Optional[str]) -> str:
+    if negative_prompt:
+        negative_value = negative_prompt.strip()
+        if DEFAULT_NEGATIVE_PROMPT.lower() in negative_value.lower():
+            return negative_value
+        return f"{negative_value}, {DEFAULT_NEGATIVE_PROMPT}"
+    return DEFAULT_NEGATIVE_PROMPT

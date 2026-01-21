@@ -24,6 +24,8 @@ class TestCover(unittest.TestCase):
         self.assertIn("Starbound", prompt)
         self.assertIn("discovery and resilience", prompt)
         self.assertIn("No text", prompt)
+        self.assertIn("cover art", prompt.lower())
+        self.assertIn("not a book cover", prompt.lower())
 
     def test_build_cover_prompt_truncates_long_synopsis(self) -> None:
         synopsis = " ".join(["word"] * 400)
@@ -51,6 +53,8 @@ class TestCover(unittest.TestCase):
         self.assertIn("Chapter One", prompt)
         self.assertIn("My Book", prompt)
         self.assertIn("First scene.", prompt)
+        self.assertIn("cover art", prompt.lower())
+        self.assertIn("No text", prompt)
 
     @patch("book_writer.cover.subprocess.run")
     def test_generate_book_cover_runs_command(self, run_mock: Mock) -> None:
@@ -73,6 +77,14 @@ class TestCover(unittest.TestCase):
         called_kwargs = run_mock.call_args.kwargs
         self.assertIn("StableDiffusionSample", called_args)
         self.assertIn("--output-path", called_args)
+        self.assertIn("--negative-prompt", called_args)
+        negative_prompt = next(
+            arg for arg in called_args if "typography" in arg
+        )
+        self.assertIn("text", negative_prompt)
+        self.assertTrue(
+            any("not a book cover" in arg for arg in called_args)
+        )
         self.assertIn(str(output_dir), called_args)
         self.assertEqual(result, output_dir / settings.output_name)
         self.assertIn("env", called_kwargs)
