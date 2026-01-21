@@ -52,6 +52,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"coverProgressLabel\"", html)
         self.assertIn("Select a book before generating audio.", html)
         self.assertIn("Select a book before generating a cover.", html)
+        self.assertIn("Select an outline before generating a book.", html)
         self.assertIn(
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
             html,
@@ -64,6 +65,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("handoffChapterAudioToDetail", html)
         self.assertIn("restoreChapterAudioToCard", html)
         self.assertIn("setCoverProgress(true", html)
+        self.assertIn("buildGenerateBookPayload", html)
         self.assertIn("No preview available.", html)
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)

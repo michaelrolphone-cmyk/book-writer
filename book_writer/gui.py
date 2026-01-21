@@ -1385,6 +1385,7 @@ def get_gui_html() -> str:
         type: null,
         path: null,
       };
+      let currentChapters = [];
       let currentChapter = null;
       let chapterAudioHandoff = null;
       let activeChapterAudio = chapterViewAudio;
@@ -1747,9 +1748,13 @@ def get_gui_html() -> str:
         openReader.disabled = true;
         setSelectOptions(chapterSelect, [], 'Select a chapter');
         readerPanel.classList.remove('active');
-        if (!bookDir) return [];
+        if (!bookDir) {
+          currentChapters = [];
+          return [];
+        }
         try {
           const rawChapters = await fetchChapters(bookDir);
+          currentChapters = rawChapters;
           const chapters = rawChapters.map((chapter) => ({
             value: String(chapter.index),
             label: `${chapter.index}. ${chapter.title}`,
@@ -1805,23 +1810,29 @@ def get_gui_html() -> str:
         return Number.isNaN(parsed) ? null : parsed;
       };
 
-      const buildCoverSettings = () => ({
-        enabled: true,
-        prompt: document.getElementById('coverPrompt').value || null,
-        negative_prompt: document.getElementById('coverNegativePrompt').value || null,
-        model_path: document.getElementById('coverModelPath').value || null,
-        module_path: document.getElementById('coverModulePath').value || null,
-        steps: parseOptionalNumber(document.getElementById('coverSteps').value),
-        guidance_scale: parseOptionalNumber(
-          document.getElementById('coverGuidanceScale').value,
-        ),
-        seed: parseOptionalNumber(document.getElementById('coverSeed').value),
-        width: parseOptionalNumber(document.getElementById('coverWidth').value),
-        height: parseOptionalNumber(document.getElementById('coverHeight').value),
-        output_name: document.getElementById('coverOutputName').value || null,
-        overwrite: document.getElementById('coverOverwrite').checked,
-        command: document.getElementById('coverCommand').value || null,
-      });
+      const buildCoverSettings = (options = {}) => {
+        const settings = {
+          enabled: true,
+          prompt: document.getElementById('coverPrompt').value || null,
+          negative_prompt: document.getElementById('coverNegativePrompt').value || null,
+          model_path: document.getElementById('coverModelPath').value || null,
+          module_path: document.getElementById('coverModulePath').value || null,
+          steps: parseOptionalNumber(document.getElementById('coverSteps').value),
+          guidance_scale: parseOptionalNumber(
+            document.getElementById('coverGuidanceScale').value,
+          ),
+          seed: parseOptionalNumber(document.getElementById('coverSeed').value),
+          width: parseOptionalNumber(document.getElementById('coverWidth').value),
+          height: parseOptionalNumber(document.getElementById('coverHeight').value),
+          output_name: document.getElementById('coverOutputName').value || null,
+          overwrite: document.getElementById('coverOverwrite').checked,
+          command: document.getElementById('coverCommand').value || null,
+        };
+        if (options.forceOverwrite) {
+          settings.overwrite = true;
+        }
+        return settings;
+      };
 
       const getChapterCoverDir = () =>
         document.getElementById('chapterCoverDir').value || 'chapter_covers';
@@ -2006,16 +2017,18 @@ def get_gui_html() -> str:
         }
       };
 
+      const buildGenerateBookPayload = (outlinePath) => ({
+        outline_path: outlinePath || 'OUTLINE.md',
+        output_dir: document.getElementById('outputDir').value || 'output',
+        base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
+        model: document.getElementById('modelName').value || 'local-model',
+        tone: document.getElementById('tone').value || 'instructive self help guide',
+        byline: document.getElementById('byline').value || 'Marissa Bard',
+      });
+
       document.getElementById('generateBook').addEventListener('click', async () => {
         try {
-          const payload = {
-            outline_path: outlineSelect.value || 'OUTLINE.md',
-            output_dir: document.getElementById('outputDir').value || 'output',
-            base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
-            model: document.getElementById('modelName').value || 'local-model',
-            tone: document.getElementById('tone').value || 'instructive self help guide',
-            byline: document.getElementById('byline').value || 'Marissa Bard',
-          };
+          const payload = buildGenerateBookPayload(outlineSelect.value);
           const result = await postJson('/api/generate-book', payload);
           log(`Generated book with ${result.written_files.length} files.`);
         } catch (error) {
@@ -2096,11 +2109,12 @@ def get_gui_html() -> str:
             return;
           }
           setCoverProgress(true, 'Generating book cover art...');
+          const forceOverwrite = Boolean(bookCoverImage.dataset.mediaUrl);
           const payload = {
             book_dir: bookSelect.value,
             base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
             model: document.getElementById('modelName').value || 'local-model',
-            cover_settings: buildCoverSettings(),
+            cover_settings: buildCoverSettings({ forceOverwrite }),
           };
           await postJson('/api/generate-cover', payload);
           log('Book cover generation complete.');
@@ -2119,12 +2133,13 @@ def get_gui_html() -> str:
             return;
           }
           setCoverProgress(true, 'Generating chapter cover art...');
+          const forceOverwrite = currentChapters.some((chapter) => chapter.cover_url);
           const payload = {
             book_dir: bookSelect.value,
             chapter_cover_dir: getChapterCoverDir(),
             base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
             model: document.getElementById('modelName').value || 'local-model',
-            cover_settings: buildCoverSettings(),
+            cover_settings: buildCoverSettings({ forceOverwrite }),
           };
           await postJson('/api/generate-chapter-covers', payload);
           log('Chapter cover generation complete.');
@@ -2256,13 +2271,16 @@ def get_gui_html() -> str:
         }
         try {
           setCoverProgress(true, 'Generating chapter cover art...');
+          const forceOverwrite = Boolean(
+            chapterCoverImage.dataset.mediaUrl || currentChapter.cover_url,
+          );
           const payload = {
             book_dir: currentChapter.bookDir,
             chapter: currentChapter.index,
             chapter_cover_dir: getChapterCoverDir(),
             base_url: document.getElementById('baseUrl').value || 'http://localhost:1234',
             model: document.getElementById('modelName').value || 'local-model',
-            cover_settings: buildCoverSettings(),
+            cover_settings: buildCoverSettings({ forceOverwrite }),
           };
           await postJson('/api/generate-chapter-covers', payload);
           log('Chapter cover generation complete.');
@@ -2333,8 +2351,19 @@ def get_gui_html() -> str:
         }
       });
 
-      outlineWorkspaceGenerate.addEventListener('click', () => {
-        document.getElementById('generateBook').click();
+      outlineWorkspaceGenerate.addEventListener('click', async () => {
+        const outlinePath = outlineWorkspacePath.textContent;
+        if (!outlinePath) {
+          log('Select an outline before generating a book.');
+          return;
+        }
+        try {
+          const payload = buildGenerateBookPayload(outlinePath);
+          const result = await postJson('/api/generate-book', payload);
+          log(`Generated book with ${result.written_files.length} files.`);
+        } catch (error) {
+          log(`Generate failed: ${error.message}`);
+        }
       });
 
       generateOutline.addEventListener('click', async () => {
