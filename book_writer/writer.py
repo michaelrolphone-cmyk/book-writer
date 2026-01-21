@@ -11,7 +11,12 @@ from urllib import request
 from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem, outline_to_text, slugify
-from book_writer.tts import TTSSettings, synthesize_chapter_audio, synthesize_text_audio
+from book_writer.tts import (
+    TTSSynthesisError,
+    TTSSettings,
+    synthesize_chapter_audio,
+    synthesize_text_audio,
+)
 from book_writer.video import VideoSettings, synthesize_chapter_video
 
 
@@ -579,18 +584,19 @@ def generate_book_audio(
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
     created: List[Path] = []
     audio_dir = output_dir / tts_settings.audio_dirname
-    for chapter_file in chapter_files:
-        audio_path = audio_dir / f"{chapter_file.stem}.mp3"
-        if audio_path.exists() and not tts_settings.overwrite_audio:
-            continue
-        generated = synthesize_chapter_audio(
-            chapter_path=chapter_file,
-            output_dir=audio_dir,
-            settings=tts_settings,
-            verbose=verbose,
-        )
-        if generated:
-            created.append(generated)
+    if not tts_settings.book_only:
+        for chapter_file in chapter_files:
+            audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+            if audio_path.exists() and not tts_settings.overwrite_audio:
+                continue
+            generated = synthesize_chapter_audio(
+                chapter_path=chapter_file,
+                output_dir=audio_dir,
+                settings=tts_settings,
+                verbose=verbose,
+            )
+            if generated:
+                created.append(generated)
 
     book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
     audiobook_text = build_audiobook_text(
@@ -600,28 +606,35 @@ def generate_book_audio(
     )
     book_audio_path = audio_dir / "book.mp3"
     if tts_settings.overwrite_audio or not book_audio_path.exists():
-        generated = synthesize_text_audio(
-            text=audiobook_text,
-            output_path=book_audio_path,
-            settings=tts_settings,
-            verbose=verbose,
-        )
+        try:
+            generated = synthesize_text_audio(
+                text=audiobook_text,
+                output_path=book_audio_path,
+                settings=tts_settings,
+                verbose=verbose,
+                raise_on_error=True,
+            )
+        except TTSSynthesisError as error:
+            raise TTSSynthesisError(
+                f"Failed to generate full audiobook audio: {error}"
+            ) from error
         if generated:
             created.append(generated)
 
-    synopsis_path = output_dir / "back-cover-synopsis.md"
-    synopsis_audio_path = audio_dir / "back-cover-synopsis.mp3"
-    if synopsis_path.exists() and (
-        tts_settings.overwrite_audio or not synopsis_audio_path.exists()
-    ):
-        generated = synthesize_text_audio(
-            text=synopsis_path.read_text(encoding="utf-8"),
-            output_path=synopsis_audio_path,
-            settings=tts_settings,
-            verbose=verbose,
-        )
-        if generated:
-            created.append(generated)
+    if not tts_settings.book_only:
+        synopsis_path = output_dir / "back-cover-synopsis.md"
+        synopsis_audio_path = audio_dir / "back-cover-synopsis.mp3"
+        if synopsis_path.exists() and (
+            tts_settings.overwrite_audio or not synopsis_audio_path.exists()
+        ):
+            generated = synthesize_text_audio(
+                text=synopsis_path.read_text(encoding="utf-8"),
+                output_path=synopsis_audio_path,
+                settings=tts_settings,
+                verbose=verbose,
+            )
+            if generated:
+                created.append(generated)
     return created
 
 
@@ -822,12 +835,18 @@ def expand_book(
         byline,
         [path.read_text(encoding="utf-8") for path in all_chapter_files],
     )
-    synthesize_text_audio(
-        text=audiobook_text,
-        output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-        settings=tts_settings,
-        verbose=verbose,
-    )
+    try:
+        synthesize_text_audio(
+            text=audiobook_text,
+            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            settings=tts_settings,
+            verbose=verbose,
+            raise_on_error=True,
+        )
+    except TTSSynthesisError as error:
+        raise TTSSynthesisError(
+            f"Failed to generate full audiobook audio: {error}"
+        ) from error
     if verbose:
         print("[expand] Wrote book.mp3 for full audiobook.")
     _write_nextsteps(output_dir, nextsteps_sections)
@@ -989,12 +1008,18 @@ def write_book(
         byline,
         [path.read_text(encoding="utf-8") for path in written_files],
     )
-    synthesize_text_audio(
-        text=audiobook_text,
-        output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-        settings=tts_settings,
-        verbose=verbose,
-    )
+    try:
+        synthesize_text_audio(
+            text=audiobook_text,
+            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            settings=tts_settings,
+            verbose=verbose,
+            raise_on_error=True,
+        )
+    except TTSSynthesisError as error:
+        raise TTSSynthesisError(
+            f"Failed to generate full audiobook audio: {error}"
+        ) from error
     if verbose:
         print("[write] Wrote book.mp3 for full audiobook.")
     synopsis_prompt = build_synopsis_prompt(

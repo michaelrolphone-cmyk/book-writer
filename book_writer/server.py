@@ -49,6 +49,7 @@ def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
         pitch=tts_payload.get("pitch", "+0Hz"),
         audio_dirname=tts_payload.get("audio_dirname", "audio"),
         overwrite_audio=bool(tts_payload.get("overwrite_audio", False)),
+        book_only=bool(tts_payload.get("book_only", False)),
     )
 
 
