@@ -54,6 +54,7 @@ class TestGui(unittest.TestCase):
         self.assertIn(".workspace-actions {", html)
         self.assertIn("display: flex;", html)
         self.assertIn("width: auto;", html)
+        self.assertIn(".book-cover-image {", html)
         book_shelf_index = html.index("id=\"bookShelf\"")
         outline_shelf_index = html.index("id=\"outlineShelf\"")
         self.assertLess(book_shelf_index, outline_shelf_index)
