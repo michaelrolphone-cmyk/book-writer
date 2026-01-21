@@ -79,6 +79,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("sanitizeTitleForDisplay", html)
         self.assertIn("displayBookTitle", html)
         self.assertIn("displayChapterTitle", html)
+        self.assertIn("ensureLazyAudioSource", html)
+        self.assertIn("audio.preload = 'none';", html)
         self.assertIn("cleaned = cleaned.replace(/^[\\-–—]+\\s*/, '');", html)
         self.assertIn("renderCatalog", html)
         self.assertIn("filterEntries", html)
