@@ -1160,9 +1160,19 @@ def get_gui_html() -> str:
         return `linear-gradient(135deg, ${start} 0%, ${end} 100%)`;
       };
 
-      const createCard = (title, status, detail, tag, accentLabel, progress, coverUrl = null) => {
+      const createCard = (
+        title,
+        status,
+        detail,
+        tag,
+        accentLabel,
+        progress,
+        coverUrl = null,
+        displayTitle = null,
+      ) => {
         const card = document.createElement('article');
         card.className = 'book-card';
+        const resolvedTitle = displayTitle || title;
 
         const cover = document.createElement('div');
         cover.className = 'book-cover';
@@ -1171,14 +1181,14 @@ def get_gui_html() -> str:
           const coverImage = document.createElement('img');
           coverImage.className = 'book-cover-image';
           coverImage.src = coverUrl;
-          coverImage.alt = title;
+          coverImage.alt = resolvedTitle;
           cover.appendChild(coverImage);
         } else {
-          cover.style.background = gradientFor(title);
+          cover.style.background = gradientFor(resolvedTitle);
         }
         const coverTitle = document.createElement('span');
         coverTitle.className = 'book-cover-title';
-        coverTitle.textContent = title;
+        coverTitle.textContent = resolvedTitle;
         cover.appendChild(coverTitle);
 
         const content = document.createElement('div');
@@ -1283,6 +1293,36 @@ def get_gui_html() -> str:
         return html;
       };
 
+      const stripMarkdownSymbols = (value) => {
+        if (!value) return '';
+        let cleaned = String(value);
+        cleaned = cleaned.replace(/!\\[([^\\]]*)\\]\\([^)]+\\)/g, '$1');
+        cleaned = cleaned.replace(/\\[([^\\]]+)\\]\\([^)]+\\)/g, '$1');
+        cleaned = cleaned.replace(/[`*_~>#]/g, '');
+        cleaned = cleaned.replace(/[()[\\]]/g, '');
+        cleaned = cleaned.replace(/\\s+/g, ' ').trim();
+        return cleaned;
+      };
+
+      const sanitizeTitleForDisplay = (value, type) => {
+        const base = stripMarkdownSymbols(value);
+        if (!base) return '';
+        let cleaned = base;
+        if (type === 'book') {
+          cleaned = cleaned.replace(/^(book\\s+)?title\\b\\s*[:\\-–]?\\s*/i, '');
+          cleaned = cleaned.replace(/\\btitle\\b/gi, '').replace(/\\s+/g, ' ').trim();
+        }
+        if (type === 'chapter') {
+          cleaned = cleaned.replace(/^chapter\\s+\\d+\\s*[:\\-–]?\\s*/i, '');
+        }
+        cleaned = cleaned.replace(/\\s+/g, ' ').trim();
+        return cleaned || base;
+      };
+
+      const displayBookTitle = (title) => sanitizeTitleForDisplay(title, 'book');
+
+      const displayChapterTitle = (title) => sanitizeTitleForDisplay(title, 'chapter');
+
       const outlineSelect = document.getElementById('outlineSelect');
       const bookSelect = document.getElementById('bookSelect');
       const chapterSelect = document.getElementById('chapterSelect');
@@ -1373,7 +1413,7 @@ def get_gui_html() -> str:
         `${outline.title || outline.path.split('/').pop()} (${outline.item_count || 0} sections)`;
 
       const bookLabel = (book) =>
-        `${book.title} (${book.chapter_count || 0} chapters)`;
+        `${displayBookTitle(book.title)} (${book.chapter_count || 0} chapters)`;
 
       const catalogState = {
         outlines: [],
@@ -1553,6 +1593,7 @@ def get_gui_html() -> str:
 
       const createChapterCard = (bookDir, chapter) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
+        const displayTitle = displayChapterTitle(title);
         const detail = chapter.summary || 'Select to preview chapter content.';
         const card = createCard(
           title,
@@ -1562,6 +1603,7 @@ def get_gui_html() -> str:
           'Preview',
           null,
           chapter.cover_url || null,
+          displayTitle,
         );
         card.classList.add('selectable', 'chapter-card');
         card.dataset.chapter = String(chapter.index);
@@ -1652,7 +1694,8 @@ def get_gui_html() -> str:
         chapterSelect.value = chapterIndex;
         openReader.disabled = false;
         setChapterSelection(chapterIndex);
-        chapterHeading.textContent = chapter.title || `Chapter ${chapter.index}`;
+        const chapterTitle = chapter.title || `Chapter ${chapter.index}`;
+        chapterHeading.textContent = displayChapterTitle(chapterTitle);
         chapterSubheading.textContent = `Book: ${bookDir.split('/').pop()}`;
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
@@ -1666,7 +1709,8 @@ def get_gui_html() -> str:
             chapterCoverDir,
           )}`,
         );
-        chapterReaderTitle.textContent = result.title || 'Chapter preview';
+        const readerTitleValue = result.title || 'Chapter preview';
+        chapterReaderTitle.textContent = displayChapterTitle(readerTitleValue);
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         restoreChapterAudioToDetail();
         setImageSource(chapterCoverBlock, chapterCoverImage, result.cover_url);
@@ -1696,7 +1740,12 @@ def get_gui_html() -> str:
         if (!entry) return;
         currentSelection = { type, path: entry.path };
         setSelectedCard(cardElement || findCardByPath(type, entry.path));
-        detailSubheading.textContent = entry.title || entry.path.split('/').pop();
+        if (type === 'book') {
+          const bookTitle = displayBookTitle(entry.title || '');
+          detailSubheading.textContent = bookTitle || entry.path.split('/').pop();
+        } else {
+          detailSubheading.textContent = entry.title || entry.path.split('/').pop();
+        }
         showDetailView();
 
         if (type === 'book') {
@@ -1709,7 +1758,8 @@ def get_gui_html() -> str:
           if (entry.has_compilation) statusFlags.push('Compiled');
           const statusLabel = statusFlags.length ? statusFlags.join(' • ') : 'No media yet';
           bookWorkspaceState.textContent = statusLabel;
-          bookWorkspaceTitle.textContent = entry.title || entry.path.split('/').pop();
+          const bookTitle = displayBookTitle(entry.title || '');
+          bookWorkspaceTitle.textContent = bookTitle || entry.path.split('/').pop();
           bookWorkspacePath.textContent = entry.path;
           setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
           setImageSource(bookCoverBlock, bookCoverImage, entry.cover_url);
@@ -1755,10 +1805,13 @@ def get_gui_html() -> str:
         try {
           const rawChapters = await fetchChapters(bookDir);
           currentChapters = rawChapters;
-          const chapters = rawChapters.map((chapter) => ({
-            value: String(chapter.index),
-            label: `${chapter.index}. ${chapter.title}`,
-          }));
+          const chapters = rawChapters.map((chapter) => {
+            const title = chapter.title || `Chapter ${chapter.index}`;
+            return {
+              value: String(chapter.index),
+              label: `${chapter.index}. ${displayChapterTitle(title)}`,
+            };
+          });
           setSelectOptions(chapterSelect, chapters, 'Select a chapter');
           chapterSelect.disabled = !chapters.length;
           return rawChapters;
@@ -1948,6 +2001,7 @@ def get_gui_html() -> str:
               const status = book.has_compilation ? 'Compiled' : book.has_text ? 'Drafting' : 'No chapters';
               const detail = `${book.chapter_count || 0} chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
               const progress = (statusFlags.length / 4) * 100;
+              const displayTitle = displayBookTitle(book.title);
               const card = createCard(
                 book.title,
                 status,
@@ -1956,6 +2010,7 @@ def get_gui_html() -> str:
                 book.path.split('/').pop(),
                 progress,
                 book.cover_url || null,
+                displayTitle,
               );
               card.classList.add('selectable');
               card.dataset.type = 'book';
@@ -2210,7 +2265,8 @@ def get_gui_html() -> str:
           );
           currentChapter = { index: Number(chapter), bookDir };
           setChapterSelection(chapter);
-          readerTitle.textContent = result.title || 'Chapter preview';
+          const readerTitleValue = result.title || 'Chapter preview';
+          readerTitle.textContent = displayChapterTitle(readerTitleValue);
           readerBody.innerHTML = renderMarkdown(result.content || '');
           setMediaSource(audioBlock, chapterAudio, result.audio_url);
           setMediaSource(videoBlock, chapterVideo, result.video_url);
