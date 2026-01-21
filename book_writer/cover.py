@@ -31,27 +31,16 @@ class CoverSettings:
 
 
 DEFAULT_COVER_COMMAND = [
-    "python",
-    "-m",
-    "python_coreml_stable_diffusion",
-    "--prompt",
+    "swift",
+    "run",
+    "StableDiffusionSample",
     "{prompt}",
-    "{negative_prompt_flag}",
-    "{negative_prompt}",
-    "{model_path_flag}",
+    "--resource-path",
     "{model_path}",
     "{seed_flag}",
     "{seed}",
-    "--num-inference-steps",
-    "{steps}",
-    "--guidance-scale",
-    "{guidance_scale}",
-    "--width",
-    "{width}",
-    "--height",
-    "{height}",
     "--output-path",
-    "{output_path}",
+    "{output_dir}",
 ]
 
 
@@ -78,6 +67,7 @@ def _render_command(
     width: int,
     height: int,
     output_path: Path,
+    output_dir: Path,
 ) -> list[str]:
     values = {
         "prompt": prompt,
@@ -92,6 +82,7 @@ def _render_command(
         "width": str(width),
         "height": str(height),
         "output_path": str(output_path),
+        "output_dir": str(output_dir),
     }
     rendered: list[str] = []
     for token in template:
@@ -102,7 +93,9 @@ def _render_command(
     return rendered
 
 
-def _resolve_command(settings: CoverSettings, prompt: str, output_path: Path) -> list[str]:
+def _resolve_command(
+    settings: CoverSettings, prompt: str, output_path: Path, output_dir: Path
+) -> list[str]:
     template = settings.command or DEFAULT_COVER_COMMAND
     return _render_command(
         template,
@@ -115,6 +108,7 @@ def _resolve_command(settings: CoverSettings, prompt: str, output_path: Path) ->
         width=settings.width,
         height=settings.height,
         output_path=output_path,
+        output_dir=output_dir,
     )
 
 
@@ -149,18 +143,31 @@ def generate_book_cover(
     output_path = output_dir / settings.output_name
     if output_path.exists() and not settings.overwrite:
         return output_path
+    if settings.command is None and not settings.model_path:
+        raise ValueError(
+            "Cover generation requires a --cover-model-path when using the default "
+            "swift command."
+        )
     prompt = settings.prompt or build_cover_prompt(title, synopsis)
-    command = _resolve_command(settings, prompt, output_path)
+    command = _resolve_command(settings, prompt, output_path, output_dir)
     try:
         subprocess.run(
             command,
             check=True,
             env=_build_cover_env(settings.module_path),
+            cwd=str(settings.module_path) if settings.module_path else None,
         )
     except FileNotFoundError as exc:
         message = (
-            "python_coreml_stable_diffusion command not found. "
+            "Cover generation command not found. "
             "Ensure it is installed and available in your PATH or set --cover-command."
         )
         raise RuntimeError(message) from exc
+    if output_path.exists():
+        return output_path
+    candidates = sorted(
+        output_dir.glob("*.png"), key=lambda path: path.stat().st_mtime, reverse=True
+    )
+    if candidates:
+        candidates[0].replace(output_path)
     return output_path

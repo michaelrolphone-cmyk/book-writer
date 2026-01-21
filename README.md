@@ -41,7 +41,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
 - `--cover`: Generate a book cover image using `python_coreml_stable_diffusion`.
-- `--cover-model-path`: Optional Core ML model path to use for cover generation.
+- `--cover-model-path`: Path to the compiled Core ML resource folder for cover generation.
 - `--cover-module-path`: Path to the `python_coreml_stable_diffusion` module (default: `../ml-stable-diffusion`).
 - `--cover-prompt`: Override the generated cover prompt.
 - `--cover-negative-prompt`: Negative prompt to avoid unwanted elements.

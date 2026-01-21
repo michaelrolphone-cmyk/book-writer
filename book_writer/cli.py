@@ -980,7 +980,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--cover-model-path",
         type=Path,
         default=None,
-        help="Optional Core ML model path for cover generation.",
+        help="Path to the compiled Core ML resource folder for cover generation.",
     )
     parser.add_argument(
         "--cover-module-path",
