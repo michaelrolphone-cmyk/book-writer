@@ -26,6 +26,30 @@ class TestServerHelpers(unittest.TestCase):
 
 
 class TestServerApi(unittest.TestCase):
+    def test_send_file_handles_client_disconnect(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            media_path = Path(tmpdir) / "audio.mp3"
+            media_path.write_text("audio", encoding="utf-8")
+
+            class DummyWfile:
+                def write(self, _body: bytes) -> None:
+                    raise BrokenPipeError("client disconnected")
+
+            class DummyHandler:
+                def __init__(self) -> None:
+                    self.wfile = DummyWfile()
+
+                def send_response(self, _status: int) -> None:
+                    return None
+
+                def send_header(self, _key: str, _value: str) -> None:
+                    return None
+
+                def end_headers(self) -> None:
+                    return None
+
+            server._send_file(DummyHandler(), media_path)
+
     def test_list_outlines_returns_preview(self) -> None:
         with TemporaryDirectory() as tmpdir:
             outlines_dir = Path(tmpdir) / "outlines"

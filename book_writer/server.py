@@ -383,7 +383,10 @@ def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
     handler.send_header("Content-Type", content_type or "application/octet-stream")
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
-    handler.wfile.write(body)
+    try:
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionResetError):
+        return
 
 
 def _parse_query(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
