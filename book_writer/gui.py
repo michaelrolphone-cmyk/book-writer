@@ -75,10 +75,41 @@ def get_gui_html() -> str:
         justify-content: space-between;
         gap: 20px;
         position: relative;
+        overflow: hidden;
       }
 
       .now-playing.hidden {
         display: none;
+      }
+
+      .now-playing::before,
+      .now-playing::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .now-playing::before {
+        background: var(--now-playing-cover, var(--bg));
+        background-size: cover;
+        background-position: center;
+        transform: scale(1.05);
+      }
+
+      .now-playing::after {
+        background: linear-gradient(135deg, rgba(10, 16, 26, 0.25), rgba(10, 16, 26, 0.55));
+      }
+
+      .now-playing.with-cover::before,
+      .now-playing.with-cover::after {
+        opacity: 1;
+      }
+
+      .now-playing > * {
+        position: relative;
+        z-index: 2;
       }
 
       .now-playing-info {
@@ -105,6 +136,19 @@ def get_gui_html() -> str:
 
       .now-playing-controls audio {
         width: 100%;
+      }
+
+      .now-playing-settings {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .now-playing-settings input[type='checkbox'] {
+        accent-color: var(--accent);
       }
 
       .now-playing-close {
@@ -907,9 +951,16 @@ def get_gui_html() -> str:
               <span class="tag">Now playing</span>
               <div>
                 <h2 id="nowPlayingTitle">Nothing playing</h2>
+                <p id="nowPlayingSubtitle">Select a chapter to start listening.</p>
               </div>
             </div>
             <div class="now-playing-controls" id="nowPlayingControls"></div>
+            <div class="now-playing-settings">
+              <label>
+                <input type="checkbox" id="nowPlayingAutoplay" checked />
+                Autoplay next chapter
+              </label>
+            </div>
           </section>
         </div>
 
@@ -1584,8 +1635,10 @@ def get_gui_html() -> str:
       const coverProgressLabel = document.getElementById('coverProgressLabel');
       const nowPlaying = document.getElementById('nowPlaying');
       const nowPlayingTitle = document.getElementById('nowPlayingTitle');
+      const nowPlayingSubtitle = document.getElementById('nowPlayingSubtitle');
       const nowPlayingControls = document.getElementById('nowPlayingControls');
       const nowPlayingClose = document.getElementById('nowPlayingClose');
+      const nowPlayingAutoplay = document.getElementById('nowPlayingAutoplay');
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
       const nowPlayingDetailSlot = document.getElementById('nowPlayingDetailSlot');
       const nowPlayingChapterSlot = document.getElementById('nowPlayingChapterSlot');
@@ -1637,6 +1690,11 @@ def get_gui_html() -> str:
       let chapterAudioHandoff = null;
       let activeChapterAudio = chapterViewAudio;
       let activePlayback = null;
+      let autoplayEnabled = true;
+      const autoplayState = {
+        session: null,
+        chapters: [],
+      };
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
@@ -1792,14 +1850,76 @@ def get_gui_html() -> str:
         return audio.dataset.mediaTitle || 'Audio playback';
       };
 
+      const getBookMetadata = (bookDir) => {
+        if (!bookDir) {
+          return { title: '', coverUrl: '' };
+        }
+        const match = catalogState.books.find((book) => book.path === bookDir);
+        if (match) {
+          const title = displayBookTitle(match.title || '') || match.path.split('/').pop();
+          return { title, coverUrl: match.cover_url || '' };
+        }
+        return { title: bookDir.split('/').pop(), coverUrl: '' };
+      };
+
+      const setBookAudioMetadata = (audio, bookDir, title, coverUrl) => {
+        if (!audio) return;
+        audio.dataset.playbackType = 'book';
+        audio.dataset.bookDir = bookDir || '';
+        audio.dataset.bookTitle = title || '';
+        audio.dataset.coverUrl = coverUrl || '';
+      };
+
+      const setChapterAudioMetadata = (audio, details) => {
+        if (!audio || !details) return;
+        audio.dataset.playbackType = 'chapter';
+        audio.dataset.bookDir = details.bookDir || '';
+        audio.dataset.chapterIndex = details.chapterIndex ? String(details.chapterIndex) : '';
+        audio.dataset.bookTitle = details.bookTitle || '';
+        audio.dataset.coverUrl = details.coverUrl || '';
+        audio.dataset.bookCoverUrl = details.bookCoverUrl || '';
+        if (details.mediaTitle) {
+          audio.dataset.mediaTitle = details.mediaTitle;
+        }
+      };
+
+      const getPlaybackMetadata = (audio) => {
+        if (!audio) return {};
+        const chapterIndexValue = audio.dataset.chapterIndex;
+        const chapterIndex = chapterIndexValue ? Number(chapterIndexValue) : null;
+        return {
+          playbackType: audio.dataset.playbackType || null,
+          bookDir: audio.dataset.bookDir || null,
+          chapterIndex,
+          coverUrl: audio.dataset.coverUrl || audio.dataset.bookCoverUrl || null,
+          bookTitle: audio.dataset.bookTitle || '',
+        };
+      };
+
+      const updateNowPlayingBackground = (coverUrl) => {
+        if (!nowPlaying) return;
+        if (coverUrl) {
+          nowPlaying.style.setProperty('--now-playing-cover', `url("${coverUrl}")`);
+          nowPlaying.classList.add('with-cover');
+          return;
+        }
+        nowPlaying.style.removeProperty('--now-playing-cover');
+        nowPlaying.classList.remove('with-cover');
+      };
+
       const updateNowPlayingUI = () => {
         if (!nowPlaying) return;
         if (!activePlayback || !activePlayback.audio) {
           nowPlaying.classList.add('hidden');
+          updateNowPlayingBackground(null);
           return;
         }
         nowPlayingTitle.textContent = activePlayback.title || 'Audio playback';
+        if (nowPlayingSubtitle) {
+          nowPlayingSubtitle.textContent = activePlayback.subtitle || '';
+        }
         nowPlaying.classList.remove('hidden');
+        updateNowPlayingBackground(activePlayback.coverUrl || null);
       };
 
       const restoreAudioToOrigin = (origin, audio) => {
@@ -1848,9 +1968,101 @@ def get_gui_html() -> str:
         updateNowPlayingUI();
       };
 
+      const findNextPlayableChapter = (chapters, currentIndex) => {
+        if (!chapters || currentIndex === null || currentIndex === undefined) return null;
+        const startIndex = chapters.findIndex(
+          (chapter) => Number(chapter.index) === Number(currentIndex),
+        );
+        if (startIndex === -1) return null;
+        for (let i = startIndex + 1; i < chapters.length; i += 1) {
+          if (chapters[i].audio_url) {
+            return chapters[i];
+          }
+        }
+        return null;
+      };
+
+      const startAutoplaySession = async (bookDir) => {
+        if (!bookDir) return;
+        if (autoplayState.session && autoplayState.session.bookDir === bookDir) return;
+        let chapters = [];
+        if (currentSelection.type === 'book' && currentSelection.path === bookDir) {
+          chapters = currentChapters;
+        }
+        if (!chapters || !chapters.length) {
+          chapters = await fetchChapters(bookDir);
+        }
+        autoplayState.session = {
+          bookDir,
+          initialCount: chapters.length,
+          knownCount: chapters.length,
+        };
+        autoplayState.chapters = chapters;
+      };
+
+      const refreshAutoplayChapters = async (bookDir) => {
+        const chapters = await fetchChapters(bookDir);
+        if (autoplayState.session && autoplayState.session.bookDir === bookDir) {
+          autoplayState.session.knownCount = chapters.length;
+          autoplayState.chapters = chapters;
+        }
+        if (currentSelection.type === 'book' && currentSelection.path === bookDir) {
+          currentChapters = chapters;
+          updateChaptersInDetailView(bookDir, chapters);
+        }
+        return chapters;
+      };
+
+      const playAutoplayChapter = async (bookDir, chapter) => {
+        if (!chapter || !chapter.audio_url) return false;
+        currentChapter = { ...chapter, bookDir };
+        if (currentSelection.type === 'book' && currentSelection.path === bookDir) {
+          chapterSelect.value = String(chapter.index);
+          setChapterSelection(String(chapter.index));
+        }
+        if (
+          !chapterView.classList.contains('is-hidden') &&
+          currentChapter.bookDir === bookDir
+        ) {
+          await openChapterView(bookDir, chapter);
+          if (chapterViewAudio) {
+            await chapterViewAudio.play();
+            return true;
+          }
+        }
+        const cardAudio = getChapterCardAudio(String(chapter.index));
+        if (cardAudio) {
+          const { coverUrl: bookCoverUrl, title: bookTitle } = getBookMetadata(bookDir);
+          setChapterAudioMetadata(cardAudio, {
+            bookDir,
+            chapterIndex: chapter.index,
+            bookTitle,
+            coverUrl: chapter.cover_url || '',
+            bookCoverUrl,
+            mediaTitle: displayChapterTitle(chapter.title || `Chapter ${chapter.index}`),
+          });
+          hydrateAudioSource(cardAudio, chapter.audio_url);
+          await cardAudio.play();
+          return true;
+        }
+        const { coverUrl: bookCoverUrl, title: bookTitle } = getBookMetadata(bookDir);
+        const fallbackAudio = chapterAudio;
+        setMediaSource(audioBlock, fallbackAudio, chapter.audio_url);
+        setChapterAudioMetadata(fallbackAudio, {
+          bookDir,
+          chapterIndex: chapter.index,
+          bookTitle,
+          coverUrl: chapter.cover_url || '',
+          bookCoverUrl,
+          mediaTitle: displayChapterTitle(chapter.title || `Chapter ${chapter.index}`),
+        });
+        await fallbackAudio.play();
+        return true;
+      };
+
       const trackPlayback = (audio, titleProvider) => {
         if (!audio) return;
-        audio.addEventListener('play', () => {
+        audio.addEventListener('play', async () => {
           if (activePlayback?.audio && activePlayback.audio !== audio) {
             stopActivePlayback();
           }
@@ -1861,22 +2073,64 @@ def get_gui_html() -> str:
                   parent: audio.parentElement,
                   nextSibling: audio.nextSibling,
                 };
+          const metadata = getPlaybackMetadata(audio);
           activePlayback = {
             audio,
             title: titleProvider ? titleProvider() : getAudioLabel(audio),
+            subtitle: metadata.bookTitle ? `Book: ${metadata.bookTitle}` : '',
+            coverUrl: metadata.coverUrl || null,
+            playbackType: metadata.playbackType,
+            bookDir: metadata.bookDir,
+            chapterIndex: metadata.chapterIndex,
             origin,
           };
+          if (metadata.playbackType === 'chapter' && metadata.bookDir) {
+            try {
+              await startAutoplaySession(metadata.bookDir);
+            } catch (error) {
+              log(`Autoplay setup failed: ${error.message}`);
+            }
+          }
           moveAudioToNowPlaying(audio);
           updateNowPlayingPlacement();
         });
-        audio.addEventListener('ended', () => {
-          if (activePlayback?.audio === audio) {
-            stopActivePlayback();
+        audio.addEventListener('ended', async () => {
+          if (activePlayback?.audio !== audio) {
+            return;
           }
+          if (
+            autoplayEnabled &&
+            activePlayback.playbackType === 'chapter' &&
+            activePlayback.bookDir
+          ) {
+            const bookDir = activePlayback.bookDir;
+            await startAutoplaySession(bookDir);
+            let chapters = autoplayState.chapters;
+            let nextChapter = findNextPlayableChapter(chapters, activePlayback.chapterIndex);
+            if (!nextChapter) {
+              try {
+                const refreshed = await refreshAutoplayChapters(bookDir);
+                const baseline = autoplayState.session?.initialCount ?? 0;
+                if (refreshed.length > baseline) {
+                  chapters = refreshed;
+                  nextChapter = findNextPlayableChapter(chapters, activePlayback.chapterIndex);
+                }
+              } catch (error) {
+                log(`Autoplay refresh failed: ${error.message}`);
+              }
+            }
+            if (nextChapter) {
+              const played = await playAutoplayChapter(bookDir, nextChapter);
+              if (played) {
+                return;
+              }
+            }
+          }
+          stopActivePlayback();
         });
       };
 
-      const createChapterCard = (bookDir, chapter) => {
+      const createChapterCard = (bookDir, chapter, bookCoverUrl, bookTitle) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
         const displayTitle = displayChapterTitle(title);
         const detail = chapter.summary || 'Select to preview chapter content.';
@@ -1900,6 +2154,14 @@ def get_gui_html() -> str:
           audio.dataset.audioUrl = chapter.audio_url;
           audio.dataset.mediaUrl = chapter.audio_url;
           audio.dataset.mediaTitle = displayTitle;
+          setChapterAudioMetadata(audio, {
+            bookDir,
+            chapterIndex: chapter.index,
+            bookTitle,
+            coverUrl: chapter.cover_url || '',
+            bookCoverUrl,
+            mediaTitle: displayTitle,
+          });
           hydrateAudioSource(audio, chapter.audio_url);
           trackPlayback(audio, () => displayTitle);
           audio.addEventListener('click', (event) => {
@@ -1925,13 +2187,38 @@ def get_gui_html() -> str:
           renderEmpty(chapterShelf, 'No chapters found for this book yet.');
           return;
         }
+        const { coverUrl: bookCoverUrl, title: bookTitle } = getBookMetadata(bookDir);
         chapters.forEach((chapter) => {
-          const card = createChapterCard(bookDir, chapter);
+          const card = createChapterCard(bookDir, chapter, bookCoverUrl, bookTitle);
           card.addEventListener('click', async () => {
             await openChapterView(bookDir, chapter);
           });
           chapterShelf.appendChild(card);
         });
+      };
+
+      const updateChaptersInDetailView = (bookDir, chapters) => {
+        if (
+          currentSelection.type !== 'book' ||
+          currentSelection.path !== bookDir ||
+          detailView.classList.contains('is-hidden')
+        ) {
+          return;
+        }
+        const previousSelection = chapterSelect.value;
+        const options = chapters.map((chapter) => {
+          const title = chapter.title || `Chapter ${chapter.index}`;
+          return {
+            value: String(chapter.index),
+            label: `${chapter.index}. ${displayChapterTitle(title)}`,
+          };
+        });
+        setSelectOptions(chapterSelect, options, 'Select a chapter');
+        chapterSelect.disabled = !options.length;
+        if (previousSelection) {
+          chapterSelect.value = previousSelection;
+        }
+        renderChapterShelf(bookDir, chapters);
       };
 
       const loadOutlineContent = async (outlinePath) => {
@@ -2015,6 +2302,15 @@ def get_gui_html() -> str:
         setCoverHeader(chapterReaderCover, displayReaderTitle, result.cover_url);
         setMediaSource(chapterViewAudioBlock, chapterViewAudio, result.audio_url);
         setMediaSource(chapterViewVideoBlock, chapterViewVideo, result.video_url);
+        const { coverUrl: bookCoverUrl, title: bookTitle } = getBookMetadata(bookDir);
+        setChapterAudioMetadata(chapterViewAudio, {
+          bookDir,
+          chapterIndex,
+          bookTitle,
+          coverUrl: result.cover_url || '',
+          bookCoverUrl,
+          mediaTitle: displayReaderTitle,
+        });
         handoffChapterAudioToDetail(cardAudio, result.audio_url);
         await loadWorkspaceChapterContent(bookDir, chapterIndex);
         showChapterView();
@@ -2063,6 +2359,7 @@ def get_gui_html() -> str:
           bookWorkspaceTitle.textContent = resolvedBookTitle;
           bookWorkspacePath.textContent = entry.path;
           setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
+          setBookAudioMetadata(bookAudio, entry.path, resolvedBookTitle, entry.cover_url || '');
           setHiddenImageSource(bookCoverImage, entry.cover_url);
           setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
           const chapters = await loadChapters(entry.path);
@@ -2689,6 +2986,15 @@ def get_gui_html() -> str:
           readerBody.innerHTML = renderMarkdown(result.content || '');
           setMediaSource(audioBlock, chapterAudio, result.audio_url);
           setMediaSource(videoBlock, chapterVideo, result.video_url);
+          const { coverUrl: bookCoverUrl, title: bookTitle } = getBookMetadata(bookDir);
+          setChapterAudioMetadata(chapterAudio, {
+            bookDir,
+            chapterIndex: chapter,
+            bookTitle,
+            coverUrl: result.cover_url || '',
+            bookCoverUrl,
+            mediaTitle: displayChapterTitle(readerTitleValue),
+          });
           readerPanel.classList.add('active');
         } catch (error) {
           log(`Reader failed: ${error.message}`);
@@ -2723,6 +3029,13 @@ def get_gui_html() -> str:
       if (nowPlayingClose) {
         nowPlayingClose.addEventListener('click', () => {
           stopActivePlayback();
+        });
+      }
+
+      if (nowPlayingAutoplay) {
+        autoplayEnabled = nowPlayingAutoplay.checked;
+        nowPlayingAutoplay.addEventListener('change', (event) => {
+          autoplayEnabled = event.target.checked;
         });
       }
 
