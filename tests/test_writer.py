@@ -130,7 +130,10 @@ class TestWriter(unittest.TestCase):
     def test_sanitize_markdown_for_latex_escapes_commands_outside_math(self) -> None:
         text = "We measure \\frac{d\\Psi}{dt} over time."
         cleaned = _sanitize_markdown_for_latex(text)
-        self.assertIn("\\\\frac{d\\\\Psi}{dt}", cleaned)
+        self.assertIn(
+            "\\textbackslash{}frac{d\\textbackslash{}Psi}{dt}",
+            cleaned,
+        )
 
     def test_sanitize_markdown_for_latex_preserves_math_blocks(self) -> None:
         text = "Energy $\\frac{d\\Psi}{dt}$ is steady."
@@ -141,6 +144,15 @@ class TestWriter(unittest.TestCase):
         text = "The price is $5 for admission."
         cleaned = _sanitize_markdown_for_latex(text)
         self.assertIn("\\$5", cleaned)
+
+    def test_sanitize_markdown_for_latex_escapes_windows_paths(self) -> None:
+        text = "Saved to \\\\Server\\Office\\text."
+        cleaned = _sanitize_markdown_for_latex(text)
+        self.assertIn(
+            "\\textbackslash{}\\textbackslash{}Server"
+            "\\textbackslash{}Office\\textbackslash{}text.",
+            cleaned,
+        )
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_creates_numbered_files(self, run_mock: Mock) -> None:
