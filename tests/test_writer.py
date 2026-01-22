@@ -203,6 +203,31 @@ class TestWriter(unittest.TestCase):
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
+    def test_write_book_clears_existing_chapters(
+        self, run_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            stale_path = output_dir / "001-old-chapter.md"
+            stale_path.write_text("# Old Chapter\n\nOld content\n", encoding="utf-8")
+
+            files = write_book(items, output_dir, client)
+
+            self.assertEqual(len(files), 1)
+            self.assertFalse(stale_path.exists())
+
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
     def test_write_book_logs_verbose_steps(self, run_mock: Mock) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
         client = MagicMock()
@@ -882,6 +907,52 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Previous chapter context:", first_prompt)
         self.assertIn("Saved summary", first_prompt)
         self.assertEqual(progress["status"], "completed")
+        run_mock.assert_called_once()
+
+    @patch("book_writer.writer.subprocess.run")
+    def test_write_book_restarts_when_outline_hash_changes(
+        self, run_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "New chapter content",
+            "New chapter summary",
+            "Synopsis text",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            stale_path = output_dir / "001-stale.md"
+            stale_path.write_text("# Stale Chapter\n\nOld content.\n", encoding="utf-8")
+            save_book_progress(
+                output_dir,
+                {
+                    "status": "in_progress",
+                    "total_steps": 1,
+                    "completed_steps": 0,
+                    "previous_chapter": None,
+                    "nextsteps_sections": [],
+                    "book_title": "Old Book",
+                    "byline": "Marissa Bard",
+                    "outline_hash": "old-hash",
+                },
+            )
+
+            files = write_book(
+                items,
+                output_dir,
+                client,
+                book_title="New Book",
+                resume=True,
+                outline_hash="new-hash",
+            )
+
+            self.assertEqual(len(files), 1)
+            self.assertFalse(stale_path.exists())
+            self.assertIn("# Chapter One", files[0].read_text(encoding="utf-8"))
+
         run_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
