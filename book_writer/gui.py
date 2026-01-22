@@ -74,6 +74,7 @@ def get_gui_html() -> str:
         align-items: center;
         justify-content: space-between;
         gap: 20px;
+        position: relative;
       }
 
       .now-playing.hidden {
@@ -104,6 +105,17 @@ def get_gui_html() -> str:
 
       .now-playing-controls audio {
         width: 100%;
+      }
+
+      .now-playing-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 18px;
+        cursor: pointer;
       }
 
       .header-title {
@@ -871,19 +883,6 @@ def get_gui_html() -> str:
   </head>
   <body>
     <div class="app">
-      <section class="now-playing hidden" id="nowPlaying">
-        <div class="now-playing-info">
-          <span class="tag">Now playing</span>
-          <div>
-            <h2 id="nowPlayingTitle">Nothing playing</h2>
-            <p id="nowPlayingMeta">Return to the library to keep listening.</p>
-          </div>
-        </div>
-        <div class="now-playing-controls" id="nowPlayingControls">
-          <audio controls id="nowPlayingAudio"></audio>
-        </div>
-      </section>
-
       <main class="home-view" id="homeView">
         <header class="header">
           <div class="header-title">
@@ -898,6 +897,21 @@ def get_gui_html() -> str:
           <input id="searchInput" type="text" placeholder="Search by title or file name" />
           <button class="pill-button">Filters</button>
         </section>
+
+        <div id="nowPlayingHomeSlot">
+          <section class="now-playing hidden" id="nowPlaying">
+            <button class="now-playing-close" id="nowPlayingClose" aria-label="Close now playing">
+              ×
+            </button>
+            <div class="now-playing-info">
+              <span class="tag">Now playing</span>
+              <div>
+                <h2 id="nowPlayingTitle">Nothing playing</h2>
+              </div>
+            </div>
+            <div class="now-playing-controls" id="nowPlayingControls"></div>
+          </section>
+        </div>
 
         <section class="catalog">
           <section class="shelf-section">
@@ -1122,6 +1136,7 @@ def get_gui_html() -> str:
             <p id="detailSubheading">Open a book or outline to focus on.</p>
           </div>
         </div>
+        <div id="nowPlayingDetailSlot"></div>
 
         <div class="detail-layout">
           <div class="panel" id="workspacePanel">
@@ -1246,6 +1261,7 @@ def get_gui_html() -> str:
             <p id="chapterSubheading">Select a chapter to read and play media.</p>
           </div>
         </div>
+        <div id="nowPlayingChapterSlot"></div>
 
         <div class="chapter-layout">
           <div class="panel">
@@ -1568,9 +1584,11 @@ def get_gui_html() -> str:
       const coverProgressLabel = document.getElementById('coverProgressLabel');
       const nowPlaying = document.getElementById('nowPlaying');
       const nowPlayingTitle = document.getElementById('nowPlayingTitle');
-      const nowPlayingMeta = document.getElementById('nowPlayingMeta');
       const nowPlayingControls = document.getElementById('nowPlayingControls');
-      const nowPlayingAudio = document.getElementById('nowPlayingAudio');
+      const nowPlayingClose = document.getElementById('nowPlayingClose');
+      const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
+      const nowPlayingDetailSlot = document.getElementById('nowPlayingDetailSlot');
+      const nowPlayingChapterSlot = document.getElementById('nowPlayingChapterSlot');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -1619,17 +1637,12 @@ def get_gui_html() -> str:
       let chapterAudioHandoff = null;
       let activeChapterAudio = chapterViewAudio;
       let activePlayback = null;
-      let nowPlayingState = {
-        title: '',
-        url: '',
-        origin: null,
-      };
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
         homeView.classList.remove('is-hidden');
-        persistPlaybackToNowPlaying();
+        updateNowPlayingPlacement();
       };
 
       const showDetailView = () => {
@@ -1637,6 +1650,7 @@ def get_gui_html() -> str:
         chapterView.classList.add('is-hidden');
         detailView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        updateNowPlayingPlacement();
       };
 
       const showChapterView = () => {
@@ -1644,6 +1658,7 @@ def get_gui_html() -> str:
         detailView.classList.add('is-hidden');
         chapterView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        updateNowPlayingPlacement();
       };
 
       const setSelectedCard = (cardElement) => {
@@ -1703,37 +1718,6 @@ def get_gui_html() -> str:
         const card = chapterShelf.querySelector(`article[data-chapter="${chapterIndex}"]`);
         if (!card) return null;
         return card.querySelector('audio');
-      };
-
-      const captureAudioState = (audio) => ({
-        currentTime: audio.currentTime || 0,
-        paused: audio.paused,
-        playbackRate: audio.playbackRate,
-        volume: audio.volume,
-        muted: audio.muted,
-      });
-
-      const applyAudioState = (audio, state) => {
-        if (!audio || !state) return;
-        audio.playbackRate = state.playbackRate;
-        audio.volume = state.volume;
-        audio.muted = state.muted;
-        const applyTime = () => {
-          const duration = Number.isFinite(audio.duration) ? audio.duration : null;
-          const nextTime =
-            duration !== null ? Math.min(state.currentTime, duration) : state.currentTime;
-          audio.currentTime = nextTime;
-          if (state.paused) {
-            audio.pause();
-          } else {
-            audio.play().catch(() => {});
-          }
-        };
-        if (audio.readyState >= 1) {
-          applyTime();
-        } else {
-          audio.addEventListener('loadedmetadata', applyTime, { once: true });
-        }
       };
 
       const restoreChapterAudioToDetail = () => {
@@ -1809,69 +1793,85 @@ def get_gui_html() -> str:
       };
 
       const updateNowPlayingUI = () => {
-        if (!nowPlaying || !nowPlayingAudio) return;
-        if (!nowPlayingState.url) {
+        if (!nowPlaying) return;
+        if (!activePlayback || !activePlayback.audio) {
           nowPlaying.classList.add('hidden');
           return;
         }
-        nowPlayingTitle.textContent = nowPlayingState.title || 'Audio playback';
-        nowPlayingMeta.textContent = nowPlayingState.url;
+        nowPlayingTitle.textContent = activePlayback.title || 'Audio playback';
         nowPlaying.classList.remove('hidden');
       };
 
-      const persistPlaybackToNowPlaying = () => {
-        if (!activePlayback || !activePlayback.audio) return;
-        const audio = activePlayback.audio;
-        if (audio === nowPlayingAudio) {
+      const restoreAudioToOrigin = (origin, audio) => {
+        if (!origin || !origin.parent || !audio) return;
+        if (origin.parent.contains(audio)) return;
+        if (origin.nextSibling && origin.nextSibling.parentElement === origin.parent) {
+          origin.parent.insertBefore(audio, origin.nextSibling);
+        } else {
+          origin.parent.appendChild(audio);
+        }
+      };
+
+      const moveAudioToNowPlaying = (audio) => {
+        if (!nowPlayingControls || !audio) return;
+        if (nowPlayingControls.contains(audio)) return;
+        nowPlayingControls.replaceChildren(audio);
+      };
+
+      const getActiveViewSlot = () => {
+        if (!homeView.classList.contains('is-hidden')) return nowPlayingHomeSlot;
+        if (!detailView.classList.contains('is-hidden')) return nowPlayingDetailSlot;
+        if (!chapterView.classList.contains('is-hidden')) return nowPlayingChapterSlot;
+        return nowPlayingHomeSlot;
+      };
+
+      const updateNowPlayingPlacement = () => {
+        if (!nowPlaying) return;
+        const slot = getActiveViewSlot();
+        if (slot && nowPlaying.parentElement !== slot) {
+          slot.appendChild(nowPlaying);
+        }
+        if (!activePlayback || !activePlayback.audio) {
           updateNowPlayingUI();
           return;
         }
-        const mediaUrl = audio.dataset.mediaUrl || audio.currentSrc;
-        if (!mediaUrl) return;
-        const state = captureAudioState(audio);
-        nowPlayingState = {
-          title: activePlayback.title || getAudioLabel(audio),
-          url: mediaUrl,
-          origin: {
-            audio,
-            parent: audio.parentElement,
-            nextSibling: audio.nextSibling,
-          },
-        };
-        hydrateAudioSource(nowPlayingAudio, mediaUrl);
-        applyAudioState(nowPlayingAudio, state);
+        moveAudioToNowPlaying(activePlayback.audio);
+        updateNowPlayingUI();
+      };
+
+      const stopActivePlayback = () => {
+        if (!activePlayback || !activePlayback.audio) return;
+        const { audio, origin } = activePlayback;
         audio.pause();
-        activePlayback = {
-          audio: nowPlayingAudio,
-          title: nowPlayingState.title,
-          url: mediaUrl,
-        };
+        restoreAudioToOrigin(origin, audio);
+        activePlayback = null;
         updateNowPlayingUI();
       };
 
       const trackPlayback = (audio, titleProvider) => {
         if (!audio) return;
         audio.addEventListener('play', () => {
+          if (activePlayback?.audio && activePlayback.audio !== audio) {
+            stopActivePlayback();
+          }
+          const origin =
+            activePlayback?.audio === audio && activePlayback.origin
+              ? activePlayback.origin
+              : {
+                  parent: audio.parentElement,
+                  nextSibling: audio.nextSibling,
+                };
           activePlayback = {
             audio,
             title: titleProvider ? titleProvider() : getAudioLabel(audio),
-            url: audio.dataset.mediaUrl || audio.currentSrc,
+            origin,
           };
-          nowPlayingState = {
-            title: activePlayback.title,
-            url: activePlayback.url,
-            origin: {
-              audio,
-              parent: audio.parentElement,
-              nextSibling: audio.nextSibling,
-            },
-          };
+          moveAudioToNowPlaying(audio);
+          updateNowPlayingPlacement();
         });
         audio.addEventListener('ended', () => {
           if (activePlayback?.audio === audio) {
-            activePlayback = null;
-            nowPlayingState = { title: '', url: '', origin: null };
-            updateNowPlayingUI();
+            stopActivePlayback();
           }
         });
       };
@@ -1918,7 +1918,7 @@ def get_gui_html() -> str:
       };
 
       const renderChapterShelf = (bookDir, chapters) => {
-        persistPlaybackToNowPlaying();
+        updateNowPlayingPlacement();
         chapterShelf.innerHTML = '';
         chapterCount.textContent = `${chapters.length} chapters`;
         if (!chapters.length) {
@@ -2040,7 +2040,7 @@ def get_gui_html() -> str:
         currentSelection = { type, path: entry.path };
         setSelectedCard(cardElement || findCardByPath(type, entry.path));
         if (type === 'book') {
-          persistPlaybackToNowPlaying();
+          updateNowPlayingPlacement();
           const bookTitle = displayBookTitle(entry.title || '');
           detailSubheading.textContent = bookTitle || entry.path.split('/').pop();
         } else {
@@ -2700,14 +2700,14 @@ def get_gui_html() -> str:
       });
 
       detailBack.addEventListener('click', async () => {
-        persistPlaybackToNowPlaying();
+        updateNowPlayingPlacement();
         await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
         showHomeView();
       });
 
       chapterBack.addEventListener('click', async () => {
         restoreChapterAudioToCard();
-        persistPlaybackToNowPlaying();
+        updateNowPlayingPlacement();
         await loadCatalog({ refreshMode: 'books' });
         if (detailView.classList.contains('is-hidden')) {
           showDetailView();
@@ -2717,6 +2717,12 @@ def get_gui_html() -> str:
       if (searchInput) {
         searchInput.addEventListener('input', () => {
           renderCatalog();
+        });
+      }
+
+      if (nowPlayingClose) {
+        nowPlayingClose.addEventListener('click', () => {
+          stopActivePlayback();
         });
       }
 
@@ -2934,7 +2940,7 @@ def get_gui_html() -> str:
       trackPlayback(bookAudio, () => bookWorkspaceTitle.textContent || 'Book audio');
       trackPlayback(chapterAudio, () => readerTitle.textContent || 'Chapter audio');
       trackPlayback(chapterViewAudio, () => chapterReaderTitle.textContent || 'Chapter audio');
-      trackPlayback(nowPlayingAudio, () => nowPlayingTitle.textContent || 'Audio playback');
+      updateNowPlayingPlacement();
     </script>
   </body>
 </html>
