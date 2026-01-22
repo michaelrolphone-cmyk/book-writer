@@ -569,6 +569,31 @@ def get_gui_html() -> str:
         color: var(--text);
       }
 
+      .meta-line.markdown hr {
+        border: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.6);
+        margin: 8px 0;
+      }
+
+      .meta-line.markdown table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0;
+        font-size: 12px;
+      }
+
+      .meta-line.markdown th,
+      .meta-line.markdown td {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 6px 8px;
+        text-align: left;
+      }
+
+      .meta-line.markdown th {
+        background: rgba(225, 232, 242, 0.6);
+        font-weight: 600;
+      }
+
       .reader-panel {
         display: none;
         margin-top: 12px;
@@ -615,6 +640,31 @@ def get_gui_html() -> str:
         background: #dde3ec;
         padding: 2px 4px;
         border-radius: 6px;
+      }
+
+      .reader-panel .reader-body hr {
+        border: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.6);
+        margin: 12px 0;
+      }
+
+      .reader-panel .reader-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 12px;
+      }
+
+      .reader-panel .reader-body th,
+      .reader-panel .reader-body td {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 6px 8px;
+        text-align: left;
+      }
+
+      .reader-panel .reader-body th {
+        background: rgba(225, 232, 242, 0.6);
+        font-weight: 600;
       }
 
       .reader-panel .close-reader {
@@ -1565,12 +1615,61 @@ def get_gui_html() -> str:
             listType = null;
           }
         };
-        lines.forEach((line) => {
+        const isHorizontalRule = (line) => line.trim() === '---';
+        const isTableSeparator = (line) => {
+          const trimmed = line.trim();
+          if (!trimmed.includes('-')) return false;
+          const segments = trimmed.split('|').map((segment) => segment.trim());
+          const cells = segments.filter((segment) => segment.length);
+          if (!cells.length) return false;
+          return cells.every((cell) => /^:?-+:?$/.test(cell));
+        };
+        const parseTableCells = (line) => {
+          if (!line.includes('|')) return null;
+          const segments = line.split('|').map((segment) => segment.trim());
+          if (segments.length <= 1) return null;
+          if (!segments[0]) segments.shift();
+          if (!segments[segments.length - 1]) segments.pop();
+          if (!segments.length) return null;
+          return segments.map((segment) => formatInlineMarkdown(segment));
+        };
+        let index = 0;
+        while (index < lines.length) {
+          const line = lines[index];
           const trimmed = line.trim();
           if (!trimmed) {
             closeList();
             html += '<p></p>';
-            return;
+            index += 1;
+            continue;
+          }
+          if (isHorizontalRule(trimmed)) {
+            closeList();
+            html += '<hr />';
+            index += 1;
+            continue;
+          }
+          const nextLine = lines[index + 1];
+          const headerCells = parseTableCells(trimmed);
+          if (headerCells && nextLine && isTableSeparator(nextLine)) {
+            closeList();
+            let tableHtml = '<table><thead><tr>';
+            tableHtml += headerCells.map((cell) => `<th>${cell}</th>`).join('');
+            tableHtml += '</tr></thead><tbody>';
+            index += 2;
+            while (index < lines.length) {
+              const rowLine = lines[index];
+              const rowTrimmed = rowLine.trim();
+              const rowCells = rowTrimmed ? parseTableCells(rowTrimmed) : null;
+              if (!rowCells) break;
+              tableHtml += '<tr>';
+              tableHtml += rowCells.map((cell) => `<td>${cell}</td>`).join('');
+              tableHtml += '</tr>';
+              index += 1;
+            }
+            tableHtml += '</tbody></table>';
+            html += tableHtml;
+            continue;
           }
           const unorderedMatch = /^[-*]\\s+(.+)/.exec(trimmed);
           const orderedMatch = /^(\\d+)\\.\\s+(.+)/.exec(trimmed);
@@ -1581,7 +1680,8 @@ def get_gui_html() -> str:
               html += '<ul>';
             }
             html += `<li>${formatInlineMarkdown(unorderedMatch[1])}</li>`;
-            return;
+            index += 1;
+            continue;
           }
           if (orderedMatch) {
             if (listType !== 'ol') {
@@ -1590,17 +1690,20 @@ def get_gui_html() -> str:
               html += '<ol>';
             }
             html += `<li>${formatInlineMarkdown(orderedMatch[2])}</li>`;
-            return;
+            index += 1;
+            continue;
           }
           closeList();
           const headingMatch = /^(#{1,6})\\s+(.+)/.exec(trimmed);
           if (headingMatch) {
             const level = headingMatch[1].length;
             html += `<h${level}>${formatInlineMarkdown(headingMatch[2])}</h${level}>`;
-            return;
+            index += 1;
+            continue;
           }
           html += `<p>${formatInlineMarkdown(trimmed)}</p>`;
-        });
+          index += 1;
+        }
         closeList();
         return html;
       };
