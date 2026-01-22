@@ -5,10 +5,11 @@ import json
 import math
 import mimetypes
 import re
+import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlparse
 
@@ -50,6 +51,8 @@ SUMMARY_DIRNAME = "summaries"
 SUMMARY_CHAPTER_DIRNAME = "chapters"
 BOOK_SUMMARY_FILENAME = "book-summary.md"
 SUMMARY_SOURCE_LIMIT = 4000
+_SUMMARY_TASKS_LOCK = threading.Lock()
+_SUMMARY_TASKS: set[str] = set()
 
 
 def _estimate_page_count(content: str) -> int:
@@ -176,7 +179,30 @@ def _build_chapter_summary_prompt(title: str, content: str) -> str:
     )
 
 
-def _ensure_book_summary(
+def _summary_task_key(book_dir: Path, chapter_file: Path | None = None) -> str:
+    if chapter_file is None:
+        return f"book:{book_dir.resolve()}"
+    return f"chapter:{book_dir.resolve()}:{chapter_file.resolve()}"
+
+
+def _schedule_summary_task(task_key: str, task: Callable[[], str | None]) -> None:
+    with _SUMMARY_TASKS_LOCK:
+        if task_key in _SUMMARY_TASKS:
+            return
+        _SUMMARY_TASKS.add(task_key)
+
+    def runner() -> None:
+        try:
+            task()
+        finally:
+            with _SUMMARY_TASKS_LOCK:
+                _SUMMARY_TASKS.discard(task_key)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+
+
+def _generate_book_summary(
     book_dir: Path, book_title: str, payload: dict[str, Any]
 ) -> str:
     summary_path = _book_summary_path(book_dir)
@@ -199,7 +225,7 @@ def _ensure_book_summary(
     return summary
 
 
-def _ensure_chapter_summary(
+def _generate_chapter_summary(
     book_dir: Path,
     chapter_file: Path,
     chapter_title: str,
@@ -222,6 +248,41 @@ def _ensure_chapter_summary(
     if summary:
         _write_summary(summary_path, summary)
     return summary
+
+
+def _ensure_book_summary_async(
+    book_dir: Path, book_title: str, payload: dict[str, Any]
+) -> str:
+    summary_path = _book_summary_path(book_dir)
+    summary = _read_summary(summary_path)
+    if summary:
+        return summary
+    task_key = _summary_task_key(book_dir)
+    _schedule_summary_task(
+        task_key, lambda: _generate_book_summary(book_dir, book_title, payload)
+    )
+    return ""
+
+
+def _ensure_chapter_summary_async(
+    book_dir: Path,
+    chapter_file: Path,
+    chapter_title: str,
+    content: str,
+    payload: dict[str, Any],
+) -> str:
+    summary_path = _chapter_summary_path(book_dir, chapter_file)
+    summary = _read_summary(summary_path)
+    if summary:
+        return summary
+    task_key = _summary_task_key(book_dir, chapter_file)
+    _schedule_summary_task(
+        task_key,
+        lambda: _generate_chapter_summary(
+            book_dir, chapter_file, chapter_title, content, payload
+        ),
+    )
+    return ""
 
 
 def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
@@ -506,7 +567,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_cover": (book.path / "cover.png").exists(),
                 "chapter_count": len(_book_chapter_files(book.path)),
                 "page_count": _sum_book_pages(book.path),
-                "summary": _ensure_book_summary(book.path, book.title, payload),
+                "summary": _ensure_book_summary_async(book.path, book.title, payload),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))
                     if (book.path / "cover.png").exists()
@@ -556,7 +617,7 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
         content = chapter_file.read_text(encoding="utf-8")
         title = _chapter_title_from_content(content, chapter_file.stem)
         page_count = _estimate_page_count(content)
-        summary = _ensure_chapter_summary(
+        summary = _ensure_chapter_summary_async(
             book_dir, chapter_file, title, content, payload
         )
         audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
@@ -632,7 +693,7 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     chapter_file = _find_chapter_file(book_dir, str(chapter_value))
     content = chapter_file.read_text(encoding="utf-8")
     title = _chapter_title_from_content(content, chapter_file.stem)
-    summary = _ensure_chapter_summary(
+    summary = _ensure_chapter_summary_async(
         book_dir, chapter_file, title, content, payload
     )
     audio_dirname = payload.get("audio_dirname", "audio")
@@ -675,7 +736,7 @@ def get_book_content(payload: dict[str, Any]) -> dict[str, Any]:
     book_dir = Path(book_dir_value)
     synopsis = _read_book_synopsis(book_dir)
     title = _read_book_title(book_dir)
-    summary = _ensure_book_summary(book_dir, title, payload)
+    summary = _ensure_book_summary_async(book_dir, title, payload)
     return {
         "book_dir": str(book_dir),
         "title": title,
