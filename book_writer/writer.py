@@ -582,12 +582,8 @@ def _escape_latex_line_outside_math(line: str) -> str:
                 result.append(line[index : closing + 2])
                 index = closing + 2
                 continue
-        if (
-            line[index] == "\\"
-            and index + 1 < len(line)
-            and line[index + 1].isalpha()
-        ):
-            result.append("\\\\")
+        if line[index] == "\\":
+            result.append("\\textbackslash{}")
             index += 1
             continue
         result.append(line[index])
