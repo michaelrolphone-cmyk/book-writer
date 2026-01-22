@@ -82,6 +82,10 @@ def get_gui_html() -> str:
         display: none;
       }
 
+      .now-playing.with-cover {
+        color: rgba(255, 255, 255, 0.95);
+      }
+
       .now-playing::before,
       .now-playing::after {
         content: '';
@@ -129,6 +133,20 @@ def get_gui_html() -> str:
         font-size: 13px;
       }
 
+      .now-playing.with-cover .now-playing-info h2 {
+        color: rgba(255, 255, 255, 0.98);
+      }
+
+      .now-playing.with-cover .now-playing-info p {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .now-playing.with-cover .tag {
+        background: rgba(8, 12, 20, 0.55);
+        color: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+
       .now-playing-controls {
         flex: 1;
         min-width: 240px;
@@ -151,6 +169,10 @@ def get_gui_html() -> str:
         accent-color: var(--accent);
       }
 
+      .now-playing.with-cover .now-playing-settings {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
       .now-playing-close {
         position: absolute;
         top: 12px;
@@ -160,6 +182,10 @@ def get_gui_html() -> str:
         color: var(--muted);
         font-size: 18px;
         cursor: pointer;
+      }
+
+      .now-playing.with-cover .now-playing-close {
+        color: rgba(255, 255, 255, 0.8);
       }
 
       .header-title {
@@ -921,6 +947,28 @@ def get_gui_html() -> str:
         .detail-header {
           flex-direction: column;
           align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .now-playing {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 14px;
+        }
+
+        .now-playing-info {
+          width: 100%;
+        }
+
+        .now-playing-controls {
+          width: 100%;
+          min-width: 100%;
+        }
+
+        .now-playing-settings {
+          width: 100%;
+          white-space: normal;
         }
       }
     </style>
