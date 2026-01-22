@@ -2007,6 +2007,56 @@ def get_gui_html() -> str:
         updateNowPlayingUI();
       };
 
+      const resolveBookEntry = async (bookDir) => {
+        if (!bookDir) return null;
+        let book = catalogState.books.find((entry) => entry.path === bookDir);
+        if (book) {
+          return book;
+        }
+        try {
+          await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
+        } catch (error) {
+          log(`Catalog refresh failed: ${error.message}`);
+        }
+        book = catalogState.books.find((entry) => entry.path === bookDir);
+        return book || null;
+      };
+
+      const navigateToBookDetail = async (bookDir) => {
+        const book = await resolveBookEntry(bookDir);
+        if (!book) {
+          return;
+        }
+        await selectEntry('book', book);
+      };
+
+      const navigateToChapterDetail = async (bookDir, chapterIndex) => {
+        if (!bookDir || chapterIndex === null || chapterIndex === undefined) return;
+        const book = await resolveBookEntry(bookDir);
+        if (!book) {
+          return;
+        }
+        if (currentSelection.type !== 'book' || currentSelection.path !== bookDir) {
+          await selectEntry('book', book);
+        }
+        const chapters = await loadChapters(bookDir);
+        const chapter = chapters.find(
+          (entry) => Number(entry.index) === Number(chapterIndex),
+        );
+        if (!chapter) {
+          return;
+        }
+        await openChapterView(bookDir, chapter);
+      };
+
+      const shouldIgnoreNowPlayingClick = (event) => {
+        if (!event || !event.target) return false;
+        if (nowPlayingControls && nowPlayingControls.contains(event.target)) return true;
+        if (nowPlayingClose && nowPlayingClose.contains(event.target)) return true;
+        if (nowPlayingAutoplay && nowPlayingAutoplay.contains(event.target)) return true;
+        return false;
+      };
+
       const stopActivePlayback = () => {
         if (!activePlayback || !activePlayback.audio) return;
         const { audio, origin } = activePlayback;
@@ -3077,6 +3127,30 @@ def get_gui_html() -> str:
       if (nowPlayingClose) {
         nowPlayingClose.addEventListener('click', () => {
           stopActivePlayback();
+        });
+      }
+
+      if (nowPlaying) {
+        nowPlaying.addEventListener('click', async (event) => {
+          if (shouldIgnoreNowPlayingClick(event)) {
+            return;
+          }
+          if (!activePlayback) return;
+          if (activePlayback.playbackType === 'book' && activePlayback.bookDir) {
+            await navigateToBookDetail(activePlayback.bookDir);
+            return;
+          }
+          if (
+            activePlayback.playbackType === 'chapter' &&
+            activePlayback.bookDir &&
+            activePlayback.chapterIndex !== null &&
+            activePlayback.chapterIndex !== undefined
+          ) {
+            await navigateToChapterDetail(
+              activePlayback.bookDir,
+              activePlayback.chapterIndex,
+            );
+          }
         });
       }
 
