@@ -86,6 +86,21 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Title: Chapter One", prompt)
         self.assertIn("Protagonist meets the guide.", prompt)
 
+    def test_build_prompt_includes_outline_beats(self) -> None:
+        items = [
+            OutlineItem(title="Chapter One", level=1),
+            OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+            OutlineItem(title="Beat one", level=3, parent_title="Section A"),
+            OutlineItem(title="Beat two", level=4, parent_title="Beat one"),
+        ]
+
+        prompt = build_prompt(items, items[0], None)
+
+        self.assertIn("Outline beats to cover:", prompt)
+        self.assertIn("- Section A", prompt)
+        self.assertIn("  - Beat one", prompt)
+        self.assertIn("    - Beat two", prompt)
+
     def test_build_prompt_labels_epilogue(self) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),
