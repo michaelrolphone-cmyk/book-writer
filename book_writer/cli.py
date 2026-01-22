@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import re
 from dataclasses import dataclass, replace
@@ -1008,6 +1009,7 @@ def write_books_from_outlines(
                 f"[batch] Step {index}/{len(outline_files)}: "
                 f"Writing book for {outline_path.name}."
             )
+        outline_text = outline_path.read_text(encoding="utf-8")
         outline_title, items = parse_outline_with_title(outline_path)
         if not items:
             raise ValueError(f"No outline items found in {outline_path}.")
@@ -1015,6 +1017,7 @@ def write_books_from_outlines(
             client.set_author(author_decider(outline_path))
         book_title = outline_title or generate_book_title(items, client)
         outline_tone = tone_decider(outline_path) if tone_decider else tone
+        outline_hash = hashlib.sha256(outline_text.encode("utf-8")).hexdigest()
 
         book_short_title = outline_path.stem
         book_output_dir = books_dir / book_short_title
@@ -1044,6 +1047,7 @@ def write_books_from_outlines(
                 tone=outline_tone,
                 resume=resume,
                 log_prompts=log_prompts,
+                outline_hash=outline_hash,
             )
         )
         reset_supported = client.reset_context()
@@ -1708,6 +1712,9 @@ def main() -> int:
             tone=selected_tone,
             resume=resume,
             log_prompts=True,
+            outline_hash=hashlib.sha256(
+                args.outline.read_text(encoding="utf-8").encode("utf-8")
+            ).hexdigest(),
         )
         return 0
     if outline_files:
@@ -1758,6 +1765,9 @@ def main() -> int:
         tone=args.tone,
         resume=resume,
         log_prompts=True,
+        outline_hash=hashlib.sha256(
+            args.outline.read_text(encoding="utf-8").encode("utf-8")
+        ).hexdigest(),
     )
     return 0
 

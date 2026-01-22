@@ -812,6 +812,13 @@ def _chapter_files(output_dir: Path) -> List[Path]:
     )
 
 
+def _clear_chapter_files(output_dir: Path) -> None:
+    if not output_dir.exists():
+        return
+    for chapter_path in _chapter_files(output_dir):
+        chapter_path.unlink()
+
+
 def _derive_outline_from_chapters(chapter_files: List[Path]) -> str:
     items: List[OutlineItem] = []
     current_chapter: Optional[str] = None
@@ -1270,6 +1277,7 @@ def write_book(
     tone: Optional[str] = None,
     resume: bool = False,
     log_prompts: bool = False,
+    outline_hash: Optional[str] = None,
 ) -> List[Path]:
     tts_settings = tts_settings or TTSSettings()
     video_settings = video_settings or VideoSettings()
@@ -1282,7 +1290,14 @@ def write_book(
     total_steps = len(items)
     progress = load_book_progress(output_dir) if resume else None
     if progress and progress.get("status") == "in_progress" and resume:
-        if progress.get("total_steps") == total_steps:
+        if (
+            outline_hash
+            and progress.get("outline_hash")
+            and progress.get("outline_hash") != outline_hash
+        ):
+            clear_book_progress(output_dir)
+            progress = None
+        elif progress.get("total_steps") == total_steps:
             index = int(progress.get("completed_steps", 0))
             previous_data = progress.get("previous_chapter")
             if previous_data:
@@ -1306,7 +1321,11 @@ def write_book(
         clear_book_progress(output_dir)
         progress = None
 
+    if progress is not None and outline_hash and "outline_hash" not in progress:
+        progress["outline_hash"] = outline_hash
+
     if progress is None:
+        _clear_chapter_files(output_dir)
         progress = {
             "status": "in_progress",
             "total_steps": total_steps,
@@ -1316,6 +1335,8 @@ def write_book(
             "book_title": book_title or (items[0].title if items else "Untitled"),
             "byline": byline,
         }
+        if outline_hash:
+            progress["outline_hash"] = outline_hash
         save_book_progress(output_dir, progress)
 
     image_theme: str | None = None
