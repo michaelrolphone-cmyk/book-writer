@@ -1538,6 +1538,21 @@ def get_gui_html() -> str:
           .replace(/\"/g, '&quot;')
           .replace(/'/g, '&#39;');
 
+      const formatInlineMarkdown = (value) => {
+        if (!value) return '';
+        let formatted = value;
+        formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+        formatted = formatted.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        formatted = formatted.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+        formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>');
+        formatted = formatted.replace(
+          /\\[([^\\]]+)\\]\\(([^)]+)\\)/g,
+          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+        );
+        return formatted;
+      };
+
       const renderMarkdown = (value) => {
         if (!value) return '';
         const safe = escapeHtml(value);
@@ -1565,7 +1580,7 @@ def get_gui_html() -> str:
               listType = 'ul';
               html += '<ul>';
             }
-            html += `<li>${unorderedMatch[1]}</li>`;
+            html += `<li>${formatInlineMarkdown(unorderedMatch[1])}</li>`;
             return;
           }
           if (orderedMatch) {
@@ -1574,17 +1589,17 @@ def get_gui_html() -> str:
               listType = 'ol';
               html += '<ol>';
             }
-            html += `<li>${orderedMatch[2]}</li>`;
+            html += `<li>${formatInlineMarkdown(orderedMatch[2])}</li>`;
             return;
           }
           closeList();
           const headingMatch = /^(#{1,6})\\s+(.+)/.exec(trimmed);
           if (headingMatch) {
             const level = headingMatch[1].length;
-            html += `<h${level}>${headingMatch[2]}</h${level}>`;
+            html += `<h${level}>${formatInlineMarkdown(headingMatch[2])}</h${level}>`;
             return;
           }
-          html += `<p>${trimmed}</p>`;
+          html += `<p>${formatInlineMarkdown(trimmed)}</p>`;
         });
         closeList();
         return html;
