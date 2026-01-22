@@ -59,7 +59,17 @@ class TestOutlineParsing(unittest.TestCase):
             items,
             [
                 OutlineItem(title="Chapter 1: Redefining Motherhood", level=1),
+                OutlineItem(
+                    title="Bullet one",
+                    level=2,
+                    parent_title="Chapter 1: Redefining Motherhood",
+                ),
                 OutlineItem(title="Chapter 2: The Foundation of Trust", level=1),
+                OutlineItem(
+                    title="Bullet two",
+                    level=2,
+                    parent_title="Chapter 2: The Foundation of Trust",
+                ),
             ],
         )
 
@@ -108,7 +118,17 @@ class TestOutlineParsing(unittest.TestCase):
                 OutlineItem(
                     title="Introduction: The Eternal Call of Service", level=1
                 ),
+                OutlineItem(
+                    title="Bullet one",
+                    level=2,
+                    parent_title="Introduction: The Eternal Call of Service",
+                ),
                 OutlineItem(title="Chapter 1: The Divine Blueprint", level=1),
+                OutlineItem(
+                    title="Bullet two",
+                    level=2,
+                    parent_title="Chapter 1: The Divine Blueprint",
+                ),
             ],
         )
 
@@ -278,11 +298,57 @@ class TestOutlineParsing(unittest.TestCase):
         items = [
             OutlineItem(title="Chapter One", level=1),
             OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+            OutlineItem(
+                title="Beat detail",
+                level=3,
+                parent_title="Section A",
+            ),
         ]
 
         outline = outline_to_text(items)
 
-        self.assertEqual(outline, "- Chapter One\n  - Section A")
+        self.assertEqual(
+            outline, "- Chapter One\n  - Section A\n    - Beat detail"
+        )
+
+    def test_parse_outline_includes_bullets_under_sections(self) -> None:
+        content = """
+# Chapter One
+## Section A
+- Beat one
+  - Beat two
+## Section B
+- Beat three
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            items = parse_outline(outline_path)
+
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(title="Section A", level=2, parent_title="Chapter One"),
+                OutlineItem(
+                    title="Beat one",
+                    level=3,
+                    parent_title="Section A",
+                ),
+                OutlineItem(
+                    title="Beat two",
+                    level=4,
+                    parent_title="Beat one",
+                ),
+                OutlineItem(title="Section B", level=2, parent_title="Chapter One"),
+                OutlineItem(
+                    title="Beat three",
+                    level=3,
+                    parent_title="Section B",
+                ),
+            ],
+        )
 
     def test_slugify_normalizes_text(self) -> None:
         self.assertEqual(slugify("Chapter 1: Intro"), "chapter-1-intro")

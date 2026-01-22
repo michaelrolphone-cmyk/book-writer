@@ -180,6 +180,25 @@ def _expand_prompt_text() -> str:
     return prompt_path.read_text(encoding="utf-8").strip()
 
 
+def _outline_descendant_lines(
+    items: Iterable[OutlineItem], current_title: str
+) -> list[str]:
+    children_map: dict[str, list[OutlineItem]] = {}
+    for item in items:
+        if item.parent_title:
+            children_map.setdefault(item.parent_title, []).append(item)
+
+    def walk(parent_title: str, depth: int) -> list[str]:
+        lines: list[str] = []
+        for child in children_map.get(parent_title, []):
+            indent = "  " * depth
+            lines.append(f"{indent}- {child.title}")
+            lines.extend(walk(child.title, depth + 1))
+        return lines
+
+    return walk(current_title, 0)
+
+
 def build_prompt(
     items: Iterable[OutlineItem],
     current: OutlineItem,
@@ -199,6 +218,11 @@ def build_prompt(
             )
     else:
         focus_parts.append(f"Section focus: {current.title}")
+    descendant_lines = _outline_descendant_lines(items, current.title)
+    if descendant_lines:
+        focus_parts.append(
+            "Outline beats to cover:\n" + "\n".join(descendant_lines)
+        )
     if current.parent_title:
         context_parts.append(
             f"The current section belongs to the chapter '{current.parent_title}'."
@@ -218,6 +242,7 @@ def build_prompt(
         "Cover the themes and plot beats listed for the current item. "
         "Do not introduce new plot threads that are not supported by the outline. "
         "Do not jump ahead to future outline items. "
+        "Use only the characters, locations, and events mentioned in the outline. "
         "Return only markdown content for the requested item.\n\n"
         f"Outline:\n{outline_text}\n\n"
         f"Current item: {current.title} ({current.type_label}).\n"
