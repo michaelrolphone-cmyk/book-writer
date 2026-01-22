@@ -1233,6 +1233,7 @@ def get_gui_html() -> str:
           <div class="detail-heading">
             <h2 id="detailHeading">Workspace</h2>
             <p id="detailSubheading">Open a book or outline to focus on.</p>
+            <p class="meta-line is-hidden" id="detailSummary"></p>
           </div>
         </div>
         <div id="nowPlayingDetailSlot"></div>
@@ -1326,7 +1327,7 @@ def get_gui_html() -> str:
                 <div class="shelf chapter-shelf" id="chapterShelf"></div>
               </div>
               <div class="detail-section">
-                <h4>Book content</h4>
+                <h4 id="bookContentHeading">Book content</h4>
                 <div class="detail-content markdown" id="bookWorkspaceContent"></div>
               </div>
               <div class="detail-section">
@@ -1359,6 +1360,7 @@ def get_gui_html() -> str:
           <div class="detail-heading">
             <h2 id="chapterHeading">Chapter view</h2>
             <p id="chapterSubheading">Select a chapter to read and play media.</p>
+            <p class="meta-line is-hidden" id="chapterSummary"></p>
             <p class="meta-line" id="chapterPageCount"></p>
           </div>
         </div>
@@ -1423,6 +1425,16 @@ def get_gui_html() -> str:
           throw new Error(`Request failed: ${response.status}`);
         }
         return response.json();
+      };
+
+      const buildSummaryParams = () => {
+        const baseUrl = document.getElementById('baseUrl').value || 'http://localhost:1234';
+        const model = document.getElementById('modelName').value || 'local-model';
+        const params = new URLSearchParams({
+          base_url: baseUrl,
+          model,
+        });
+        return params.toString();
       };
 
       const gradients = [
@@ -1578,6 +1590,18 @@ def get_gui_html() -> str:
         return html;
       };
 
+      const setSummaryText = (element, summary) => {
+        if (!element) return;
+        const cleaned = (summary || '').trim();
+        if (!cleaned) {
+          element.textContent = '';
+          element.classList.add('is-hidden');
+          return;
+        }
+        element.textContent = cleaned;
+        element.classList.remove('is-hidden');
+      };
+
       const stripMarkdownSymbols = (value) => {
         if (!value) return '';
         let cleaned = String(value);
@@ -1643,10 +1667,12 @@ def get_gui_html() -> str:
       const detailBack = document.getElementById('detailBack');
       const detailHeading = document.getElementById('detailHeading');
       const detailSubheading = document.getElementById('detailSubheading');
+      const detailSummary = document.getElementById('detailSummary');
       const chapterView = document.getElementById('chapterView');
       const chapterBack = document.getElementById('chapterBack');
       const chapterHeading = document.getElementById('chapterHeading');
       const chapterSubheading = document.getElementById('chapterSubheading');
+      const chapterSummary = document.getElementById('chapterSummary');
       const chapterPageCount = document.getElementById('chapterPageCount');
       const chapterReaderTitle = document.getElementById('chapterReaderTitle');
       const chapterReaderBody = document.getElementById('chapterReaderBody');
@@ -1686,6 +1712,7 @@ def get_gui_html() -> str:
       const bookWorkspaceCoverHeader = document.getElementById('bookWorkspaceCoverHeader');
       const bookWorkspacePath = document.getElementById('bookWorkspacePath');
       const bookWorkspacePages = document.getElementById('bookWorkspacePages');
+      const bookContentHeading = document.getElementById('bookContentHeading');
       const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
       const chapterShelf = document.getElementById('chapterShelf');
       const chapterCount = document.getElementById('chapterCount');
@@ -1756,6 +1783,7 @@ def get_gui_html() -> str:
       let activeChapterAudio = chapterViewAudio;
       let activePlayback = null;
       let autoplayEnabled = true;
+      let currentBookSynopsis = '';
       const autoplayState = {
         session: null,
         chapters: [],
@@ -1824,6 +1852,18 @@ def get_gui_html() -> str:
 
       const setBookContent = (content) => {
         bookWorkspaceContent.innerHTML = renderMarkdown(content || 'No chapter content available.');
+      };
+
+      const setBookSynopsis = (synopsis) => {
+        currentBookSynopsis = synopsis || '';
+        if (bookContentHeading) {
+          bookContentHeading.textContent = currentBookSynopsis
+            ? 'Book synopsis'
+            : 'Book content';
+        }
+        if (currentBookSynopsis) {
+          setBookContent(currentBookSynopsis);
+        }
       };
 
       const setChapterSelection = (chapterIndex) => {
@@ -2348,6 +2388,18 @@ def get_gui_html() -> str:
         return result;
       };
 
+      const loadBookContent = async (bookDir) => {
+        if (!bookDir) return null;
+        const params = new URLSearchParams({
+          book_dir: bookDir,
+        });
+        const summaryParams = buildSummaryParams();
+        const result = await fetchJson(
+          `/api/book-content?${params.toString()}&${summaryParams}`,
+        );
+        return result;
+      };
+
       const parseRevisionPrompts = (value) =>
         value
           .split(`\n`)
@@ -2375,6 +2427,10 @@ def get_gui_html() -> str:
 
       const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
         if (!bookDir || !chapterValue) return;
+        if (currentBookSynopsis) {
+          setBookContent(currentBookSynopsis);
+          return;
+        }
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
         const chapterCoverDir = document.getElementById('chapterCoverDir').value || 'chapter_covers';
@@ -2385,7 +2441,7 @@ def get_gui_html() -> str:
             audioDir,
           )}&video_dirname=${encodeURIComponent(videoDir)}&chapter_cover_dir=${encodeURIComponent(
             chapterCoverDir,
-          )}`,
+          )}&${buildSummaryParams()}`,
         );
         setBookContent(result.content || '');
       };
@@ -2412,12 +2468,13 @@ def get_gui_html() -> str:
             audioDir,
           )}&video_dirname=${encodeURIComponent(videoDir)}&chapter_cover_dir=${encodeURIComponent(
             chapterCoverDir,
-          )}`,
+          )}&${buildSummaryParams()}`,
         );
         const readerTitleValue = result.title || 'Chapter preview';
         const displayReaderTitle = displayChapterTitle(readerTitleValue);
         chapterReaderTitle.textContent = displayReaderTitle;
         chapterPageCount.textContent = formatPageCount(result.page_count ?? chapter.page_count);
+        setSummaryText(chapterSummary, result.summary || chapter.summary || '');
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         restoreChapterAudioToDetail();
         setHiddenImageSource(chapterCoverImage, result.cover_url);
@@ -2448,7 +2505,7 @@ def get_gui_html() -> str:
             bookDir,
           )}&audio_dirname=${encodeURIComponent(audioDir)}&video_dirname=${encodeURIComponent(
             videoDir,
-          )}&chapter_cover_dir=${encodeURIComponent(chapterCoverDir)}`,
+          )}&chapter_cover_dir=${encodeURIComponent(chapterCoverDir)}&${buildSummaryParams()}`,
         );
         return result.chapters || [];
       };
@@ -2457,10 +2514,18 @@ def get_gui_html() -> str:
         if (!entry) return;
         currentSelection = { type, path: entry.path };
         setSelectedCard(cardElement || findCardByPath(type, entry.path));
+        if (type !== 'book') {
+          currentBookSynopsis = '';
+          setSummaryText(detailSummary, '');
+          if (bookContentHeading) {
+            bookContentHeading.textContent = 'Book content';
+          }
+        }
         if (type === 'book') {
           updateNowPlayingPlacement();
           const bookTitle = displayBookTitle(entry.title || '');
           detailSubheading.textContent = bookTitle || entry.path.split('/').pop();
+          setSummaryText(detailSummary, entry.summary || '');
         } else {
           detailSubheading.textContent = entry.title || entry.path.split('/').pop();
         }
@@ -2485,6 +2550,13 @@ def get_gui_html() -> str:
           setBookAudioMetadata(bookAudio, entry.path, resolvedBookTitle, entry.cover_url || '');
           setHiddenImageSource(bookCoverImage, entry.cover_url);
           setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
+          const bookContent = await loadBookContent(entry.path);
+          if (bookContent) {
+            setSummaryText(detailSummary, bookContent.summary || entry.summary || '');
+            setBookSynopsis(bookContent.synopsis);
+          } else {
+            setBookSynopsis('');
+          }
           const chapters = await loadChapters(entry.path);
           renderChapterShelf(entry.path, chapters);
           if (chapters.length) {
@@ -2749,7 +2821,8 @@ def get_gui_html() -> str:
               : book.has_text
                 ? 'Drafting'
                 : 'No chapters';
-            const detail = `${formatPageCount(book.page_count)}\\n${
+            const summaryLine = book.summary || 'Summary coming soon.';
+            const detail = `${summaryLine}\\n${formatPageCount(book.page_count)}\\n${
               book.chapter_count || 0
             } chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
             const progress = (statusFlags.length / 4) * 100;
@@ -2813,7 +2886,7 @@ def get_gui_html() -> str:
               ? fetchJson('/api/completed-outlines')
               : Promise.resolve({ outlines: catalogState.completedOutlines }),
             shouldFetchBooks
-              ? fetchJson('/api/books')
+              ? fetchJson(`/api/books?${buildSummaryParams()}`)
               : Promise.resolve({ books: catalogState.books }),
             shouldFetchAuthors
               ? fetchJson('/api/authors')

@@ -7,6 +7,18 @@ from unittest.mock import MagicMock, patch
 from book_writer import server
 
 
+def _write_book_summary(book_dir: Path, text: str = "Summary") -> None:
+    summary_dir = book_dir / "summaries"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    (summary_dir / "book-summary.md").write_text(text, encoding="utf-8")
+
+
+def _write_chapter_summary(book_dir: Path, stem: str, text: str = "Summary") -> None:
+    summary_dir = book_dir / "summaries" / "chapters"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    (summary_dir / f"{stem}.md").write_text(text, encoding="utf-8")
+
+
 class TestServerHelpers(unittest.TestCase):
     def test_parse_tts_settings_defaults(self) -> None:
         settings = server._parse_tts_settings({})
@@ -129,6 +141,7 @@ class TestServerApi(unittest.TestCase):
             (book_dir / "002-chapter-two.md").write_text(
                 second_content, encoding="utf-8"
             )
+            _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books({"books_dir": str(books_dir)})
 
@@ -153,6 +166,7 @@ class TestServerApi(unittest.TestCase):
                 "# Chapter One\n\nContent", encoding="utf-8"
             )
             (bad_dir / "001-chapter-one.md").write_bytes(b"\xff\xfe\xfd")
+            _write_book_summary(good_dir, "Saved summary")
 
             result = server.list_books({"books_dir": str(books_dir)})
 
@@ -169,6 +183,7 @@ class TestServerApi(unittest.TestCase):
             audio_dir.mkdir(parents=True)
             (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
             (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books(
                 {"books_dir": str(books_dir), "tts_audio_dir": "audio"}
@@ -187,6 +202,8 @@ class TestServerApi(unittest.TestCase):
             second_content = "# Chapter Two\n\nContent " + ("word " * 10)
             first.write_text(first_content, encoding="utf-8")
             second.write_text(second_content, encoding="utf-8")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
+            _write_chapter_summary(book_dir, "002-chapter-two", "Saved summary")
 
             result = server.list_chapters({"book_dir": str(book_dir)})
 
@@ -217,6 +234,7 @@ class TestServerApi(unittest.TestCase):
             (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
             (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
 
             result = server.list_chapters(
                 {
@@ -239,6 +257,7 @@ class TestServerApi(unittest.TestCase):
             chapter = book_dir / "001-chapter-one.md"
             content = "# Chapter One\n\nContent " + ("word " * 100)
             chapter.write_text(content, encoding="utf-8")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
 
             result = server.get_chapter_content(
                 {"book_dir": str(book_dir), "chapter": "001-chapter-one.md"}
@@ -305,6 +324,7 @@ class TestServerApi(unittest.TestCase):
             (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
             (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
 
             result = server.get_chapter_content(
                 {
@@ -320,6 +340,58 @@ class TestServerApi(unittest.TestCase):
         self.assertTrue(result["audio_url"].startswith(expected_base))
         self.assertTrue(result["video_url"].startswith(expected_base))
         self.assertTrue(result["cover_url"].startswith(expected_base))
+
+    def test_get_book_content_returns_synopsis(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nContent", encoding="utf-8"
+            )
+            (book_dir / "back-cover-synopsis.md").write_text(
+                "Synopsis text.", encoding="utf-8"
+            )
+            _write_book_summary(book_dir, "Saved summary")
+
+            result = server.get_book_content({"book_dir": str(book_dir)})
+
+        self.assertEqual(result["synopsis"], "Synopsis text.")
+
+    @patch("book_writer.server._build_client")
+    def test_list_books_generates_summary_when_missing(
+        self, build_client_mock: MagicMock
+    ) -> None:
+        build_client_mock.return_value.generate.return_value = "Generated summary."
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nContent", encoding="utf-8"
+            )
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+            self.assertEqual(result["books"][0]["summary"], "Generated summary.")
+            summary_path = book_dir / "summaries" / "book-summary.md"
+            self.assertTrue(summary_path.exists())
+
+    @patch("book_writer.server._build_client")
+    def test_list_chapters_generates_summary_when_missing(
+        self, build_client_mock: MagicMock
+    ) -> None:
+        build_client_mock.return_value.generate.return_value = "Chapter summary."
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            chapter = book_dir / "001-chapter-one.md"
+            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+
+            result = server.list_chapters({"book_dir": str(book_dir)})
+
+            self.assertEqual(result["chapters"][0]["summary"], "Chapter summary.")
+            summary_path = book_dir / "summaries" / "chapters" / "001-chapter-one.md"
+            self.assertTrue(summary_path.exists())
 
     def test_resolve_media_path_blocks_escape(self) -> None:
         with TemporaryDirectory() as tmpdir:

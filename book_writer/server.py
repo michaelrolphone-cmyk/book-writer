@@ -9,6 +9,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlparse
 
 from book_writer.cli import (
@@ -45,6 +46,10 @@ class ApiError(ValueError):
 
 WORDS_PER_PAGE = 300
 WORD_PATTERN = re.compile(r"\b\w+\b")
+SUMMARY_DIRNAME = "summaries"
+SUMMARY_CHAPTER_DIRNAME = "chapters"
+BOOK_SUMMARY_FILENAME = "book-summary.md"
+SUMMARY_SOURCE_LIMIT = 4000
 
 
 def _estimate_page_count(content: str) -> int:
@@ -70,6 +75,153 @@ def _get_value(data: dict[str, Any], key: str, default: Any = None) -> Any:
     if value is None:
         return default
     return value
+
+
+def _summary_dir(book_dir: Path) -> Path:
+    return book_dir / SUMMARY_DIRNAME
+
+
+def _book_summary_path(book_dir: Path) -> Path:
+    return _summary_dir(book_dir) / BOOK_SUMMARY_FILENAME
+
+
+def _chapter_summary_path(book_dir: Path, chapter_file: Path) -> Path:
+    return _summary_dir(book_dir) / SUMMARY_CHAPTER_DIRNAME / f"{chapter_file.stem}.md"
+
+
+def _normalize_summary_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _truncate_summary_source(text: str) -> str:
+    if len(text) <= SUMMARY_SOURCE_LIMIT:
+        return text
+    return text[:SUMMARY_SOURCE_LIMIT].rstrip()
+
+
+def _read_summary(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def _write_summary(path: Path, summary: str) -> None:
+    if not summary:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(summary + "\n", encoding="utf-8")
+
+
+def _read_book_title(book_dir: Path) -> str:
+    book_md = book_dir / "book.md"
+    if book_md.exists():
+        try:
+            for line in book_md.read_text(encoding="utf-8").splitlines():
+                if line.startswith("# "):
+                    return line[2:].strip() or book_dir.name
+        except (OSError, UnicodeDecodeError):
+            pass
+    for chapter_file in _book_chapter_files(book_dir):
+        try:
+            content = chapter_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        title = _chapter_title_from_content(content, chapter_file.stem)
+        if title:
+            return title
+    return book_dir.name
+
+
+def _read_book_synopsis(book_dir: Path) -> str:
+    synopsis_path = book_dir / "back-cover-synopsis.md"
+    if synopsis_path.exists():
+        return synopsis_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def _select_book_summary_source(book_dir: Path, chapter_files: list[Path]) -> tuple[str, str]:
+    synopsis = _read_book_synopsis(book_dir)
+    if synopsis:
+        return "Synopsis", synopsis
+    book_md = book_dir / "book.md"
+    if book_md.exists():
+        try:
+            return "Book content", book_md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            pass
+    if chapter_files:
+        try:
+            return "Chapter content", chapter_files[0].read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            pass
+    return "Notes", ""
+
+
+def _build_book_summary_prompt(title: str, source_label: str, source_text: str) -> str:
+    return (
+        "Write a single-paragraph summary of the book below. "
+        "Keep it concise (3-5 sentences). Return only the summary text.\n\n"
+        f"Book title: {title}\n"
+        f"{source_label}:\n{source_text}"
+    )
+
+
+def _build_chapter_summary_prompt(title: str, content: str) -> str:
+    return (
+        "Write a single-paragraph summary of the chapter below. "
+        "Keep it concise (2-4 sentences). Return only the summary text.\n\n"
+        f"Chapter title: {title}\n"
+        f"{content}"
+    )
+
+
+def _ensure_book_summary(
+    book_dir: Path, book_title: str, payload: dict[str, Any]
+) -> str:
+    summary_path = _book_summary_path(book_dir)
+    summary = _read_summary(summary_path)
+    if summary:
+        return summary
+    chapter_files = _book_chapter_files(book_dir)
+    source_label, source_text = _select_book_summary_source(book_dir, chapter_files)
+    source_text = _truncate_summary_source(source_text.strip())
+    if not source_text:
+        return ""
+    try:
+        client = _build_client(payload)
+        prompt = _build_book_summary_prompt(book_title, source_label, source_text)
+        summary = _normalize_summary_text(client.generate(prompt))
+    except (HTTPError, URLError, OSError, ValueError):
+        return ""
+    if summary:
+        _write_summary(summary_path, summary)
+    return summary
+
+
+def _ensure_chapter_summary(
+    book_dir: Path,
+    chapter_file: Path,
+    chapter_title: str,
+    content: str,
+    payload: dict[str, Any],
+) -> str:
+    summary_path = _chapter_summary_path(book_dir, chapter_file)
+    summary = _read_summary(summary_path)
+    if summary:
+        return summary
+    content = _truncate_summary_source(content.strip())
+    if not content:
+        return ""
+    try:
+        client = _build_client(payload)
+        prompt = _build_chapter_summary_prompt(chapter_title, content)
+        summary = _normalize_summary_text(client.generate(prompt))
+    except (HTTPError, URLError, OSError, ValueError):
+        return ""
+    if summary:
+        _write_summary(summary_path, summary)
+    return summary
 
 
 def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
@@ -354,6 +506,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_cover": (book.path / "cover.png").exists(),
                 "chapter_count": len(_book_chapter_files(book.path)),
                 "page_count": _sum_book_pages(book.path),
+                "summary": _ensure_book_summary(book.path, book.title, payload),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))
                     if (book.path / "cover.png").exists()
@@ -403,6 +556,9 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
         content = chapter_file.read_text(encoding="utf-8")
         title = _chapter_title_from_content(content, chapter_file.stem)
         page_count = _estimate_page_count(content)
+        summary = _ensure_chapter_summary(
+            book_dir, chapter_file, title, content, payload
+        )
         audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
         video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
         cover_path = (
@@ -415,6 +571,7 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
                 "stem": chapter_file.stem,
                 "title": title,
                 "page_count": page_count,
+                "summary": summary,
                 "cover_url": (
                     _build_media_url(
                         book_dir, cover_path.relative_to(book_dir)
@@ -475,6 +632,9 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     chapter_file = _find_chapter_file(book_dir, str(chapter_value))
     content = chapter_file.read_text(encoding="utf-8")
     title = _chapter_title_from_content(content, chapter_file.stem)
+    summary = _ensure_chapter_summary(
+        book_dir, chapter_file, title, content, payload
+    )
     audio_dirname = payload.get("audio_dirname", "audio")
     video_dirname = payload.get("video_dirname", "video")
     chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
@@ -501,9 +661,26 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
         "title": title,
         "content": content,
         "page_count": _estimate_page_count(content),
+        "summary": summary,
         "cover_url": cover_url,
         "audio_url": audio_url,
         "video_url": video_url,
+    }
+
+
+def get_book_content(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    synopsis = _read_book_synopsis(book_dir)
+    title = _read_book_title(book_dir)
+    summary = _ensure_book_summary(book_dir, title, payload)
+    return {
+        "book_dir": str(book_dir),
+        "title": title,
+        "summary": summary,
+        "synopsis": synopsis,
     }
 
 
@@ -743,6 +920,10 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             return
         if path == "/api/chapter-content":
             response = get_chapter_content(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/book-content":
+            response = get_book_content(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
 
