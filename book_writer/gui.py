@@ -63,6 +63,49 @@ def get_gui_html() -> str:
         margin-bottom: 32px;
       }
 
+      .now-playing {
+        max-width: 1280px;
+        margin: 0 auto 28px;
+        padding: 18px 22px;
+        border-radius: 24px;
+        background: var(--bg);
+        box-shadow: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .now-playing.hidden {
+        display: none;
+      }
+
+      .now-playing-info {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .now-playing-info h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .now-playing-info p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .now-playing-controls {
+        flex: 1;
+        min-width: 240px;
+      }
+
+      .now-playing-controls audio {
+        width: 100%;
+      }
+
       .header-title {
         display: flex;
         flex-direction: column;
@@ -828,6 +871,19 @@ def get_gui_html() -> str:
   </head>
   <body>
     <div class="app">
+      <section class="now-playing hidden" id="nowPlaying">
+        <div class="now-playing-info">
+          <span class="tag">Now playing</span>
+          <div>
+            <h2 id="nowPlayingTitle">Nothing playing</h2>
+            <p id="nowPlayingMeta">Return to the library to keep listening.</p>
+          </div>
+        </div>
+        <div class="now-playing-controls" id="nowPlayingControls">
+          <audio controls id="nowPlayingAudio"></audio>
+        </div>
+      </section>
+
       <main class="home-view" id="homeView">
         <header class="header">
           <div class="header-title">
@@ -1510,6 +1566,11 @@ def get_gui_html() -> str:
       const bookWorkspaceChapterCovers = document.getElementById('bookWorkspaceChapterCovers');
       const coverProgress = document.getElementById('coverProgress');
       const coverProgressLabel = document.getElementById('coverProgressLabel');
+      const nowPlaying = document.getElementById('nowPlaying');
+      const nowPlayingTitle = document.getElementById('nowPlayingTitle');
+      const nowPlayingMeta = document.getElementById('nowPlayingMeta');
+      const nowPlayingControls = document.getElementById('nowPlayingControls');
+      const nowPlayingAudio = document.getElementById('nowPlayingAudio');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -1557,11 +1618,18 @@ def get_gui_html() -> str:
       let currentChapter = null;
       let chapterAudioHandoff = null;
       let activeChapterAudio = chapterViewAudio;
+      let activePlayback = null;
+      let nowPlayingState = {
+        title: '',
+        url: '',
+        origin: null,
+      };
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
         homeView.classList.remove('is-hidden');
+        persistPlaybackToNowPlaying();
       };
 
       const showDetailView = () => {
@@ -1729,6 +1797,85 @@ def get_gui_html() -> str:
         audio.load();
       };
 
+      const getAudioLabel = (audio) => {
+        if (!audio) return 'Audio';
+        if (audio === bookAudio) {
+          return bookWorkspaceTitle.textContent || 'Book audio';
+        }
+        if (audio === chapterAudio || audio === chapterViewAudio) {
+          return readerTitle.textContent || chapterReaderTitle.textContent || 'Chapter audio';
+        }
+        return audio.dataset.mediaTitle || 'Audio playback';
+      };
+
+      const updateNowPlayingUI = () => {
+        if (!nowPlaying || !nowPlayingAudio) return;
+        if (!nowPlayingState.url) {
+          nowPlaying.classList.add('hidden');
+          return;
+        }
+        nowPlayingTitle.textContent = nowPlayingState.title || 'Audio playback';
+        nowPlayingMeta.textContent = nowPlayingState.url;
+        nowPlaying.classList.remove('hidden');
+      };
+
+      const persistPlaybackToNowPlaying = () => {
+        if (!activePlayback || !activePlayback.audio) return;
+        const audio = activePlayback.audio;
+        if (audio === nowPlayingAudio) {
+          updateNowPlayingUI();
+          return;
+        }
+        const mediaUrl = audio.dataset.mediaUrl || audio.currentSrc;
+        if (!mediaUrl) return;
+        const state = captureAudioState(audio);
+        nowPlayingState = {
+          title: activePlayback.title || getAudioLabel(audio),
+          url: mediaUrl,
+          origin: {
+            audio,
+            parent: audio.parentElement,
+            nextSibling: audio.nextSibling,
+          },
+        };
+        hydrateAudioSource(nowPlayingAudio, mediaUrl);
+        applyAudioState(nowPlayingAudio, state);
+        audio.pause();
+        activePlayback = {
+          audio: nowPlayingAudio,
+          title: nowPlayingState.title,
+          url: mediaUrl,
+        };
+        updateNowPlayingUI();
+      };
+
+      const trackPlayback = (audio, titleProvider) => {
+        if (!audio) return;
+        audio.addEventListener('play', () => {
+          activePlayback = {
+            audio,
+            title: titleProvider ? titleProvider() : getAudioLabel(audio),
+            url: audio.dataset.mediaUrl || audio.currentSrc,
+          };
+          nowPlayingState = {
+            title: activePlayback.title,
+            url: activePlayback.url,
+            origin: {
+              audio,
+              parent: audio.parentElement,
+              nextSibling: audio.nextSibling,
+            },
+          };
+        });
+        audio.addEventListener('ended', () => {
+          if (activePlayback?.audio === audio) {
+            activePlayback = null;
+            nowPlayingState = { title: '', url: '', origin: null };
+            updateNowPlayingUI();
+          }
+        });
+      };
+
       const createChapterCard = (bookDir, chapter) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
         const displayTitle = displayChapterTitle(title);
@@ -1752,7 +1899,9 @@ def get_gui_html() -> str:
           audio.controls = true;
           audio.dataset.audioUrl = chapter.audio_url;
           audio.dataset.mediaUrl = chapter.audio_url;
+          audio.dataset.mediaTitle = displayTitle;
           hydrateAudioSource(audio, chapter.audio_url);
+          trackPlayback(audio, () => displayTitle);
           audio.addEventListener('click', (event) => {
             event.stopPropagation();
           });
@@ -1769,6 +1918,7 @@ def get_gui_html() -> str:
       };
 
       const renderChapterShelf = (bookDir, chapters) => {
+        persistPlaybackToNowPlaying();
         chapterShelf.innerHTML = '';
         chapterCount.textContent = `${chapters.length} chapters`;
         if (!chapters.length) {
@@ -1890,6 +2040,7 @@ def get_gui_html() -> str:
         currentSelection = { type, path: entry.path };
         setSelectedCard(cardElement || findCardByPath(type, entry.path));
         if (type === 'book') {
+          persistPlaybackToNowPlaying();
           const bookTitle = displayBookTitle(entry.title || '');
           detailSubheading.textContent = bookTitle || entry.path.split('/').pop();
         } else {
@@ -2549,12 +2700,14 @@ def get_gui_html() -> str:
       });
 
       detailBack.addEventListener('click', async () => {
+        persistPlaybackToNowPlaying();
         await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
         showHomeView();
       });
 
       chapterBack.addEventListener('click', async () => {
         restoreChapterAudioToCard();
+        persistPlaybackToNowPlaying();
         await loadCatalog({ refreshMode: 'books' });
         if (detailView.classList.contains('is-hidden')) {
           showDetailView();
@@ -2778,6 +2931,10 @@ def get_gui_html() -> str:
       });
 
       loadCatalog();
+      trackPlayback(bookAudio, () => bookWorkspaceTitle.textContent || 'Book audio');
+      trackPlayback(chapterAudio, () => readerTitle.textContent || 'Chapter audio');
+      trackPlayback(chapterViewAudio, () => chapterReaderTitle.textContent || 'Chapter audio');
+      trackPlayback(nowPlayingAudio, () => nowPlayingTitle.textContent || 'Audio playback');
     </script>
   </body>
 </html>
