@@ -3125,7 +3125,8 @@ def get_gui_html() -> str:
       }
 
       if (nowPlayingClose) {
-        nowPlayingClose.addEventListener('click', () => {
+        nowPlayingClose.addEventListener('click', (event) => {
+          event.stopPropagation();
           stopActivePlayback();
         });
       }

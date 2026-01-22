@@ -93,6 +93,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("updateNowPlayingPlacement", html)
         self.assertIn("navigateToChapterDetail", html)
         self.assertIn("nowPlaying.addEventListener('click'", html)
+        self.assertIn("nowPlayingClose.addEventListener('click', (event) => {", html)
+        self.assertIn("event.stopPropagation();", html)
         self.assertIn("shouldIgnoreNowPlayingClick", html)
         self.assertIn("playAutoplayChapter", html)
         self.assertIn("audio.preload = 'metadata';", html)
