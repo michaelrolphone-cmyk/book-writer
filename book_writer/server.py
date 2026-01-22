@@ -19,7 +19,11 @@ from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.gui import get_gui_html
 from book_writer.outline import parse_outline_with_title
 from book_writer.tts import TTSSettings
-from book_writer.video import VideoSettings
+from book_writer.video import (
+    ParagraphImageSettings,
+    VideoSettings,
+    parse_video_image_command,
+)
 from book_writer.writer import (
     LMStudioClient,
     compile_book,
@@ -59,12 +63,69 @@ def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
 
 def _parse_video_settings(payload: dict[str, Any]) -> VideoSettings:
     video_payload = payload.get("video_settings") or {}
+    paragraph_payload = video_payload.get("paragraph_images") or {}
+    default_image_settings = ParagraphImageSettings()
+
+    def parse_int(value: Any, fallback: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def parse_optional_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def parse_float(value: Any, fallback: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return fallback
+
     return VideoSettings(
         enabled=bool(video_payload.get("enabled", payload.get("video", False))),
         background_video=Path(video_payload["background_video"])
         if video_payload.get("background_video")
         else None,
         video_dirname=video_payload.get("video_dirname", "video"),
+        paragraph_images=ParagraphImageSettings(
+            enabled=bool(paragraph_payload.get("enabled", False)),
+            image_dirname=paragraph_payload.get(
+                "image_dirname", default_image_settings.image_dirname
+            ),
+            negative_prompt=paragraph_payload.get("negative_prompt") or None,
+            model_path=Path(paragraph_payload["model_path"])
+            if paragraph_payload.get("model_path")
+            else None,
+            module_path=Path(paragraph_payload["module_path"])
+            if paragraph_payload.get("module_path")
+            else default_image_settings.module_path,
+            steps=parse_int(
+                paragraph_payload.get("steps", default_image_settings.steps),
+                default_image_settings.steps,
+            ),
+            guidance_scale=parse_float(
+                paragraph_payload.get(
+                    "guidance_scale", default_image_settings.guidance_scale
+                ),
+                default_image_settings.guidance_scale,
+            ),
+            seed=parse_optional_int(paragraph_payload.get("seed")),
+            width=parse_int(
+                paragraph_payload.get("width", default_image_settings.width),
+                default_image_settings.width,
+            ),
+            height=parse_int(
+                paragraph_payload.get("height", default_image_settings.height),
+                default_image_settings.height,
+            ),
+            overwrite=bool(paragraph_payload.get("overwrite", False)),
+            command=parse_video_image_command(paragraph_payload.get("command")),
+        ),
     )
 
 
@@ -508,11 +569,13 @@ def generate_videos_api(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApiError("book_dir is required")
     book_dir = Path(book_dir_value)
     video_settings = _parse_video_settings(payload)
+    client = _build_client(payload)
     generate_book_videos(
         output_dir=book_dir,
         video_settings=video_settings,
         audio_dirname=payload.get("audio_dirname", "audio"),
         verbose=bool(payload.get("verbose", False)),
+        client=client,
     )
     return {"status": "videos_generated", "book_dir": str(book_dir)}
 

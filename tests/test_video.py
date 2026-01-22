@@ -4,11 +4,14 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from book_writer.video import (
+    ParagraphImageSettings,
     VideoSettings,
     _build_ffmpeg_command,
     _format_srt_timestamp,
     _write_word_captions,
+    generate_paragraph_image,
     synthesize_chapter_video,
+    synthesize_chapter_video_from_images,
 )
 
 
@@ -182,6 +185,65 @@ class TestVideo(unittest.TestCase):
 
     def test_format_srt_timestamp_formats_milliseconds(self) -> None:
         self.assertEqual(_format_srt_timestamp(61.234), "00:01:01,234")
+
+    @patch("book_writer.video.subprocess.run")
+    def test_generate_paragraph_image_runs_command(
+        self, run_mock: Mock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "image.png"
+            settings = ParagraphImageSettings(
+                enabled=True,
+                model_path=Path("model"),
+            )
+
+            def _run_side_effect(*_args: object, **_kwargs: object) -> None:
+                output_path.write_bytes(b"image")
+
+            run_mock.side_effect = _run_side_effect
+
+            result = generate_paragraph_image(
+                prompt="A vivid scene",
+                output_path=output_path,
+                settings=settings,
+            )
+
+            self.assertEqual(result, output_path)
+            run_mock.assert_called_once()
+
+    @patch("book_writer.video.subprocess.run")
+    def test_synthesize_chapter_video_from_images_runs_ffmpeg(
+        self, run_mock: Mock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path.write_bytes(b"audio")
+            image_dir = Path(tmpdir) / "images"
+            image_dir.mkdir()
+            image_paths = [
+                image_dir / "img-1.png",
+                image_dir / "img-2.png",
+            ]
+            for path in image_paths:
+                path.write_bytes(b"image")
+            output_dir = Path(tmpdir) / "video"
+            settings = VideoSettings(
+                enabled=True,
+                paragraph_images=ParagraphImageSettings(
+                    enabled=True, width=640, height=360
+                ),
+            )
+
+            output_path = synthesize_chapter_video_from_images(
+                audio_path=audio_path,
+                output_dir=output_dir,
+                image_paths=image_paths,
+                durations=[1.0, 2.0],
+                settings=settings,
+            )
+
+            self.assertEqual(output_path, output_dir / "chapter.mp4")
+            run_mock.assert_called_once()
 
 
 if __name__ == "__main__":

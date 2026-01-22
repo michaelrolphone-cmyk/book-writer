@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSynthesisError, TTSSettings
-from book_writer.video import VideoSettings
+from book_writer.video import ParagraphImageSettings, VideoSettings
 from book_writer.cover import CoverSettings
 from book_writer.writer import (
     ChapterContext,
@@ -582,6 +582,62 @@ class TestWriter(unittest.TestCase):
             verbose=False,
             text=chapter_text,
         )
+
+    @patch("book_writer.writer.generate_paragraph_image")
+    @patch("book_writer.writer.synthesize_chapter_video_from_images")
+    @patch("book_writer.writer._probe_audio_duration")
+    def test_generate_book_videos_uses_paragraph_images(
+        self,
+        duration_mock: Mock,
+        synthesize_video_mock: Mock,
+        generate_image_mock: Mock,
+    ) -> None:
+        duration_mock.return_value = 10.0
+        video_settings = VideoSettings(
+            enabled=True,
+            paragraph_images=ParagraphImageSettings(
+                enabled=True,
+                image_dirname="images",
+            ),
+        )
+        generate_image_mock.side_effect = (
+            lambda **kwargs: kwargs["output_path"]
+        )
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Theme style",
+            "First image description",
+            "Second image description",
+        ]
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nFirst paragraph text.\n\nSecond paragraph text here.\n",
+                encoding="utf-8",
+            )
+            audio_dir = output_dir / "audio"
+            audio_dir.mkdir()
+            audio_path = audio_dir / "001-chapter-one.mp3"
+            audio_path.write_text("audio", encoding="utf-8")
+
+            generate_book_videos(
+                output_dir,
+                video_settings,
+                audio_dirname="audio",
+                client=client,
+            )
+
+        self.assertEqual(client.generate.call_count, 3)
+        prompts = [call.args[0] for call in client.generate.call_args_list]
+        self.assertIn("Previous image: None yet.", prompts[1])
+        self.assertIn("Previous image: First image description", prompts[2])
+        self.assertEqual(generate_image_mock.call_count, 2)
+        synthesize_video_mock.assert_called_once()
+        durations = synthesize_video_mock.call_args.kwargs["durations"]
+        self.assertEqual(len(durations), 2)
+        self.assertAlmostEqual(sum(durations), 10.0, places=3)
 
     @patch("book_writer.writer.generate_book_pdf")
     def test_compile_book_uses_chapters(self, generate_pdf_mock: Mock) -> None:

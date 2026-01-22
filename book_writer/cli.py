@@ -10,7 +10,11 @@ from pathlib import Path
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import TTSSettings
-from book_writer.video import VideoSettings
+from book_writer.video import (
+    ParagraphImageSettings,
+    VideoSettings,
+    parse_video_image_command,
+)
 from book_writer.writer import (
     LMStudioClient,
     clear_book_progress,
@@ -242,6 +246,8 @@ def _prompt_for_task_settings(
     video_enabled = "video" in selected
     background_video = args.background_video
     video_dirname = args.video_dir
+    paragraph_images = False
+    image_settings = _video_image_settings_from_args(args)
     if video_enabled:
         background_response = questionary.text(
             "Background video path (leave blank for none):",
@@ -254,10 +260,22 @@ def _prompt_for_task_settings(
         ).ask()
         if video_dir_response:
             video_dirname = video_dir_response
+        paragraph_images = _prompt_yes_no(
+            "Generate paragraph images for videos?",
+            args.video_paragraph_images,
+        )
+        if paragraph_images:
+            image_settings = _prompt_for_video_image_settings(
+                args, image_settings
+            )
     video_settings = VideoSettings(
         enabled=video_enabled,
         background_video=background_video,
         video_dirname=video_dirname,
+        paragraph_images=replace(
+            image_settings,
+            enabled=paragraph_images,
+        ),
     )
     cover_enabled = "cover" in selected
     cover_settings = CoverSettings(
@@ -564,10 +582,139 @@ def _prompt_for_video_settings(args: argparse.Namespace) -> VideoSettings:
     ).ask()
     if video_dir_response:
         video_dirname = video_dir_response
+    paragraph_images = _prompt_yes_no(
+        "Generate paragraph images for videos?",
+        args.video_paragraph_images,
+    )
+    image_settings = _video_image_settings_from_args(args)
+    if paragraph_images:
+        image_settings = _prompt_for_video_image_settings(args, image_settings)
     return VideoSettings(
         enabled=True,
         background_video=background_video,
         video_dirname=video_dirname,
+        paragraph_images=replace(
+            image_settings,
+            enabled=paragraph_images,
+        ),
+    )
+
+
+def _video_image_settings_from_args(
+    args: argparse.Namespace,
+) -> ParagraphImageSettings:
+    default_settings = ParagraphImageSettings()
+    return ParagraphImageSettings(
+        enabled=args.video_paragraph_images,
+        image_dirname=args.video_image_dir,
+        negative_prompt=args.video_image_negative_prompt,
+        model_path=args.video_image_model_path,
+        module_path=args.video_image_module_path or default_settings.module_path,
+        steps=args.video_image_steps,
+        guidance_scale=args.video_image_guidance_scale,
+        seed=args.video_image_seed,
+        width=args.video_image_width,
+        height=args.video_image_height,
+        overwrite=args.video_image_overwrite,
+        command=parse_video_image_command(args.video_image_command),
+    )
+
+
+def _prompt_for_video_image_settings(
+    args: argparse.Namespace,
+    settings: ParagraphImageSettings,
+) -> ParagraphImageSettings:
+    questionary = _questionary()
+    image_dir = questionary.text(
+        "Paragraph image output directory:",
+        default=settings.image_dirname,
+    ).ask()
+    negative_prompt = questionary.text(
+        "Negative prompt (optional):",
+        default=settings.negative_prompt or "",
+    ).ask()
+    model_path_response = questionary.text(
+        "Core ML model path (optional):",
+        default=str(settings.model_path or ""),
+    ).ask()
+    module_path_response = questionary.text(
+        "python_coreml_stable_diffusion module path:",
+        default=str(settings.module_path or ""),
+    ).ask()
+    steps_response = questionary.text(
+        "Inference steps:",
+        default=str(settings.steps),
+    ).ask()
+    guidance_response = questionary.text(
+        "Guidance scale:",
+        default=str(settings.guidance_scale),
+    ).ask()
+    seed_response = questionary.text(
+        "Seed (optional):",
+        default="" if settings.seed is None else str(settings.seed),
+    ).ask()
+    width_response = questionary.text(
+        "Image width:",
+        default=str(settings.width),
+    ).ask()
+    height_response = questionary.text(
+        "Image height:",
+        default=str(settings.height),
+    ).ask()
+    overwrite = _prompt_yes_no(
+        "Overwrite existing paragraph images?",
+        settings.overwrite,
+    )
+    command_response = questionary.text(
+        "Custom image command (optional):",
+        default=args.video_image_command or "",
+    ).ask()
+
+    def parse_int(value: Optional[str], fallback: int) -> int:
+        if value is None or not value.strip():
+            return fallback
+        try:
+            return int(value)
+        except ValueError:
+            print(f"Invalid number '{value}', using {fallback}.")
+            return fallback
+
+    def parse_float(value: Optional[str], fallback: float) -> float:
+        if value is None or not value.strip():
+            return fallback
+        try:
+            return float(value)
+        except ValueError:
+            print(f"Invalid number '{value}', using {fallback}.")
+            return fallback
+
+    def parse_optional_int(value: Optional[str]) -> Optional[int]:
+        if value is None or not value.strip():
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            print(f"Invalid seed '{value}', leaving unset.")
+            return None
+
+    model_path = Path(model_path_response) if model_path_response else None
+    module_path = (
+        Path(module_path_response) if module_path_response else settings.module_path
+    )
+    command = parse_video_image_command(command_response) or settings.command
+    return ParagraphImageSettings(
+        enabled=True,
+        image_dirname=image_dir or settings.image_dirname,
+        negative_prompt=negative_prompt or None,
+        model_path=model_path,
+        module_path=module_path,
+        steps=parse_int(steps_response, settings.steps),
+        guidance_scale=parse_float(guidance_response, settings.guidance_scale),
+        seed=parse_optional_int(seed_response),
+        width=parse_int(width_response, settings.width),
+        height=parse_int(height_response, settings.height),
+        overwrite=overwrite,
+        command=command,
     )
 
 
@@ -721,6 +868,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         enabled=False,
         background_video=args.background_video,
         video_dirname=args.video_dir,
+        paragraph_images=_video_image_settings_from_args(args),
     )
     if generate_video:
         video_settings = _prompt_for_video_settings(args)
@@ -1034,6 +1182,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory name for storing chapter video files.",
     )
     parser.add_argument(
+        "--video-paragraph-images",
+        action="store_true",
+        help=(
+            "Generate videos from paragraph images keyed to audio timing instead of "
+            "a looping background video."
+        ),
+    )
+    parser.add_argument(
+        "--video-image-dir",
+        default="video_images",
+        help="Directory name for storing per-paragraph video images.",
+    )
+    parser.add_argument(
+        "--video-image-negative-prompt",
+        default=None,
+        help="Negative prompt for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-model-path",
+        type=Path,
+        default=None,
+        help="Path to the Core ML model resources for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-module-path",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the python_coreml_stable_diffusion module for paragraph "
+            "image generation (default: ../ml-stable-diffusion)."
+        ),
+    )
+    parser.add_argument(
+        "--video-image-steps",
+        type=int,
+        default=30,
+        help="Inference steps for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-guidance-scale",
+        type=float,
+        default=7.5,
+        help="Guidance scale for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-seed",
+        type=int,
+        default=None,
+        help="Seed for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-width",
+        type=int,
+        default=1280,
+        help="Width for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-height",
+        type=int,
+        default=720,
+        help="Height for paragraph image generation.",
+    )
+    parser.add_argument(
+        "--video-image-overwrite",
+        action="store_true",
+        help="Overwrite existing paragraph images.",
+    )
+    parser.add_argument(
+        "--video-image-command",
+        default=None,
+        help=(
+            "Custom command template for paragraph image generation (uses placeholders "
+            "like {prompt} and {output_path})."
+        ),
+    )
+    parser.add_argument(
         "--cover",
         action="store_true",
         help="Generate a book cover image using python_coreml_stable_diffusion.",
@@ -1219,6 +1443,7 @@ def main() -> int:
         enabled=args.video,
         background_video=args.background_video,
         video_dirname=args.video_dir,
+        paragraph_images=_video_image_settings_from_args(args),
     )
     cover_settings = CoverSettings(
         enabled=args.cover,
@@ -1364,6 +1589,7 @@ def main() -> int:
                         video_settings=task_selection.video_settings,
                         audio_dirname=task_selection.tts_settings.audio_dirname,
                         verbose=True,
+                        client=client,
                     )
                 if task_selection.generate_cover:
                     generate_book_cover_asset(
