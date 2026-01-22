@@ -1,14 +1,21 @@
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from book_writer.tts import (
+    AUDIO_EXTENSION,
     MAX_TTS_CHARS,
+    ParagraphTiming,
     TTSSynthesisError,
     TTSSettings,
+    WordTiming,
+    _build_paragraph_timings,
     _synthesize_with_edge_tts,
+    read_paragraph_timings,
     sanitize_markdown_for_tts,
+    split_markdown_paragraphs,
     split_text_for_tts,
     synthesize_chapter_audio,
     synthesize_text_audio,
@@ -51,12 +58,61 @@ class TestTTS(unittest.TestCase):
         self.assertEqual(" ".join(chunks), text)
         self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
 
+    def test_split_markdown_paragraphs_discards_headings(self) -> None:
+        markdown = "# Title\n\nFirst paragraph.\n\n## Subhead\n\nSecond paragraph."
+
+        paragraphs = split_markdown_paragraphs(markdown)
+
+        self.assertEqual(paragraphs, ["First paragraph.", "Second paragraph."])
+
+    def test_build_paragraph_timings_uses_word_positions(self) -> None:
+        paragraphs = ["Hello world", "Another line"]
+        word_timings = [
+            WordTiming(text="Hello", start=0.0, end=0.5),
+            WordTiming(text="world", start=0.5, end=1.0),
+            WordTiming(text="Another", start=1.0, end=1.5),
+            WordTiming(text="line", start=1.5, end=2.0),
+        ]
+
+        timings = _build_paragraph_timings(paragraphs, word_timings)
+
+        self.assertEqual(
+            timings,
+            [
+                ParagraphTiming(text="Hello world", start=0.0, end=1.0),
+                ParagraphTiming(text="Another line", start=1.0, end=2.0),
+            ],
+        )
+
+    def test_read_paragraph_timings_reads_json(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            audio_path = Path(tmpdir) / f"chapter{AUDIO_EXTENSION}"
+            timing_path = audio_path.with_suffix(".timed.json")
+            timing_path.write_text(
+                json.dumps(
+                    {
+                        "paragraphs": [
+                            {"text": "Hello world", "start": 0.0, "end": 1.0}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            timings = read_paragraph_timings(audio_path)
+
+            self.assertEqual(
+                timings,
+                [ParagraphTiming(text="Hello world", start=0.0, end=1.0)],
+            )
+
     @patch("book_writer.tts._synthesize_with_edge_tts")
-    def test_synthesize_chapter_audio_writes_mp3(
+    def test_synthesize_chapter_audio_writes_mp4(
         self, synthesize_mock: Mock
     ) -> None:
         settings = TTSSettings(enabled=True, audio_dirname="audio")
         chapter_content = "# Chapter One\n\nThis is **bold** text."
+        synthesize_mock.return_value = []
 
         with TemporaryDirectory() as tmpdir:
             chapter_path = Path(tmpdir) / "001-chapter-one.md"
@@ -69,7 +125,10 @@ class TestTTS(unittest.TestCase):
                 settings=settings,
             )
 
-            self.assertEqual(audio_path, output_dir / "001-chapter-one.mp3")
+            self.assertEqual(
+                audio_path,
+                output_dir / f"001-chapter-one{AUDIO_EXTENSION}",
+            )
             self.assertTrue(output_dir.exists())
 
         synthesize_mock.assert_called_once()
@@ -78,12 +137,17 @@ class TestTTS(unittest.TestCase):
         self.assertIn("This is bold text.", called_text)
 
     @patch("book_writer.tts._synthesize_with_edge_tts")
-    def test_synthesize_text_audio_writes_mp3(self, synthesize_mock: Mock) -> None:
+    def test_synthesize_text_audio_writes_mp4(self, synthesize_mock: Mock) -> None:
         settings = TTSSettings(enabled=True, audio_dirname="audio")
         text = "# Synopsis\n\nThis is a **synopsis**."
+        synthesize_mock.return_value = []
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "audio" / "back-cover-synopsis.mp3"
+            output_path = (
+                Path(tmpdir)
+                / "audio"
+                / f"back-cover-synopsis{AUDIO_EXTENSION}"
+            )
 
             audio_path = synthesize_text_audio(
                 text=text,
@@ -110,7 +174,7 @@ class TestTTS(unittest.TestCase):
             chapter_path = Path(tmpdir) / "001-chapter-one.md"
             chapter_path.write_text("# Chapter One\n\nContent.", encoding="utf-8")
             output_dir = Path(tmpdir) / "audio"
-            expected_output = output_dir / "001-chapter-one.mp3"
+            expected_output = output_dir / f"001-chapter-one{AUDIO_EXTENSION}"
             output_dir.mkdir(parents=True, exist_ok=True)
             expected_output.write_bytes(b"partial")
 
@@ -132,7 +196,11 @@ class TestTTS(unittest.TestCase):
         synthesize_mock.side_effect = TTSSynthesisError("No audio was received.")
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "audio" / "back-cover-synopsis.mp3"
+            output_path = (
+                Path(tmpdir)
+                / "audio"
+                / f"back-cover-synopsis{AUDIO_EXTENSION}"
+            )
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(b"partial")
 
@@ -152,23 +220,29 @@ class TestTTS(unittest.TestCase):
 
         class FakeCommunicate:
             created = 0
-            save_calls = 0
+            stream_calls = 0
 
             def __init__(self, *_args: object, **_kwargs: object) -> None:
                 FakeCommunicate.created += 1
 
-            async def save(self, path: str) -> None:
-                FakeCommunicate.save_calls += 1
-                if FakeCommunicate.save_calls == 1:
+            async def stream(self):
+                FakeCommunicate.stream_calls += 1
+                if FakeCommunicate.stream_calls == 1:
                     raise FakeNoAudioReceived("no audio")
-                Path(path).write_bytes(b"ok")
+                yield {"type": "audio", "data": b"ok"}
+                yield {
+                    "type": "WordBoundary",
+                    "offset": 0,
+                    "duration": 5_000_000,
+                    "text": "Hello",
+                }
 
         fake_edge_tts = Mock()
         fake_edge_tts.Communicate = FakeCommunicate
         fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
+            output_path = Path(tmpdir) / f"chapter{AUDIO_EXTENSION}"
             with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
                 _synthesize_with_edge_tts(
                     text="Hello world.",
@@ -188,7 +262,9 @@ class TestTTS(unittest.TestCase):
             def __init__(self, *_args: object, **_kwargs: object) -> None:
                 pass
 
-            async def save(self, _path: str) -> None:
+            async def stream(self):
+                if False:
+                    yield {}
                 raise FakeNoAudioReceived("no audio")
 
         fake_edge_tts = Mock()
@@ -196,7 +272,7 @@ class TestTTS(unittest.TestCase):
         fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
+            output_path = Path(tmpdir) / f"chapter{AUDIO_EXTENSION}"
             with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
                 with self.assertRaises(TTSSynthesisError):
                     _synthesize_with_edge_tts(
@@ -215,10 +291,16 @@ class TestTTS(unittest.TestCase):
             def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
                 self.text = text
 
-            async def save(self, path: str) -> None:
+            async def stream(self):
                 if len(self.text) <= MAX_TTS_CHARS:
                     raise FakeNoAudioReceived("no audio")
-                Path(path).write_bytes(b"ok")
+                yield {"type": "audio", "data": b"ok"}
+                yield {
+                    "type": "WordBoundary",
+                    "offset": 0,
+                    "duration": 5_000_000,
+                    "text": "Hello",
+                }
 
         fake_edge_tts = Mock()
         fake_edge_tts.Communicate = FakeCommunicate
@@ -227,8 +309,11 @@ class TestTTS(unittest.TestCase):
         long_text = "A" * (MAX_TTS_CHARS + 1)
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
+            output_path = Path(tmpdir) / f"chapter{AUDIO_EXTENSION}"
+            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}), patch(
+                "book_writer.tts.subprocess.run"
+            ) as run_mock:
+                run_mock.return_value = Mock()
                 _synthesize_with_edge_tts(
                     text=long_text,
                     output_path=output_path,
@@ -246,10 +331,16 @@ class TestTTS(unittest.TestCase):
             def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
                 self.text = text
 
-            async def save(self, path: str) -> None:
+            async def stream(self):
                 if "BAD" in self.text:
                     raise FakeChunkError("bad chunk")
-                Path(path).write_bytes(b"part")
+                yield {"type": "audio", "data": b"part"}
+                yield {
+                    "type": "WordBoundary",
+                    "offset": 0,
+                    "duration": 5_000_000,
+                    "text": "Hello",
+                }
 
         fake_edge_tts = Mock()
         fake_edge_tts.Communicate = FakeCommunicate
@@ -258,8 +349,11 @@ class TestTTS(unittest.TestCase):
         long_text = ("A" * MAX_TTS_CHARS) + "BAD" + ("B" * 5)
 
         with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
+            output_path = Path(tmpdir) / f"chapter{AUDIO_EXTENSION}"
+            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}), patch(
+                "book_writer.tts.subprocess.run"
+            ) as run_mock:
+                run_mock.return_value = Mock()
                 with self.assertRaises(TTSSynthesisError):
                     _synthesize_with_edge_tts(
                         text=long_text,

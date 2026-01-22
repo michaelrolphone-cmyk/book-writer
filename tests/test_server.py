@@ -1,3 +1,4 @@
+import json
 import unittest
 from urllib.parse import quote
 from pathlib import Path
@@ -42,7 +43,7 @@ class TestServerHelpers(unittest.TestCase):
 class TestServerApi(unittest.TestCase):
     def test_send_file_handles_client_disconnect(self) -> None:
         with TemporaryDirectory() as tmpdir:
-            media_path = Path(tmpdir) / "audio.mp3"
+            media_path = Path(tmpdir) / "audio.mp4"
             media_path.write_text("audio", encoding="utf-8")
 
             class DummyWfile:
@@ -182,7 +183,7 @@ class TestServerApi(unittest.TestCase):
             audio_dir = book_dir / "audio"
             audio_dir.mkdir(parents=True)
             (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
-            (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+            (audio_dir / "book.mp4").write_text("audio", encoding="utf-8")
             _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books(
@@ -231,7 +232,7 @@ class TestServerApi(unittest.TestCase):
             cover_dir.mkdir()
             first = book_dir / "001-chapter-one.md"
             first.write_text("# Chapter One\n\nContent", encoding="utf-8")
-            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+            (audio_dir / "001-chapter-one.mp4").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
             (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
             _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
@@ -249,6 +250,42 @@ class TestServerApi(unittest.TestCase):
         self.assertTrue(result["chapters"][0]["audio_url"].startswith(expected_base))
         self.assertTrue(result["chapters"][0]["video_url"].startswith(expected_base))
         self.assertTrue(result["chapters"][0]["cover_url"].startswith(expected_base))
+
+    def test_list_chapters_includes_paragraph_images(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            audio_dir = book_dir / "audio"
+            audio_dir.mkdir(parents=True)
+            chapter = book_dir / "001-chapter-one.md"
+            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            audio_path = audio_dir / "001-chapter-one.mp4"
+            audio_path.write_text("audio", encoding="utf-8")
+            timing_path = audio_path.with_suffix(".timed.json")
+            timing_path.write_text(
+                json.dumps(
+                    {
+                        "paragraphs": [
+                            {"text": "First paragraph", "start": 0.0, "end": 2.0}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            image_dir = book_dir / "video_images" / "001-chapter-one"
+            image_dir.mkdir(parents=True)
+            (image_dir / "001-chapter-one-001.png").write_text(
+                "image", encoding="utf-8"
+            )
+            _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
+
+            result = server.list_chapters({"book_dir": str(book_dir)})
+
+        images = result["chapters"][0]["paragraph_images"]
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0]["start"], 0.0)
+        self.assertEqual(images[0]["end"], 2.0)
+        expected_base = f"/media?book_dir={quote(str(book_dir))}"
+        self.assertTrue(images[0]["url"].startswith(expected_base))
 
     def test_get_chapter_content_returns_markdown(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -321,7 +358,7 @@ class TestServerApi(unittest.TestCase):
             cover_dir.mkdir()
             chapter = book_dir / "001-chapter-one.md"
             chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
-            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+            (audio_dir / "001-chapter-one.mp4").write_text("audio", encoding="utf-8")
             (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
             (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
             _write_chapter_summary(book_dir, "001-chapter-one", "Saved summary")
@@ -447,15 +484,15 @@ class TestServerApi(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             book_dir = Path(tmpdir) / "book"
             book_dir.mkdir()
-            media_path = book_dir / "audio" / "chapter.mp3"
+            media_path = book_dir / "audio" / "chapter.mp4"
             media_path.parent.mkdir()
             media_path.write_text("audio", encoding="utf-8")
 
-            resolved = server._resolve_media_path(book_dir, "audio/chapter.mp3")
+            resolved = server._resolve_media_path(book_dir, "audio/chapter.mp4")
 
             self.assertEqual(resolved, media_path.resolve())
             with self.assertRaises(server.ApiError):
-                server._resolve_media_path(book_dir, "../outside.mp3")
+                server._resolve_media_path(book_dir, "../outside.mp4")
 
     def test_generate_book_calls_writer(self) -> None:
         with TemporaryDirectory() as tmpdir:

@@ -32,12 +32,12 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--base-url`: LM Studio API base URL (default `http://localhost:1234`).
 - `--model`: LM Studio model name (default `local-model`).
 - `--timeout`: Optional request timeout in seconds.
-- `--tts`: Generate MP3 narration for each chapter using TTS.
+- `--tts`: Generate MP4 narration for each chapter using TTS.
 - `--tts-voice`: Voice name for TTS narration (default `en-US-JennyNeural`).
 - `--tts-rate`: Rate adjustment for TTS narration (e.g., `+5%`).
 - `--tts-pitch`: Pitch adjustment for TTS narration (e.g., `+2Hz`).
 - `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
-- `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
+- `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP4 narration.
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
 - `--video-paragraph-images`: Generate MP4 chapter videos from per-paragraph images aligned to audio timing.
@@ -67,7 +67,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `cover.png`: Generated cover image (when `--cover` is enabled).
-- `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
+- `audio/*.mp4`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 - `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
 
@@ -103,7 +103,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 **Outputs**
 - Updated chapter markdown files written in-place.
 - Updated `book.md` and regenerated `book.pdf`.
-- Regenerated `audio/*.mp3` files when `--tts` is enabled.
+- Regenerated `audio/*.mp4` files when `--tts` is enabled.
 - Regenerated `video/*.mp4` files when `--video` is enabled.
 - Updated `cover.png` when `--cover` is enabled.
 
@@ -124,7 +124,7 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 
 - Author personas live in `authors/` as markdown files (for example, `authors/curious-storyteller.md`). Provide the filename stem with `--author` to select a persona.
 - `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
-- Install the `edge-tts` package (`pip install edge-tts`) to enable MP3 narration with the default neural voice.
+- Install the `edge-tts` package (`pip install edge-tts`) to enable MP4 narration with the default neural voice.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
 
 ## Future ideas

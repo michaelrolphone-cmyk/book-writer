@@ -17,9 +17,12 @@ from book_writer.cover import (
 )
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
+    AUDIO_EXTENSION,
     TTSSynthesisError,
     TTSSettings,
+    read_paragraph_timings,
     sanitize_markdown_for_tts,
+    split_markdown_paragraphs,
     synthesize_chapter_audio,
     synthesize_text_audio,
 )
@@ -655,7 +658,9 @@ def generate_book_audio(
     audio_dir = output_dir / tts_settings.audio_dirname
     if not tts_settings.book_only:
         for chapter_file in chapter_files:
-            audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+            audio_path = (
+                audio_dir / f"{chapter_file.stem}{AUDIO_EXTENSION}"
+            )
             if audio_path.exists() and not tts_settings.overwrite_audio:
                 continue
             generated = synthesize_chapter_audio(
@@ -673,7 +678,7 @@ def generate_book_audio(
         byline,
         [path.read_text(encoding="utf-8") for path in chapter_files],
     )
-    book_audio_path = audio_dir / "book.mp3"
+    book_audio_path = audio_dir / f"book{AUDIO_EXTENSION}"
     if tts_settings.overwrite_audio or not book_audio_path.exists():
         try:
             generated = synthesize_text_audio(
@@ -692,7 +697,9 @@ def generate_book_audio(
 
     if not tts_settings.book_only:
         synopsis_path = output_dir / "back-cover-synopsis.md"
-        synopsis_audio_path = audio_dir / "back-cover-synopsis.mp3"
+        synopsis_audio_path = (
+            audio_dir / f"back-cover-synopsis{AUDIO_EXTENSION}"
+        )
         if synopsis_path.exists() and (
             tts_settings.overwrite_audio or not synopsis_audio_path.exists()
         ):
@@ -738,7 +745,7 @@ def generate_book_videos(
     video_dir = output_dir / video_settings.video_dirname
     audio_dir = output_dir / audio_dirname
     for chapter_file in chapter_files:
-        audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+        audio_path = audio_dir / f"{chapter_file.stem}{AUDIO_EXTENSION}"
         if not audio_path.exists():
             continue
         video_path = video_dir / f"{audio_path.stem}.mp4"
@@ -852,25 +859,6 @@ def _read_cover_synopsis(output_dir: Path) -> str:
     return ""
 
 
-def _split_markdown_paragraphs(content: str) -> list[str]:
-    paragraphs: list[str] = []
-    for block in re.split(r"\n\s*\n", content.strip()):
-        if not block.strip():
-            continue
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
-        if not lines:
-            continue
-        content_lines = [
-            line for line in lines if not line.lstrip().startswith("#")
-        ]
-        if not content_lines:
-            continue
-        paragraph = " ".join(content_lines).strip()
-        if paragraph:
-            paragraphs.append(paragraph)
-    return paragraphs
-
-
 def _paragraph_word_count(paragraph: str) -> int:
     cleaned = sanitize_markdown_for_tts(paragraph)
     return len(re.findall(r"\S+", cleaned))
@@ -937,15 +925,23 @@ def _generate_paragraph_images(
     theme: str,
     verbose: bool = False,
 ) -> tuple[list[Path], list[float]]:
-    paragraphs = _split_markdown_paragraphs(chapter_text)
+    paragraphs = split_markdown_paragraphs(chapter_text)
     if not paragraphs:
         raise ValueError("No paragraphs found for image generation.")
-    duration = _probe_audio_duration(audio_path)
-    if duration is None:
-        raise RuntimeError(
-            "ffprobe is required to align paragraph images with audio timing."
-        )
-    durations = _calculate_paragraph_durations(paragraphs, duration)
+    durations: list[float] = []
+    paragraph_timings = read_paragraph_timings(audio_path)
+    if paragraph_timings and len(paragraph_timings) == len(paragraphs):
+        durations = [
+            max(timing.end - timing.start, 0.1)
+            for timing in paragraph_timings
+        ]
+    if not durations:
+        duration = _probe_audio_duration(audio_path)
+        if duration is None:
+            raise RuntimeError(
+                "ffprobe is required to align paragraph images with audio timing."
+            )
+        durations = _calculate_paragraph_durations(paragraphs, duration)
     image_settings = video_settings.paragraph_images
     image_dir = (
         output_dir / image_settings.image_dirname / audio_path.stem
@@ -1140,7 +1136,9 @@ def expand_book(
             nextsteps_sections.extend(extracted_sections)
             chapter_file.write_text(cleaned_content.strip() + "\n", encoding="utf-8")
             audio_dir = chapter_file.parent / tts_settings.audio_dirname
-            audio_path = audio_dir / f"{chapter_file.stem}.mp3"
+            audio_path = (
+                audio_dir / f"{chapter_file.stem}{AUDIO_EXTENSION}"
+            )
             effective_tts_settings = tts_settings
             if auto_tts and not tts_settings.enabled and audio_path.exists():
                 effective_tts_settings = TTSSettings(
@@ -1157,7 +1155,9 @@ def expand_book(
                 settings=effective_tts_settings,
                 verbose=verbose,
             )
-            audio_path = audio_path or audio_dir / f"{chapter_file.stem}.mp3"
+            audio_path = audio_path or (
+                audio_dir / f"{chapter_file.stem}{AUDIO_EXTENSION}"
+            )
             if audio_path.exists() and video_settings.enabled:
                 chapter_text = chapter_file.read_text(encoding="utf-8")
                 if video_settings.paragraph_images.enabled:
@@ -1211,7 +1211,9 @@ def expand_book(
     try:
         synthesize_text_audio(
             text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / f"book{AUDIO_EXTENSION}",
             settings=tts_settings,
             verbose=verbose,
             raise_on_error=True,
@@ -1221,7 +1223,7 @@ def expand_book(
             f"Failed to generate full audiobook audio: {error}"
         ) from error
     if verbose:
-        print("[expand] Wrote book.mp3 for full audiobook.")
+        print(f"[expand] Wrote book{AUDIO_EXTENSION} for full audiobook.")
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
@@ -1350,7 +1352,7 @@ def write_book(
                 verbose=verbose,
             )
             audio_path = audio_path or file_path.parent / tts_settings.audio_dirname / (
-                f"{file_path.stem}.mp3"
+                f"{file_path.stem}{AUDIO_EXTENSION}"
             )
             if audio_path.exists() and video_settings.enabled:
                 chapter_text = file_path.read_text(encoding="utf-8")
@@ -1437,7 +1439,9 @@ def write_book(
     try:
         synthesize_text_audio(
             text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / f"book{AUDIO_EXTENSION}",
             settings=tts_settings,
             verbose=verbose,
             raise_on_error=True,
@@ -1447,7 +1451,7 @@ def write_book(
             f"Failed to generate full audiobook audio: {error}"
         ) from error
     if verbose:
-        print("[write] Wrote book.mp3 for full audiobook.")
+        print(f"[write] Wrote book{AUDIO_EXTENSION} for full audiobook.")
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
@@ -1460,7 +1464,9 @@ def write_book(
     synopsis_path.write_text(synopsis, encoding="utf-8")
     synthesize_text_audio(
         text=synopsis,
-        output_path=output_dir / tts_settings.audio_dirname / "back-cover-synopsis.mp3",
+        output_path=output_dir
+        / tts_settings.audio_dirname
+        / f"back-cover-synopsis{AUDIO_EXTENSION}",
         settings=tts_settings,
         verbose=verbose,
     )

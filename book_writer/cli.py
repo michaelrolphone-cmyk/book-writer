@@ -9,7 +9,7 @@ from pathlib import Path
 
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.outline import parse_outline, parse_outline_with_title
-from book_writer.tts import TTSSettings
+from book_writer.tts import AUDIO_EXTENSION, TTSSettings
 from book_writer.video import (
     ParagraphImageSettings,
     VideoSettings,
@@ -462,7 +462,9 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
     has_audio = False
     if audio_dir.is_dir():
         try:
-            has_audio = any(path.suffix == ".mp3" for path in audio_dir.iterdir())
+            has_audio = any(
+                path.suffix == AUDIO_EXTENSION for path in audio_dir.iterdir()
+            )
         except OSError:
             has_audio = False
     video_dir_path = book_dir / video_dir
@@ -1133,7 +1135,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-tts",
         action="store_false",
         dest="tts",
-        help="Disable MP3 narration for chapters and the synopsis.",
+        help="Disable MP4 narration for chapters and the synopsis.",
     )
     parser.add_argument(
         "--tts-voice",
@@ -1163,7 +1165,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tts-book-only",
         action="store_true",
-        help="Generate only the full book MP3 when producing audio narration.",
+        help="Generate only the full book MP4 when producing audio narration.",
     )
     parser.add_argument(
         "--video",

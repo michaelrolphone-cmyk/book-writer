@@ -2001,6 +2001,24 @@ def get_gui_html() -> str:
         };
       };
 
+      const getChapterPlaybackDetails = (bookDir, chapterIndex) => {
+        if (!bookDir || !chapterIndex) return null;
+        if (
+          currentChapter &&
+          currentChapter.bookDir === bookDir &&
+          Number(currentChapter.index) === Number(chapterIndex)
+        ) {
+          return currentChapter;
+        }
+        const sources = [currentChapters, autoplayState.chapters];
+        for (const list of sources) {
+          if (!list || !list.length) continue;
+          const match = list.find((chapter) => Number(chapter.index) === Number(chapterIndex));
+          if (match) return match;
+        }
+        return null;
+      };
+
       const updateNowPlayingBackground = (coverUrl) => {
         if (!nowPlaying) return;
         if (coverUrl) {
@@ -2010,6 +2028,56 @@ def get_gui_html() -> str:
         }
         nowPlaying.style.removeProperty('--now-playing-cover');
         nowPlaying.classList.remove('with-cover');
+      };
+
+      const selectParagraphImageForTime = (paragraphImages, currentTime) => {
+        if (!paragraphImages || !paragraphImages.length) return null;
+        const active = paragraphImages.find(
+          (image) => currentTime >= image.start && currentTime < image.end,
+        );
+        if (active) return active;
+        const last = paragraphImages[paragraphImages.length - 1];
+        return currentTime >= last.end ? last : null;
+      };
+
+      const stopNowPlayingImageSync = () => {
+        if (!activePlayback || !activePlayback.audio) return;
+        if (activePlayback.paragraphSyncHandler) {
+          const handler = activePlayback.paragraphSyncHandler;
+          activePlayback.audio.removeEventListener('timeupdate', handler);
+          activePlayback.audio.removeEventListener('seeked', handler);
+          activePlayback.audio.removeEventListener('loadedmetadata', handler);
+          activePlayback.paragraphSyncHandler = null;
+        }
+        if (activePlayback) {
+          activePlayback.paragraphImages = null;
+          activePlayback.backgroundUrl = null;
+        }
+      };
+
+      const startNowPlayingImageSync = () => {
+        if (!activePlayback || !activePlayback.audio) return;
+        const images = activePlayback.paragraphImages || [];
+        if (!images.length) {
+          activePlayback.backgroundUrl = null;
+          return;
+        }
+        const syncHandler = () => {
+          const selected = selectParagraphImageForTime(
+            images,
+            activePlayback.audio.currentTime || 0,
+          );
+          const nextUrl = selected ? selected.url : null;
+          if (activePlayback.backgroundUrl !== nextUrl) {
+            activePlayback.backgroundUrl = nextUrl;
+            updateNowPlayingBackground(activePlayback.backgroundUrl || activePlayback.coverUrl || null);
+          }
+        };
+        activePlayback.paragraphSyncHandler = syncHandler;
+        activePlayback.audio.addEventListener('timeupdate', syncHandler);
+        activePlayback.audio.addEventListener('seeked', syncHandler);
+        activePlayback.audio.addEventListener('loadedmetadata', syncHandler);
+        syncHandler();
       };
 
       const updateNowPlayingUI = () => {
@@ -2024,7 +2092,9 @@ def get_gui_html() -> str:
           nowPlayingSubtitle.textContent = activePlayback.subtitle || '';
         }
         nowPlaying.classList.remove('hidden');
-        updateNowPlayingBackground(activePlayback.coverUrl || null);
+        updateNowPlayingBackground(
+          activePlayback.backgroundUrl || activePlayback.coverUrl || null,
+        );
       };
 
       const restoreAudioToOrigin = (origin, audio) => {
@@ -2119,6 +2189,7 @@ def get_gui_html() -> str:
         const { audio, origin } = activePlayback;
         audio.pause();
         restoreAudioToOrigin(origin, audio);
+        stopNowPlayingImageSync();
         activePlayback = null;
         updateNowPlayingUI();
       };
@@ -2229,15 +2300,22 @@ def get_gui_html() -> str:
                   nextSibling: audio.nextSibling,
                 };
           const metadata = getPlaybackMetadata(audio);
+          const chapterDetails =
+            metadata.playbackType === 'chapter'
+              ? getChapterPlaybackDetails(metadata.bookDir, metadata.chapterIndex)
+              : null;
           activePlayback = {
             audio,
             title: titleProvider ? titleProvider() : getAudioLabel(audio),
             subtitle: metadata.bookTitle ? `Book: ${metadata.bookTitle}` : '',
             coverUrl: metadata.coverUrl || null,
+            backgroundUrl: null,
             playbackType: metadata.playbackType,
             bookDir: metadata.bookDir,
             chapterIndex: metadata.chapterIndex,
             origin,
+            paragraphImages: chapterDetails?.paragraph_images || null,
+            paragraphSyncHandler: null,
           };
           if (metadata.playbackType === 'chapter' && metadata.bookDir) {
             try {
@@ -2248,6 +2326,7 @@ def get_gui_html() -> str:
           }
           moveAudioToNowPlaying(audio);
           updateNowPlayingPlacement();
+          startNowPlayingImageSync();
         });
         audio.addEventListener('ended', async () => {
           if (activePlayback?.audio !== audio) {

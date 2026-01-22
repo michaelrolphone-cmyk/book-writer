@@ -22,7 +22,7 @@ from book_writer.cli import (
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.gui import get_gui_html
 from book_writer.outline import parse_outline_with_title
-from book_writer.tts import TTSSettings
+from book_writer.tts import AUDIO_EXTENSION, TTSSettings, read_paragraph_timings
 from book_writer.video import (
     ParagraphImageSettings,
     VideoSettings,
@@ -574,8 +574,10 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 ),
                 "book_audio_url": (
-                    _build_media_url(book.path, Path(audio_dir) / "book.mp3")
-                    if (book.path / audio_dir / "book.mp3").exists()
+                    _build_media_url(
+                        book.path, Path(audio_dir) / f"book{AUDIO_EXTENSION}"
+                    )
+                    if (book.path / audio_dir / f"book{AUDIO_EXTENSION}").exists()
                     else None
                 ),
             }
@@ -604,6 +606,35 @@ def _find_chapter_file(book_dir: Path, chapter_value: str) -> Path:
     raise ApiError(f"Chapter '{chapter_value}' not found in {book_dir}.")
 
 
+def _chapter_paragraph_images(
+    book_dir: Path,
+    audio_path: Path,
+    image_dirname: str,
+) -> list[dict[str, Any]]:
+    timings = read_paragraph_timings(audio_path)
+    if not timings:
+        return []
+    image_dir = book_dir / image_dirname / audio_path.stem
+    if not image_dir.exists():
+        return []
+    images: list[dict[str, Any]] = []
+    for index, timing in enumerate(timings, start=1):
+        image_path = image_dir / f"{audio_path.stem}-{index:03d}.png"
+        if not image_path.exists():
+            continue
+        images.append(
+            {
+                "url": _build_media_url(
+                    book_dir, image_path.relative_to(book_dir)
+                ),
+                "start": timing.start,
+                "end": timing.end,
+                "text": timing.text,
+            }
+        )
+    return images
+
+
 def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     book_dir_value = payload.get("book_dir")
     if not book_dir_value:
@@ -611,6 +642,9 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     book_dir = Path(book_dir_value)
     audio_dirname = payload.get("audio_dirname", "audio")
     video_dirname = payload.get("video_dirname", "video")
+    paragraph_image_dirname = payload.get(
+        "paragraph_image_dirname", ParagraphImageSettings().image_dirname
+    )
     chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
     chapters = []
     for index, chapter_file in enumerate(_book_chapter_files(book_dir), start=1):
@@ -620,10 +654,15 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
         summary = _ensure_chapter_summary_async(
             book_dir, chapter_file, title, content, payload
         )
-        audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+        audio_path = (
+            book_dir / audio_dirname / f"{chapter_file.stem}{AUDIO_EXTENSION}"
+        )
         video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
         cover_path = (
             book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
+        )
+        paragraph_images = _chapter_paragraph_images(
+            book_dir, audio_path, paragraph_image_dirname
         )
         chapters.append(
             {
@@ -650,6 +689,7 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
                     if video_path.exists()
                     else None
                 ),
+                "paragraph_images": paragraph_images,
             }
         )
     return {"chapters": chapters}
@@ -698,8 +738,13 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
     )
     audio_dirname = payload.get("audio_dirname", "audio")
     video_dirname = payload.get("video_dirname", "video")
+    paragraph_image_dirname = payload.get(
+        "paragraph_image_dirname", ParagraphImageSettings().image_dirname
+    )
     chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
-    audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+    audio_path = (
+        book_dir / audio_dirname / f"{chapter_file.stem}{AUDIO_EXTENSION}"
+    )
     video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
     cover_path = book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
     audio_url = (
@@ -717,6 +762,9 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
         if cover_path.exists()
         else None
     )
+    paragraph_images = _chapter_paragraph_images(
+        book_dir, audio_path, paragraph_image_dirname
+    )
     return {
         "chapter": chapter_file.name,
         "title": title,
@@ -726,6 +774,7 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
         "cover_url": cover_url,
         "audio_url": audio_url,
         "video_url": video_url,
+        "paragraph_images": paragraph_images,
     }
 
 

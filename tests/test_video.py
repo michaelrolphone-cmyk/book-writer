@@ -18,7 +18,7 @@ from book_writer.video import (
 class TestVideo(unittest.TestCase):
     def test_synthesize_chapter_video_returns_none_when_disabled(self) -> None:
         with TemporaryDirectory() as tmpdir:
-            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path = Path(tmpdir) / "chapter.mp4"
             audio_path.write_bytes(b"audio")
             output_dir = Path(tmpdir) / "video"
             settings = VideoSettings(enabled=False)
@@ -34,7 +34,7 @@ class TestVideo(unittest.TestCase):
 
     def test_synthesize_chapter_video_requires_background_video(self) -> None:
         with TemporaryDirectory() as tmpdir:
-            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path = Path(tmpdir) / "chapter.mp4"
             audio_path.write_bytes(b"audio")
             output_dir = Path(tmpdir) / "video"
             settings = VideoSettings(enabled=True, background_video=None)
@@ -51,7 +51,7 @@ class TestVideo(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             background_video = Path(tmpdir) / "background.mp4"
             background_video.write_bytes(b"video")
-            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path = Path(tmpdir) / "chapter.mp4"
             audio_path.write_bytes(b"audio")
             output_dir = Path(tmpdir) / "video"
             settings = VideoSettings(enabled=True, background_video=background_video)
@@ -80,7 +80,7 @@ class TestVideo(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             background_video = Path(tmpdir) / "background.mp4"
             background_video.write_bytes(b"video")
-            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path = Path(tmpdir) / "chapter.mp4"
             audio_path.write_bytes(b"audio")
             output_dir = Path(tmpdir) / "video"
             settings = VideoSettings(enabled=True, background_video=background_video)
@@ -104,7 +104,7 @@ class TestVideo(unittest.TestCase):
             with TemporaryDirectory() as tmpdir:
                 background_video = Path(tmpdir) / "background.mp4"
                 background_video.write_bytes(b"video")
-                audio_path = Path(tmpdir) / "chapter.mp3"
+                audio_path = Path(tmpdir) / "chapter.mp4"
                 audio_path.write_bytes(b"audio")
                 output_dir = Path(tmpdir) / "video"
                 settings = VideoSettings(enabled=True, background_video=background_video)
@@ -137,7 +137,7 @@ class TestVideo(unittest.TestCase):
             with TemporaryDirectory() as tmpdir:
                 background_video = Path(tmpdir) / "background.mp4"
                 background_video.write_bytes(b"video")
-                audio_path = Path(tmpdir) / "chapter.mp3"
+                audio_path = Path(tmpdir) / "chapter.mp4"
                 audio_path.write_bytes(b"audio")
                 output_dir = Path(tmpdir) / "video"
                 settings = VideoSettings(enabled=True, background_video=background_video)
@@ -156,7 +156,7 @@ class TestVideo(unittest.TestCase):
     def test_build_ffmpeg_command_quotes_subtitle_path(self) -> None:
         command = _build_ffmpeg_command(
             background_video=Path("background.mp4"),
-            audio_path=Path("chapter.mp3"),
+            audio_path=Path("chapter.mp4"),
             output_path=Path("chapter.mp4"),
             subtitle_path=Path("chapter:1's.srt"),
         )
@@ -216,7 +216,7 @@ class TestVideo(unittest.TestCase):
         self, run_mock: Mock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
-            audio_path = Path(tmpdir) / "chapter.mp3"
+            audio_path = Path(tmpdir) / "chapter.mp4"
             audio_path.write_bytes(b"audio")
             image_dir = Path(tmpdir) / "images"
             image_dir.mkdir()

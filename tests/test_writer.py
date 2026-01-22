@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 from urllib.error import HTTPError
 
 from book_writer.outline import OutlineItem
-from book_writer.tts import TTSSynthesisError, TTSSettings
+from book_writer.tts import AUDIO_EXTENSION, TTSSynthesisError, TTSSettings
 from book_writer.video import ParagraphImageSettings, VideoSettings
 from book_writer.cover import CoverSettings
 from book_writer.writer import (
@@ -290,7 +290,7 @@ class TestWriter(unittest.TestCase):
                     text=audiobook_text,
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "book.mp3",
+                    / f"book{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                     raise_on_error=True,
@@ -299,7 +299,7 @@ class TestWriter(unittest.TestCase):
                     text="Synopsis text",
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
+                    / f"back-cover-synopsis{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                 ),
@@ -316,8 +316,8 @@ class TestWriter(unittest.TestCase):
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
         synthesize_text_mock.side_effect = [
-            Path("book.mp3"),
-            Path("back-cover-synopsis.mp3"),
+            Path(f"book{AUDIO_EXTENSION}"),
+            Path(f"back-cover-synopsis{AUDIO_EXTENSION}"),
         ]
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -346,7 +346,7 @@ class TestWriter(unittest.TestCase):
                     text=audiobook_text,
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "book.mp3",
+                    / f"book{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                     raise_on_error=True,
@@ -355,7 +355,7 @@ class TestWriter(unittest.TestCase):
                     text="Synopsis",
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
+                    / f"back-cover-synopsis{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                 ),
@@ -452,10 +452,12 @@ class TestWriter(unittest.TestCase):
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True, overwrite_audio=True)
-        synthesize_chapter_mock.return_value = Path("chapter.mp3")
+        synthesize_chapter_mock.return_value = Path(
+            f"chapter{AUDIO_EXTENSION}"
+        )
         synthesize_text_mock.side_effect = [
-            Path("book.mp3"),
-            Path("back-cover-synopsis.mp3"),
+            Path(f"book{AUDIO_EXTENSION}"),
+            Path(f"back-cover-synopsis{AUDIO_EXTENSION}"),
         ]
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -466,11 +468,13 @@ class TestWriter(unittest.TestCase):
             synopsis_path.write_text("Synopsis", encoding="utf-8")
             audio_dir = output_dir / tts_settings.audio_dirname
             audio_dir.mkdir()
-            (audio_dir / "001-chapter-one.mp3").write_text(
+            (audio_dir / f"001-chapter-one{AUDIO_EXTENSION}").write_text(
                 "existing", encoding="utf-8"
             )
-            (audio_dir / "book.mp3").write_text("existing", encoding="utf-8")
-            (audio_dir / "back-cover-synopsis.mp3").write_text(
+            (audio_dir / f"book{AUDIO_EXTENSION}").write_text(
+                "existing", encoding="utf-8"
+            )
+            (audio_dir / f"back-cover-synopsis{AUDIO_EXTENSION}").write_text(
                 "existing", encoding="utf-8"
             )
             audiobook_text = build_audiobook_text(
@@ -491,14 +495,15 @@ class TestWriter(unittest.TestCase):
             [
                 call(
                     text=audiobook_text,
-                    output_path=audio_dir / "book.mp3",
+                    output_path=audio_dir / f"book{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                     raise_on_error=True,
                 ),
                 call(
                     text="Synopsis",
-                    output_path=audio_dir / "back-cover-synopsis.mp3",
+                    output_path=audio_dir
+                    / f"back-cover-synopsis{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                 ),
@@ -513,7 +518,7 @@ class TestWriter(unittest.TestCase):
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True, book_only=True)
-        synthesize_text_mock.return_value = Path("book.mp3")
+        synthesize_text_mock.return_value = Path(f"book{AUDIO_EXTENSION}")
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -533,7 +538,9 @@ class TestWriter(unittest.TestCase):
         synthesize_chapter_mock.assert_not_called()
         synthesize_text_mock.assert_called_once_with(
             text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / f"book{AUDIO_EXTENSION}",
             settings=tts_settings,
             verbose=False,
             raise_on_error=True,
@@ -547,7 +554,9 @@ class TestWriter(unittest.TestCase):
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True)
-        synthesize_chapter_mock.return_value = Path("audio/001-chapter-one.mp3")
+        synthesize_chapter_mock.return_value = Path(
+            f"audio/001-chapter-one{AUDIO_EXTENSION}"
+        )
         synthesize_text_mock.side_effect = TTSSynthesisError("no audio")
 
         with TemporaryDirectory() as tmpdir:
@@ -582,7 +591,7 @@ class TestWriter(unittest.TestCase):
             chapter_text = chapter_path.read_text(encoding="utf-8")
             audio_dir = output_dir / "audio"
             audio_dir.mkdir()
-            audio_path = audio_dir / "001-chapter-one.mp3"
+            audio_path = audio_dir / f"001-chapter-one{AUDIO_EXTENSION}"
             audio_path.write_text("audio", encoding="utf-8")
 
             generate_book_videos(output_dir, video_settings, audio_dirname="audio")
@@ -631,7 +640,7 @@ class TestWriter(unittest.TestCase):
             )
             audio_dir = output_dir / "audio"
             audio_dir.mkdir()
-            audio_path = audio_dir / "001-chapter-one.mp3"
+            audio_path = audio_dir / f"001-chapter-one{AUDIO_EXTENSION}"
             audio_path.write_text("audio", encoding="utf-8")
 
             generate_book_videos(
@@ -722,7 +731,7 @@ class TestWriter(unittest.TestCase):
                     text=audiobook_text,
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "book.mp3",
+                    / f"book{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                     raise_on_error=True,
@@ -731,7 +740,7 @@ class TestWriter(unittest.TestCase):
                     text="Synopsis text",
                     output_path=output_dir
                     / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
+                    / f"back-cover-synopsis{AUDIO_EXTENSION}",
                     settings=tts_settings,
                     verbose=False,
                 ),
@@ -767,7 +776,7 @@ class TestWriter(unittest.TestCase):
             def _create_audio(*_args: object, **kwargs: object) -> Path:
                 audio_dir = kwargs["output_dir"]
                 audio_dir.mkdir(parents=True, exist_ok=True)
-                audio_path = audio_dir / "001-chapter-one.mp3"
+                audio_path = audio_dir / f"001-chapter-one{AUDIO_EXTENSION}"
                 audio_path.write_bytes(b"audio")
                 return audio_path
 
@@ -784,7 +793,10 @@ class TestWriter(unittest.TestCase):
         synthesize_video_mock.assert_called_once()
         video_kwargs = synthesize_video_mock.call_args.kwargs
         self.assertIn("# Chapter One", video_kwargs["text"])
-        self.assertEqual(video_kwargs["audio_path"].name, "001-chapter-one.mp3")
+        self.assertEqual(
+            video_kwargs["audio_path"].name,
+            f"001-chapter-one{AUDIO_EXTENSION}",
+        )
         self.assertEqual(
             video_kwargs["output_dir"], written_files[0].parent / "video"
         )
@@ -1246,7 +1258,9 @@ class TestWriter(unittest.TestCase):
         )
         synthesize_text_mock.assert_called_once_with(
             text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / f"book{AUDIO_EXTENSION}",
             settings=tts_settings,
             verbose=False,
             raise_on_error=True,
@@ -1269,7 +1283,9 @@ class TestWriter(unittest.TestCase):
             )
             audio_dir = output_dir / "audio"
             audio_dir.mkdir(parents=True, exist_ok=True)
-            (audio_dir / "001-chapter-one.mp3").write_text("existing", encoding="utf-8")
+            (audio_dir / f"001-chapter-one{AUDIO_EXTENSION}").write_text(
+                "existing", encoding="utf-8"
+            )
 
             expand_book(output_dir, client)
 
