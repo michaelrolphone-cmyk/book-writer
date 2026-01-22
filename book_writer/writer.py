@@ -19,10 +19,17 @@ from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
     TTSSynthesisError,
     TTSSettings,
+    sanitize_markdown_for_tts,
     synthesize_chapter_audio,
     synthesize_text_audio,
 )
-from book_writer.video import VideoSettings, synthesize_chapter_video
+from book_writer.video import (
+    VideoSettings,
+    _probe_audio_duration,
+    generate_paragraph_image,
+    synthesize_chapter_video,
+    synthesize_chapter_video_from_images,
+)
 
 
 @dataclass(frozen=True)
@@ -709,12 +716,28 @@ def generate_book_videos(
     video_settings: VideoSettings,
     audio_dirname: str = "audio",
     verbose: bool = False,
+    client: LMStudioClient | None = None,
 ) -> List[Path]:
     if not video_settings.enabled:
         return []
     chapter_files = _chapter_files(output_dir)
     if not chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    image_theme: str | None = None
+    if video_settings.paragraph_images.enabled:
+        if client is None:
+            raise ValueError(
+                "LM Studio client is required to generate paragraph images."
+            )
+        book_metadata, _ = _read_book_metadata(output_dir, chapter_files)
+        outline_text = book_metadata.content
+        if not outline_text:
+            outline_text = _derive_outline_from_chapters(chapter_files)
+        image_theme = _generate_image_theme(
+            client,
+            book_metadata.title,
+            outline_text,
+        )
     created: List[Path] = []
     video_dir = output_dir / video_settings.video_dirname
     audio_dir = output_dir / audio_dirname
@@ -725,13 +748,33 @@ def generate_book_videos(
         video_path = video_dir / f"{audio_path.stem}.mp4"
         if video_path.exists():
             continue
-        generated = synthesize_chapter_video(
-            audio_path=audio_path,
-            output_dir=video_dir,
-            settings=video_settings,
-            verbose=verbose,
-            text=chapter_file.read_text(encoding="utf-8"),
-        )
+        chapter_text = chapter_file.read_text(encoding="utf-8")
+        if video_settings.paragraph_images.enabled:
+            image_paths, durations = _generate_paragraph_images(
+                client,
+                chapter_text,
+                audio_path,
+                output_dir,
+                video_settings,
+                image_theme or "",
+                verbose=verbose,
+            )
+            generated = synthesize_chapter_video_from_images(
+                audio_path=audio_path,
+                output_dir=video_dir,
+                image_paths=image_paths,
+                durations=durations,
+                settings=video_settings,
+                verbose=verbose,
+            )
+        else:
+            generated = synthesize_chapter_video(
+                audio_path=audio_path,
+                output_dir=video_dir,
+                settings=video_settings,
+                verbose=verbose,
+                text=chapter_text,
+            )
         if generated:
             created.append(generated)
         elif video_path.exists():
@@ -811,6 +854,125 @@ def _read_cover_synopsis(output_dir: Path) -> str:
     if synopsis_path.exists():
         return synopsis_path.read_text(encoding="utf-8").strip()
     return ""
+
+
+def _split_markdown_paragraphs(content: str) -> list[str]:
+    paragraphs: list[str] = []
+    for block in re.split(r"\n\s*\n", content.strip()):
+        if not block.strip():
+            continue
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        content_lines = [
+            line for line in lines if not line.lstrip().startswith("#")
+        ]
+        if not content_lines:
+            continue
+        paragraph = " ".join(content_lines).strip()
+        if paragraph:
+            paragraphs.append(paragraph)
+    return paragraphs
+
+
+def _paragraph_word_count(paragraph: str) -> int:
+    cleaned = sanitize_markdown_for_tts(paragraph)
+    return len(re.findall(r"\S+", cleaned))
+
+
+def _calculate_paragraph_durations(
+    paragraphs: list[str], audio_duration: float
+) -> list[float]:
+    if audio_duration <= 0:
+        raise ValueError("Audio duration must be greater than zero.")
+    weights = [max(_paragraph_word_count(p), 1) for p in paragraphs]
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        raise ValueError("Unable to calculate paragraph weights.")
+    durations = [
+        audio_duration * weight / total_weight for weight in weights
+    ]
+    if durations:
+        remaining = audio_duration - sum(durations[:-1])
+        durations[-1] = max(remaining, 0.1)
+    return durations
+
+
+def _generate_image_theme(
+    client: LMStudioClient,
+    book_title: str,
+    outline_text: str,
+) -> str:
+    prompt = (
+        "Define a cohesive visual theme for imagery in a book video. "
+        "Use 1-2 sentences describing art style, palette, lighting, era, and mood. "
+        "Avoid summarizing plot details or listing multiple options.\n\n"
+        f"Book title: {book_title}\n"
+        f"Outline:\n{outline_text}".strip()
+    )
+    return client.generate(prompt).strip()
+
+
+def _describe_paragraph_image(
+    client: LMStudioClient,
+    theme: str,
+    paragraph: str,
+    last_image: str | None,
+) -> str:
+    last_image_text = last_image or "None yet."
+    prompt = (
+        "You are describing a single image for a book video.\n"
+        f"Imagery theme: {theme}\n"
+        f"Previous image: {last_image_text}\n"
+        f"Paragraph: {paragraph}\n\n"
+        "Describe one image that represents the paragraph, stays consistent with the "
+        "theme, and flows logically from the previous image. "
+        "Return 1-2 sentences. Do not use bullet points, quotes, or mention text."
+    )
+    return client.generate(prompt).strip()
+
+
+def _generate_paragraph_images(
+    client: LMStudioClient,
+    chapter_text: str,
+    audio_path: Path,
+    output_dir: Path,
+    video_settings: VideoSettings,
+    theme: str,
+    verbose: bool = False,
+) -> tuple[list[Path], list[float]]:
+    paragraphs = _split_markdown_paragraphs(chapter_text)
+    if not paragraphs:
+        raise ValueError("No paragraphs found for image generation.")
+    duration = _probe_audio_duration(audio_path)
+    if duration is None:
+        raise RuntimeError(
+            "ffprobe is required to align paragraph images with audio timing."
+        )
+    durations = _calculate_paragraph_durations(paragraphs, duration)
+    image_settings = video_settings.paragraph_images
+    image_dir = (
+        output_dir / image_settings.image_dirname / audio_path.stem
+    )
+    last_image_description: str | None = None
+    image_paths: list[Path] = []
+    for index, paragraph in enumerate(paragraphs, start=1):
+        description = _describe_paragraph_image(
+            client, theme, paragraph, last_image_description
+        )
+        prompt = f"{theme}\n{description}".strip()
+        output_path = image_dir / f"{audio_path.stem}-{index:03d}.png"
+        generated = generate_paragraph_image(
+            prompt=prompt,
+            output_path=output_path,
+            settings=image_settings,
+            verbose=verbose,
+        )
+        if generated is None:
+            raise RuntimeError("Failed to generate a paragraph image.")
+        image_paths.append(generated)
+        last_image_description = description
+    return image_paths, durations
 
 
 def _summarize_cover_text(
@@ -953,6 +1115,17 @@ def expand_book(
 
     if verbose:
         print(f"[expand] Expanding book in {output_dir} with {passes} pass(es).")
+    image_theme: str | None = None
+    if video_settings.enabled and video_settings.paragraph_images.enabled:
+        book_metadata, _ = _read_book_metadata(output_dir, all_chapter_files)
+        outline_text = book_metadata.content
+        if not outline_text:
+            outline_text = _derive_outline_from_chapters(all_chapter_files)
+        image_theme = _generate_image_theme(
+            client,
+            book_metadata.title,
+            outline_text,
+        )
     nextsteps_sections: list[str] = []
     for _ in range(passes):
         if verbose:
@@ -989,14 +1162,36 @@ def expand_book(
                 verbose=verbose,
             )
             audio_path = audio_path or audio_dir / f"{chapter_file.stem}.mp3"
-            if audio_path.exists():
-                synthesize_chapter_video(
-                    audio_path=audio_path,
-                    output_dir=chapter_file.parent / video_settings.video_dirname,
-                    settings=video_settings,
-                    verbose=verbose,
-                    text=chapter_file.read_text(encoding="utf-8"),
-                )
+            if audio_path.exists() and video_settings.enabled:
+                chapter_text = chapter_file.read_text(encoding="utf-8")
+                if video_settings.paragraph_images.enabled:
+                    image_paths, durations = _generate_paragraph_images(
+                        client,
+                        chapter_text,
+                        audio_path,
+                        output_dir,
+                        video_settings,
+                        image_theme or "",
+                        verbose=verbose,
+                    )
+                    synthesize_chapter_video_from_images(
+                        audio_path=audio_path,
+                        output_dir=chapter_file.parent
+                        / video_settings.video_dirname,
+                        image_paths=image_paths,
+                        durations=durations,
+                        settings=video_settings,
+                        verbose=verbose,
+                    )
+                else:
+                    synthesize_chapter_video(
+                        audio_path=audio_path,
+                        output_dir=chapter_file.parent
+                        / video_settings.video_dirname,
+                        settings=video_settings,
+                        verbose=verbose,
+                        text=chapter_text,
+                    )
 
     book_metadata, byline = _read_book_metadata(output_dir, all_chapter_files)
     outline_text = book_metadata.content
@@ -1102,6 +1297,17 @@ def write_book(
         }
         save_book_progress(output_dir, progress)
 
+    image_theme: str | None = None
+    if video_settings.enabled and video_settings.paragraph_images.enabled:
+        title_for_theme = book_title or (
+            items[0].title if items else "Untitled"
+        )
+        image_theme = _generate_image_theme(
+            client,
+            title_for_theme,
+            outline_to_text(items),
+        )
+
     while index < len(items):
         item = items[index]
         if verbose:
@@ -1150,14 +1356,36 @@ def write_book(
             audio_path = audio_path or file_path.parent / tts_settings.audio_dirname / (
                 f"{file_path.stem}.mp3"
             )
-            if audio_path.exists():
-                synthesize_chapter_video(
-                    audio_path=audio_path,
-                    output_dir=file_path.parent / video_settings.video_dirname,
-                    settings=video_settings,
-                    verbose=verbose,
-                    text=file_path.read_text(encoding="utf-8"),
-                )
+            if audio_path.exists() and video_settings.enabled:
+                chapter_text = file_path.read_text(encoding="utf-8")
+                if video_settings.paragraph_images.enabled:
+                    image_paths, durations = _generate_paragraph_images(
+                        client,
+                        chapter_text,
+                        audio_path,
+                        output_dir,
+                        video_settings,
+                        image_theme or "",
+                        verbose=verbose,
+                    )
+                    synthesize_chapter_video_from_images(
+                        audio_path=audio_path,
+                        output_dir=file_path.parent
+                        / video_settings.video_dirname,
+                        image_paths=image_paths,
+                        durations=durations,
+                        settings=video_settings,
+                        verbose=verbose,
+                    )
+                else:
+                    synthesize_chapter_video(
+                        audio_path=audio_path,
+                        output_dir=file_path.parent
+                        / video_settings.video_dirname,
+                        settings=video_settings,
+                        verbose=verbose,
+                        text=chapter_text,
+                    )
             if verbose:
                 print(f"[write] Wrote {file_path.name}.")
             if item.level == 1:

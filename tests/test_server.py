@@ -23,6 +23,8 @@ class TestServerHelpers(unittest.TestCase):
         self.assertFalse(settings.enabled)
         self.assertEqual(settings.video_dirname, "video")
         self.assertIsNone(settings.background_video)
+        self.assertFalse(settings.paragraph_images.enabled)
+        self.assertEqual(settings.paragraph_images.image_dirname, "video_images")
 
 
 class TestServerApi(unittest.TestCase):

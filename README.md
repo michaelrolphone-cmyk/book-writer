@@ -40,6 +40,18 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
+- `--video-paragraph-images`: Generate MP4 chapter videos from per-paragraph images aligned to audio timing.
+- `--video-image-dir`: Directory name for storing per-paragraph images (default `video_images`).
+- `--video-image-model-path`: Path to the Core ML resources for paragraph image generation.
+- `--video-image-module-path`: Path to the `python_coreml_stable_diffusion` module (default: `../ml-stable-diffusion`).
+- `--video-image-negative-prompt`: Negative prompt for paragraph image generation.
+- `--video-image-steps`: Inference steps for paragraph image generation.
+- `--video-image-guidance-scale`: Guidance scale for paragraph image generation.
+- `--video-image-seed`: Seed for paragraph image generation.
+- `--video-image-width`: Width for paragraph image generation.
+- `--video-image-height`: Height for paragraph image generation.
+- `--video-image-overwrite`: Overwrite existing paragraph images.
+- `--video-image-command`: Custom command template for paragraph image generation.
 - `--cover`: Generate a book cover image using `python_coreml_stable_diffusion`.
 - `--cover-model-path`: Path to the compiled Core ML resource folder for cover generation.
 - `--cover-module-path`: Path to the `python_coreml_stable_diffusion` module (default: `../ml-stable-diffusion`).
@@ -57,6 +69,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
+- `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
 
 ### Generate multiple books from an outlines directory
 
