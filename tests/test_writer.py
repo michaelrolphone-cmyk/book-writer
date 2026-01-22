@@ -23,6 +23,7 @@ from book_writer.writer import (
     build_prompt,
     build_synopsis_prompt,
     _base_prompt,
+    _expand_prompt_text,
     _sanitize_markdown_for_latex,
     compile_book,
     expand_book,
@@ -44,6 +45,18 @@ class TestWriter(unittest.TestCase):
         prompt = _base_prompt("curious-storyteller")
 
         self.assertIn("curious storyteller", prompt.casefold())
+
+    def test_base_prompt_includes_continuity_guidance(self) -> None:
+        prompt = _base_prompt()
+
+        self.assertIn("continuity", prompt.casefold())
+        self.assertIn("repetition", prompt.casefold())
+
+    def test_expand_prompt_mentions_bridging_sentences(self) -> None:
+        prompt = _expand_prompt_text()
+
+        self.assertIn("bridging sentences", prompt.casefold())
+        self.assertIn("continuity", prompt.casefold())
 
     def test_build_prompt_includes_outline_and_current_item(self) -> None:
         items = [
