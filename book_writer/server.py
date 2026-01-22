@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import math
 import mimetypes
+import re
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,6 +41,28 @@ from book_writer.writer import (
 
 class ApiError(ValueError):
     """Raised when API input is invalid."""
+
+
+WORDS_PER_PAGE = 300
+WORD_PATTERN = re.compile(r"\b\w+\b")
+
+
+def _estimate_page_count(content: str) -> int:
+    words = len(WORD_PATTERN.findall(content))
+    if words == 0:
+        return 0
+    return math.ceil(words / WORDS_PER_PAGE)
+
+
+def _sum_book_pages(book_dir: Path) -> int:
+    total = 0
+    for chapter_file in _book_chapter_files(book_dir):
+        try:
+            content = chapter_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        total += _estimate_page_count(content)
+    return total
 
 
 def _get_value(data: dict[str, Any], key: str, default: Any = None) -> Any:
@@ -329,6 +353,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "has_compilation": book.has_compilation,
                 "has_cover": (book.path / "cover.png").exists(),
                 "chapter_count": len(_book_chapter_files(book.path)),
+                "page_count": _sum_book_pages(book.path),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))
                     if (book.path / "cover.png").exists()
@@ -377,6 +402,7 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
     for index, chapter_file in enumerate(_book_chapter_files(book_dir), start=1):
         content = chapter_file.read_text(encoding="utf-8")
         title = _chapter_title_from_content(content, chapter_file.stem)
+        page_count = _estimate_page_count(content)
         audio_path = book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
         video_path = book_dir / video_dirname / f"{chapter_file.stem}.mp4"
         cover_path = (
@@ -388,6 +414,7 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
                 "name": chapter_file.name,
                 "stem": chapter_file.stem,
                 "title": title,
+                "page_count": page_count,
                 "cover_url": (
                     _build_media_url(
                         book_dir, cover_path.relative_to(book_dir)
@@ -473,6 +500,7 @@ def get_chapter_content(payload: dict[str, Any]) -> dict[str, Any]:
         "chapter": chapter_file.name,
         "title": title,
         "content": content,
+        "page_count": _estimate_page_count(content),
         "cover_url": cover_url,
         "audio_url": audio_url,
         "video_url": video_url,

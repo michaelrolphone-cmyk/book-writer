@@ -121,15 +121,26 @@ class TestServerApi(unittest.TestCase):
             books_dir = Path(tmpdir) / "books"
             book_dir = books_dir / "sample"
             book_dir.mkdir(parents=True)
-            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            first_content = "# Chapter One\n\n" + ("word " * 250)
+            second_content = "# Chapter Two\n\n" + ("word " * 350)
+            (book_dir / "001-chapter-one.md").write_text(
+                first_content, encoding="utf-8"
+            )
+            (book_dir / "002-chapter-two.md").write_text(
+                second_content, encoding="utf-8"
+            )
 
             result = server.list_books({"books_dir": str(books_dir)})
 
         self.assertEqual(len(result["books"]), 1)
         self.assertTrue(result["books"][0]["has_text"])
-        self.assertEqual(result["books"][0]["chapter_count"], 1)
+        self.assertEqual(result["books"][0]["chapter_count"], 2)
         self.assertIsNone(result["books"][0]["book_audio_url"])
         self.assertFalse(result["books"][0]["has_cover"])
+        expected_pages = server._estimate_page_count(
+            first_content
+        ) + server._estimate_page_count(second_content)
+        self.assertEqual(result["books"][0]["page_count"], expected_pages)
 
     def test_list_books_handles_unreadable_chapters(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -172,8 +183,10 @@ class TestServerApi(unittest.TestCase):
             book_dir.mkdir()
             first = book_dir / "001-chapter-one.md"
             second = book_dir / "002-chapter-two.md"
-            first.write_text("# Chapter One\n\nContent", encoding="utf-8")
-            second.write_text("# Chapter Two\n\nContent", encoding="utf-8")
+            first_content = "# Chapter One\n\nContent " + ("word " * 300)
+            second_content = "# Chapter Two\n\nContent " + ("word " * 10)
+            first.write_text(first_content, encoding="utf-8")
+            second.write_text(second_content, encoding="utf-8")
 
             result = server.list_chapters({"book_dir": str(book_dir)})
 
@@ -181,6 +194,14 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(result["chapters"][0]["title"], "Chapter One")
         self.assertEqual(result["chapters"][1]["title"], "Chapter Two")
         self.assertIsNone(result["chapters"][0]["audio_url"])
+        self.assertEqual(
+            result["chapters"][0]["page_count"],
+            server._estimate_page_count(first_content),
+        )
+        self.assertEqual(
+            result["chapters"][1]["page_count"],
+            server._estimate_page_count(second_content),
+        )
 
     def test_list_chapters_includes_media_urls(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -216,7 +237,8 @@ class TestServerApi(unittest.TestCase):
             book_dir = Path(tmpdir) / "book"
             book_dir.mkdir()
             chapter = book_dir / "001-chapter-one.md"
-            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            content = "# Chapter One\n\nContent " + ("word " * 100)
+            chapter.write_text(content, encoding="utf-8")
 
             result = server.get_chapter_content(
                 {"book_dir": str(book_dir), "chapter": "001-chapter-one.md"}
@@ -224,6 +246,7 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(result["title"], "Chapter One")
         self.assertIn("Content", result["content"])
+        self.assertEqual(result["page_count"], server._estimate_page_count(content))
 
     def test_get_outline_content_returns_content(self) -> None:
         with TemporaryDirectory() as tmpdir:

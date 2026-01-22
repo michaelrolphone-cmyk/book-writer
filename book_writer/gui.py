@@ -1300,6 +1300,7 @@ def get_gui_html() -> str:
                 <span class="status-chip" id="bookWorkspaceState"></span>
               </div>
               <p class="meta-line" id="bookWorkspacePath"></p>
+              <p class="meta-line" id="bookWorkspacePages"></p>
               <div class="detail-section">
                 <h4>Book actions</h4>
                 <div class="workspace-actions">
@@ -1358,6 +1359,7 @@ def get_gui_html() -> str:
           <div class="detail-heading">
             <h2 id="chapterHeading">Chapter view</h2>
             <p id="chapterSubheading">Select a chapter to read and play media.</p>
+            <p class="meta-line" id="chapterPageCount"></p>
           </div>
         </div>
         <div id="nowPlayingChapterSlot"></div>
@@ -1607,6 +1609,19 @@ def get_gui_html() -> str:
 
       const displayChapterTitle = (title) => sanitizeTitleForDisplay(title, 'chapter');
 
+      const formatPageCount = (count) => {
+        const resolved = Number(count);
+        const safeCount = Number.isFinite(resolved) ? resolved : 0;
+        return `${safeCount} page${safeCount === 1 ? '' : 's'}`;
+      };
+
+      const sumChapterPages = (chapters) =>
+        (chapters || []).reduce((total, chapter) => {
+          const resolved = Number(chapter?.page_count);
+          const safeCount = Number.isFinite(resolved) ? resolved : 0;
+          return total + safeCount;
+        }, 0);
+
       const searchInput = document.getElementById('searchInput');
       const outlineSelect = document.getElementById('outlineSelect');
       const bookSelect = document.getElementById('bookSelect');
@@ -1632,6 +1647,7 @@ def get_gui_html() -> str:
       const chapterBack = document.getElementById('chapterBack');
       const chapterHeading = document.getElementById('chapterHeading');
       const chapterSubheading = document.getElementById('chapterSubheading');
+      const chapterPageCount = document.getElementById('chapterPageCount');
       const chapterReaderTitle = document.getElementById('chapterReaderTitle');
       const chapterReaderBody = document.getElementById('chapterReaderBody');
       const chapterViewAudioBlock = document.getElementById('chapterViewAudioBlock');
@@ -1669,6 +1685,7 @@ def get_gui_html() -> str:
       const bookWorkspaceTitle = document.getElementById('bookWorkspaceTitle');
       const bookWorkspaceCoverHeader = document.getElementById('bookWorkspaceCoverHeader');
       const bookWorkspacePath = document.getElementById('bookWorkspacePath');
+      const bookWorkspacePages = document.getElementById('bookWorkspacePages');
       const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
       const chapterShelf = document.getElementById('chapterShelf');
       const chapterCount = document.getElementById('chapterCount');
@@ -2231,7 +2248,9 @@ def get_gui_html() -> str:
       const createChapterCard = (bookDir, chapter, bookCoverUrl, bookTitle) => {
         const title = chapter.title || `Chapter ${chapter.index}`;
         const displayTitle = displayChapterTitle(title);
-        const detail = chapter.summary || 'Select to preview chapter content.';
+        const detail = `${
+          chapter.summary || 'Select to preview chapter content.'
+        }\n${formatPageCount(chapter.page_count)}`;
         const card = createCard(
           title,
           `Chapter ${chapter.index}`,
@@ -2281,6 +2300,9 @@ def get_gui_html() -> str:
         updateNowPlayingPlacement();
         chapterShelf.innerHTML = '';
         chapterCount.textContent = `${chapters.length} chapters`;
+        if (bookWorkspacePages) {
+          bookWorkspacePages.textContent = formatPageCount(sumChapterPages(chapters));
+        }
         if (!chapters.length) {
           renderEmpty(chapterShelf, 'No chapters found for this book yet.');
           return;
@@ -2379,6 +2401,7 @@ def get_gui_html() -> str:
         const chapterTitle = chapter.title || `Chapter ${chapter.index}`;
         chapterHeading.textContent = displayChapterTitle(chapterTitle);
         chapterSubheading.textContent = `Book: ${bookDir.split('/').pop()}`;
+        chapterPageCount.textContent = formatPageCount(chapter.page_count);
         const audioDir = document.getElementById('audioDir').value || 'audio';
         const videoDir = document.getElementById('videoDir').value || 'video';
         const chapterCoverDir = document.getElementById('chapterCoverDir').value || 'chapter_covers';
@@ -2394,6 +2417,7 @@ def get_gui_html() -> str:
         const readerTitleValue = result.title || 'Chapter preview';
         const displayReaderTitle = displayChapterTitle(readerTitleValue);
         chapterReaderTitle.textContent = displayReaderTitle;
+        chapterPageCount.textContent = formatPageCount(result.page_count ?? chapter.page_count);
         chapterReaderBody.innerHTML = renderMarkdown(result.content || '');
         restoreChapterAudioToDetail();
         setHiddenImageSource(chapterCoverImage, result.cover_url);
@@ -2456,6 +2480,7 @@ def get_gui_html() -> str:
           const resolvedBookTitle = bookTitle || entry.path.split('/').pop();
           bookWorkspaceTitle.textContent = resolvedBookTitle;
           bookWorkspacePath.textContent = entry.path;
+          bookWorkspacePages.textContent = formatPageCount(entry.page_count);
           setMediaSource(bookAudioBlock, bookAudio, entry.book_audio_url);
           setBookAudioMetadata(bookAudio, entry.path, resolvedBookTitle, entry.cover_url || '');
           setHiddenImageSource(bookCoverImage, entry.cover_url);
@@ -2724,9 +2749,9 @@ def get_gui_html() -> str:
               : book.has_text
                 ? 'Drafting'
                 : 'No chapters';
-            const detail = `${book.chapter_count || 0} chapters\\n${
-              statusFlags.join(' • ') || 'No media yet'
-            }`;
+            const detail = `${formatPageCount(book.page_count)}\\n${
+              book.chapter_count || 0
+            } chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
             const progress = (statusFlags.length / 4) * 100;
             const displayTitle = displayBookTitle(book.title);
             const card = createCard(
