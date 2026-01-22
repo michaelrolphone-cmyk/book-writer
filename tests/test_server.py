@@ -357,11 +357,75 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(result["synopsis"], "Synopsis text.")
 
-    @patch("book_writer.server._build_client")
-    def test_list_books_generates_summary_when_missing(
-        self, build_client_mock: MagicMock
-    ) -> None:
-        build_client_mock.return_value.generate.return_value = "Generated summary."
+    def test_list_books_schedules_summary_generation_when_missing(self) -> None:
+        started: list[object] = []
+
+        class DummyThread:
+            def __init__(self, target: object, daemon: bool) -> None:
+                self.target = target
+                self.daemon = daemon
+
+            def start(self) -> None:
+                started.append(self)
+
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nContent", encoding="utf-8"
+            )
+            summary_path = book_dir / "summaries" / "book-summary.md"
+
+            with patch("book_writer.server.threading.Thread", DummyThread):
+                try:
+                    result = server.list_books({"books_dir": str(books_dir)})
+                finally:
+                    server._SUMMARY_TASKS.clear()
+
+            self.assertEqual(result["books"][0]["summary"], "")
+            self.assertEqual(len(started), 1)
+            self.assertFalse(summary_path.exists())
+
+    def test_list_chapters_schedules_summary_generation_when_missing(self) -> None:
+        started: list[object] = []
+
+        class DummyThread:
+            def __init__(self, target: object, daemon: bool) -> None:
+                self.target = target
+                self.daemon = daemon
+
+            def start(self) -> None:
+                started.append(self)
+
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            chapter = book_dir / "001-chapter-one.md"
+            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            summary_path = book_dir / "summaries" / "chapters" / "001-chapter-one.md"
+
+            with patch("book_writer.server.threading.Thread", DummyThread):
+                try:
+                    result = server.list_chapters({"book_dir": str(book_dir)})
+                finally:
+                    server._SUMMARY_TASKS.clear()
+
+            self.assertEqual(result["chapters"][0]["summary"], "")
+            self.assertEqual(len(started), 1)
+            self.assertFalse(summary_path.exists())
+
+    def test_summary_generation_dedupes_background_tasks(self) -> None:
+        started: list[object] = []
+
+        class DummyThread:
+            def __init__(self, target: object, daemon: bool) -> None:
+                self.target = target
+                self.daemon = daemon
+
+            def start(self) -> None:
+                started.append(self)
+
         with TemporaryDirectory() as tmpdir:
             books_dir = Path(tmpdir) / "books"
             book_dir = books_dir / "sample"
@@ -370,28 +434,14 @@ class TestServerApi(unittest.TestCase):
                 "# Chapter One\n\nContent", encoding="utf-8"
             )
 
-            result = server.list_books({"books_dir": str(books_dir)})
+            with patch("book_writer.server.threading.Thread", DummyThread):
+                try:
+                    server.list_books({"books_dir": str(books_dir)})
+                    server.list_books({"books_dir": str(books_dir)})
+                finally:
+                    server._SUMMARY_TASKS.clear()
 
-            self.assertEqual(result["books"][0]["summary"], "Generated summary.")
-            summary_path = book_dir / "summaries" / "book-summary.md"
-            self.assertTrue(summary_path.exists())
-
-    @patch("book_writer.server._build_client")
-    def test_list_chapters_generates_summary_when_missing(
-        self, build_client_mock: MagicMock
-    ) -> None:
-        build_client_mock.return_value.generate.return_value = "Chapter summary."
-        with TemporaryDirectory() as tmpdir:
-            book_dir = Path(tmpdir) / "book"
-            book_dir.mkdir()
-            chapter = book_dir / "001-chapter-one.md"
-            chapter.write_text("# Chapter One\n\nContent", encoding="utf-8")
-
-            result = server.list_chapters({"book_dir": str(book_dir)})
-
-            self.assertEqual(result["chapters"][0]["summary"], "Chapter summary.")
-            summary_path = book_dir / "summaries" / "chapters" / "001-chapter-one.md"
-            self.assertTrue(summary_path.exists())
+            self.assertEqual(len(started), 1)
 
     def test_resolve_media_path_blocks_escape(self) -> None:
         with TemporaryDirectory() as tmpdir:
