@@ -25,6 +25,7 @@ class OutlineItem:
     title: str
     level: int
     parent_title: Optional[str] = None
+    source: str = "heading"
 
     @property
     def type_label(self) -> str:
@@ -194,6 +195,7 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
                 title=bullet_text,
                 level=bullet_level,
                 parent_title=parent_title,
+                source="bullet",
             )
         )
         last_title_for_level[bullet_level] = bullet_text

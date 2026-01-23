@@ -63,12 +63,14 @@ class TestOutlineParsing(unittest.TestCase):
                     title="Bullet one",
                     level=2,
                     parent_title="Chapter 1: Redefining Motherhood",
+                    source="bullet",
                 ),
                 OutlineItem(title="Chapter 2: The Foundation of Trust", level=1),
                 OutlineItem(
                     title="Bullet two",
                     level=2,
                     parent_title="Chapter 2: The Foundation of Trust",
+                    source="bullet",
                 ),
             ],
         )
@@ -122,12 +124,14 @@ class TestOutlineParsing(unittest.TestCase):
                     title="Bullet one",
                     level=2,
                     parent_title="Introduction: The Eternal Call of Service",
+                    source="bullet",
                 ),
                 OutlineItem(title="Chapter 1: The Divine Blueprint", level=1),
                 OutlineItem(
                     title="Bullet two",
                     level=2,
                     parent_title="Chapter 1: The Divine Blueprint",
+                    source="bullet",
                 ),
             ],
         )
@@ -335,17 +339,20 @@ class TestOutlineParsing(unittest.TestCase):
                     title="Beat one",
                     level=3,
                     parent_title="Section A",
+                    source="bullet",
                 ),
                 OutlineItem(
                     title="Beat two",
                     level=4,
                     parent_title="Beat one",
+                    source="bullet",
                 ),
                 OutlineItem(title="Section B", level=2, parent_title="Chapter One"),
                 OutlineItem(
                     title="Beat three",
                     level=3,
                     parent_title="Section B",
+                    source="bullet",
                 ),
             ],
         )
