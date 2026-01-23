@@ -212,6 +212,7 @@ def _prompt_for_task_settings(
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        allow_network=args.tts_allow_network,
     )
     if audio_enabled:
         voice = questionary.text(
@@ -242,6 +243,7 @@ def _prompt_for_task_settings(
             audio_dirname=audio_dir or args.tts_audio_dir,
             overwrite_audio=overwrite_audio,
             book_only=args.tts_book_only,
+            allow_network=args.tts_allow_network,
         )
 
     video_enabled = "video" in selected
@@ -565,6 +567,7 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         audio_dirname=audio_dir or args.tts_audio_dir,
         overwrite_audio=overwrite_audio,
         book_only=book_only,
+        allow_network=args.tts_allow_network,
     )
 
 
@@ -860,6 +863,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        allow_network=args.tts_allow_network,
     )
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
@@ -1170,6 +1174,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate only the full book MP3 when producing audio narration.",
     )
     parser.add_argument(
+        "--tts-allow-network",
+        action="store_true",
+        help="Allow network access for TTS (required for Edge TTS).",
+    )
+    parser.add_argument(
         "--video",
         action="store_true",
         help="Enable MP4 chapter videos using a background video and chapter audio.",
@@ -1442,6 +1451,7 @@ def main() -> int:
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        allow_network=args.tts_allow_network,
     )
     video_settings = VideoSettings(
         enabled=args.video,

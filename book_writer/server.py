@@ -295,6 +295,7 @@ def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
         audio_dirname=tts_payload.get("audio_dirname", "audio"),
         overwrite_audio=bool(tts_payload.get("overwrite_audio", False)),
         book_only=bool(tts_payload.get("book_only", False)),
+        allow_network=bool(tts_payload.get("allow_network", False)),
     )
 
 
