@@ -1287,7 +1287,8 @@ def write_book(
     index = 0
     previous_chapter: Optional[ChapterContext] = None
     nextsteps_sections: list[str] = []
-    total_steps = len(items)
+    generation_items = [item for item in items if item.source != "bullet"]
+    total_steps = len(generation_items)
     progress = load_book_progress(output_dir) if resume else None
     if progress and progress.get("status") == "in_progress" and resume:
         if (
@@ -1295,6 +1296,9 @@ def write_book(
             and progress.get("outline_hash")
             and progress.get("outline_hash") != outline_hash
         ):
+            clear_book_progress(output_dir)
+            progress = None
+        elif outline_hash and "outline_hash" not in progress:
             clear_book_progress(output_dir)
             progress = None
         elif progress.get("total_steps") == total_steps:
@@ -1350,18 +1354,18 @@ def write_book(
             outline_to_text(items),
         )
 
-    while index < len(items):
-        item = items[index]
+    while index < len(generation_items):
+        item = generation_items[index]
         if verbose:
             print(
-                f"[write] Step {index + 1}/{len(items)}: "
+                f"[write] Step {index + 1}/{len(generation_items)}: "
                 f"Generating {item.type_label} '{item.title}'."
             )
         prompt = build_prompt(items, item, previous_chapter, tone=tone)
         if log_prompts:
             full_prompt = client.render_prompt(prompt)
             print(
-                f"[prompt] {item.type_label.title()} {index + 1}/{len(items)}: "
+                f"[prompt] {item.type_label.title()} {index + 1}/{len(generation_items)}: "
                 f"{item.title}\n{full_prompt}\n"
             )
         content = client.generate(prompt)
