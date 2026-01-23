@@ -162,6 +162,24 @@ def parse_outline_with_title(path: Path) -> tuple[Optional[str], List[OutlineIte
                 level = 1
                 items.append(OutlineItem(title=heading_title, level=level))
             else:
+                if not _looks_like_outline_item(heading_title):
+                    bullet_level = max(adjusted_hashes, 2)
+                    parent_title = last_title_for_level.get(bullet_level - 1)
+                    if not parent_title:
+                        parent_title = last_title_for_level.get(last_outline_level)
+                    items.append(
+                        OutlineItem(
+                            title=heading_title,
+                            level=bullet_level,
+                            parent_title=parent_title,
+                            source="bullet",
+                        )
+                    )
+                    last_title_for_level[bullet_level] = heading_title
+                    for depth in list(last_title_for_level):
+                        if depth > bullet_level:
+                            del last_title_for_level[depth]
+                    continue
                 level = 2
                 items.append(
                     OutlineItem(

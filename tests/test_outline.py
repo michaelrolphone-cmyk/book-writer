@@ -298,6 +298,37 @@ class TestOutlineParsing(unittest.TestCase):
             ],
         )
 
+    def test_parse_outline_treats_non_outline_headings_as_beats(self) -> None:
+        content = """
+# Chapter One
+## A quiet discovery
+### The hidden letter
+"""
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text(content.strip(), encoding="utf-8")
+
+            items = parse_outline(outline_path)
+
+        self.assertEqual(
+            items,
+            [
+                OutlineItem(title="Chapter One", level=1),
+                OutlineItem(
+                    title="A quiet discovery",
+                    level=2,
+                    parent_title="Chapter One",
+                    source="bullet",
+                ),
+                OutlineItem(
+                    title="The hidden letter",
+                    level=3,
+                    parent_title="A quiet discovery",
+                    source="bullet",
+                ),
+            ],
+        )
+
     def test_outline_to_text_formats_items(self) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),
