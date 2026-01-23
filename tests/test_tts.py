@@ -146,6 +146,18 @@ class TestTTS(unittest.TestCase):
             self.assertIsNone(audio_path)
             self.assertFalse(output_path.exists())
 
+    def test_edge_tts_requires_network_permission(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with self.assertRaises(TTSSynthesisError) as context:
+                _synthesize_with_edge_tts(
+                    text="Hello world.",
+                    output_path=output_path,
+                    settings=TTSSettings(enabled=True, allow_network=False),
+                )
+            self.assertFalse(output_path.exists())
+            self.assertIn("network access", str(context.exception))
+
     def test_edge_tts_retries_on_no_audio(self) -> None:
         class FakeNoAudioReceived(Exception):
             pass
@@ -173,7 +185,7 @@ class TestTTS(unittest.TestCase):
                 _synthesize_with_edge_tts(
                     text="Hello world.",
                     output_path=output_path,
-                    settings=TTSSettings(enabled=True),
+                    settings=TTSSettings(enabled=True, allow_network=True),
                 )
 
             self.assertTrue(output_path.exists())
@@ -202,7 +214,7 @@ class TestTTS(unittest.TestCase):
                     _synthesize_with_edge_tts(
                         text="Hello world.",
                         output_path=output_path,
-                        settings=TTSSettings(enabled=True),
+                        settings=TTSSettings(enabled=True, allow_network=True),
                     )
 
             self.assertFalse(output_path.exists())
@@ -232,7 +244,7 @@ class TestTTS(unittest.TestCase):
                 _synthesize_with_edge_tts(
                     text=long_text,
                     output_path=output_path,
-                    settings=TTSSettings(enabled=True),
+                    settings=TTSSettings(enabled=True, allow_network=True),
                 )
 
             self.assertTrue(output_path.exists())
@@ -264,7 +276,7 @@ class TestTTS(unittest.TestCase):
                     _synthesize_with_edge_tts(
                         text=long_text,
                         output_path=output_path,
-                        settings=TTSSettings(enabled=True),
+                        settings=TTSSettings(enabled=True, allow_network=True),
                     )
 
             self.assertFalse(output_path.exists())

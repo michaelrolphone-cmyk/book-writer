@@ -22,6 +22,7 @@ class TTSSettings:
     audio_dirname: str = "audio"
     overwrite_audio: bool = False
     book_only: bool = False
+    allow_network: bool = False
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -136,6 +137,11 @@ def _synthesize_with_edge_tts(
     output_path: Path,
     settings: TTSSettings,
 ) -> None:
+    if not settings.allow_network:
+        raise TTSSynthesisError(
+            "Edge TTS requires network access. Enable network access to continue."
+        )
+
     import edge_tts
 
     async def _save_with_retries(
