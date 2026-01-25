@@ -287,15 +287,23 @@ def _ensure_chapter_summary_async(
 
 def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
     tts_payload = payload.get("tts_settings") or {}
+    defaults = TTSSettings()
     return TTSSettings(
         enabled=bool(tts_payload.get("enabled", payload.get("tts", True))),
-        voice=tts_payload.get("voice", "en-US-JennyNeural"),
-        rate=tts_payload.get("rate", "+0%"),
-        pitch=tts_payload.get("pitch", "+0Hz"),
-        audio_dirname=tts_payload.get("audio_dirname", "audio"),
+        voice=tts_payload.get("voice", defaults.voice),
+        language=tts_payload.get("language", defaults.language),
+        instruct=tts_payload.get("instruct", defaults.instruct),
+        model_path=tts_payload.get("model_path", defaults.model_path),
+        device_map=tts_payload.get("device_map", defaults.device_map),
+        dtype=tts_payload.get("dtype", defaults.dtype),
+        attn_implementation=tts_payload.get(
+            "attn_implementation", defaults.attn_implementation
+        ),
+        rate=tts_payload.get("rate", defaults.rate),
+        pitch=tts_payload.get("pitch", defaults.pitch),
+        audio_dirname=tts_payload.get("audio_dirname", defaults.audio_dirname),
         overwrite_audio=bool(tts_payload.get("overwrite_audio", False)),
         book_only=bool(tts_payload.get("book_only", False)),
-        allow_network=bool(tts_payload.get("allow_network", False)),
     )
 
 

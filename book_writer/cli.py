@@ -10,7 +10,7 @@ from pathlib import Path
 
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.outline import parse_outline, parse_outline_with_title
-from book_writer.tts import TTSSettings
+from book_writer.tts import DEFAULT_QWEN3_MODEL_PATH, TTSSettings
 from book_writer.video import (
     ParagraphImageSettings,
     VideoSettings,
@@ -190,25 +190,34 @@ def _prompt_for_task_settings(
     tts_settings = TTSSettings(
         enabled=audio_enabled,
         voice=args.tts_voice,
+        language=args.tts_language,
+        instruct=args.tts_instruct,
+        model_path=args.tts_model_path,
+        device_map=args.tts_device_map,
+        dtype=args.tts_dtype,
+        attn_implementation=args.tts_attn_implementation,
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
-        allow_network=args.tts_allow_network,
     )
     if audio_enabled:
         voice = questionary.text(
-            "TTS voice:",
+            "TTS speaker:",
             default=args.tts_voice,
         ).ask()
-        rate = questionary.text(
-            "TTS rate:",
-            default=args.tts_rate,
+        language = questionary.text(
+            "TTS language:",
+            default=args.tts_language,
         ).ask()
-        pitch = questionary.text(
-            "TTS pitch:",
-            default=args.tts_pitch,
+        instruct = questionary.text(
+            "TTS instruct (optional):",
+            default=args.tts_instruct or "",
+        ).ask()
+        model_path = questionary.text(
+            "Qwen3 model path:",
+            default=args.tts_model_path,
         ).ask()
         audio_dir = questionary.text(
             "Audio output directory:",
@@ -221,12 +230,17 @@ def _prompt_for_task_settings(
         tts_settings = TTSSettings(
             enabled=True,
             voice=voice or args.tts_voice,
-            rate=rate or args.tts_rate,
-            pitch=pitch or args.tts_pitch,
+            language=language or args.tts_language,
+            instruct=instruct or None,
+            model_path=model_path or args.tts_model_path,
+            device_map=args.tts_device_map,
+            dtype=args.tts_dtype,
+            attn_implementation=args.tts_attn_implementation,
+            rate=args.tts_rate,
+            pitch=args.tts_pitch,
             audio_dirname=audio_dir or args.tts_audio_dir,
             overwrite_audio=overwrite_audio,
             book_only=args.tts_book_only,
-            allow_network=args.tts_allow_network,
         )
 
     video_enabled = "video" in selected
@@ -519,16 +533,20 @@ def _prompt_for_book_selection(book_info: list[BookInfo]) -> list[BookInfo]:
 def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
     questionary = _questionary()
     voice = questionary.text(
-        "TTS voice:",
+        "TTS speaker:",
         default=args.tts_voice,
     ).ask()
-    rate = questionary.text(
-        "TTS rate:",
-        default=args.tts_rate,
+    language = questionary.text(
+        "TTS language:",
+        default=args.tts_language,
     ).ask()
-    pitch = questionary.text(
-        "TTS pitch:",
-        default=args.tts_pitch,
+    instruct = questionary.text(
+        "TTS instruct (optional):",
+        default=args.tts_instruct or "",
+    ).ask()
+    model_path = questionary.text(
+        "Qwen3 model path:",
+        default=args.tts_model_path,
     ).ask()
     audio_dir = questionary.text(
         "Audio output directory:",
@@ -545,12 +563,17 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
     return TTSSettings(
         enabled=True,
         voice=voice or args.tts_voice,
-        rate=rate or args.tts_rate,
-        pitch=pitch or args.tts_pitch,
+        language=language or args.tts_language,
+        instruct=instruct or None,
+        model_path=model_path or args.tts_model_path,
+        device_map=args.tts_device_map,
+        dtype=args.tts_dtype,
+        attn_implementation=args.tts_attn_implementation,
+        rate=args.tts_rate,
+        pitch=args.tts_pitch,
         audio_dirname=audio_dir or args.tts_audio_dir,
         overwrite_audio=overwrite_audio,
         book_only=book_only,
-        allow_network=args.tts_allow_network,
     )
 
 
@@ -841,12 +864,17 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     tts_settings = TTSSettings(
         enabled=False,
         voice=args.tts_voice,
+        language=args.tts_language,
+        instruct=args.tts_instruct,
+        model_path=args.tts_model_path,
+        device_map=args.tts_device_map,
+        dtype=args.tts_dtype,
+        attn_implementation=args.tts_attn_implementation,
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
-        allow_network=args.tts_allow_network,
     )
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
@@ -1128,18 +1156,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tts-voice",
-        default="en-US-JennyNeural",
-        help="Voice name for TTS narration (default: en-US-JennyNeural).",
+        default="Ryan",
+        help="Speaker name for Qwen3 narration (default: Ryan).",
+    )
+    parser.add_argument(
+        "--tts-language",
+        default="English",
+        help="Language label for Qwen3 narration (default: English).",
+    )
+    parser.add_argument(
+        "--tts-instruct",
+        default=None,
+        help="Optional instruction prompt for Qwen3 narration (e.g., 'Very happy.').",
+    )
+    parser.add_argument(
+        "--tts-model-path",
+        default=str(DEFAULT_QWEN3_MODEL_PATH),
+        help="Path to the Qwen3 TTS model directory.",
+    )
+    parser.add_argument(
+        "--tts-device-map",
+        default="auto",
+        help="Device map for Qwen3 (e.g., 'auto', 'mps', 'cuda').",
+    )
+    parser.add_argument(
+        "--tts-dtype",
+        default="float32",
+        help="Torch dtype for Qwen3 (e.g., 'float32', 'float16').",
+    )
+    parser.add_argument(
+        "--tts-attn-implementation",
+        default="sdpa",
+        help="Attention implementation for Qwen3 (default: sdpa).",
     )
     parser.add_argument(
         "--tts-rate",
         default="+0%",
-        help="Rate adjustment for TTS narration (e.g., '+5%').",
+        help="Rate adjustment for legacy TTS (unused by Qwen3).",
     )
     parser.add_argument(
         "--tts-pitch",
         default="+0Hz",
-        help="Pitch adjustment for TTS narration (e.g., '+2Hz').",
+        help="Pitch adjustment for legacy TTS (unused by Qwen3).",
     )
     parser.add_argument(
         "--tts-audio-dir",
@@ -1155,11 +1213,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--tts-book-only",
         action="store_true",
         help="Generate only the full book MP3 when producing audio narration.",
-    )
-    parser.add_argument(
-        "--tts-allow-network",
-        action="store_true",
-        help="Allow network access for TTS (required for Edge TTS).",
     )
     parser.add_argument(
         "--video",
@@ -1429,12 +1482,17 @@ def main() -> int:
     tts_settings = TTSSettings(
         enabled=args.tts,
         voice=args.tts_voice,
+        language=args.tts_language,
+        instruct=args.tts_instruct,
+        model_path=args.tts_model_path,
+        device_map=args.tts_device_map,
+        dtype=args.tts_dtype,
+        attn_implementation=args.tts_attn_implementation,
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
-        allow_network=args.tts_allow_network,
     )
     video_settings = VideoSettings(
         enabled=args.video,
