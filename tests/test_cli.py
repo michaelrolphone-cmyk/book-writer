@@ -449,6 +449,34 @@ class TestCliResumeFlow(unittest.TestCase):
 
 
 class TestCliPromptFlow(unittest.TestCase):
+    def test_prompt_selects_outlines_once_with_unchecked_defaults(self) -> None:
+        outline_info = [
+            cli.OutlineInfo(
+                path=Path("alpha.md"),
+                title="Alpha",
+                items=[],
+                preview_text="Preview A",
+            ),
+            cli.OutlineInfo(
+                path=Path("beta.md"),
+                title="Beta",
+                items=[],
+                preview_text="Preview B",
+            ),
+        ]
+
+        def _select(**kwargs: Any) -> list[cli.OutlineInfo]:
+            choices = kwargs["choices"]
+            self.assertTrue(choices)
+            self.assertTrue(all(not choice.checked for choice in choices))
+            return [choices[0].value]
+
+        questionary_stub = _QuestionaryStub([_select])
+        with patch("book_writer.cli._questionary", return_value=questionary_stub):
+            selected = cli._prompt_for_outline_selection(outline_info)
+
+        self.assertEqual(selected, [outline_info[0]])
+
     @patch("book_writer.cli.write_books_from_outlines")
     def test_prompt_selects_outlines_tones_and_tasks(
         self, write_mock: MagicMock
@@ -463,7 +491,6 @@ class TestCliPromptFlow(unittest.TestCase):
             questionary_stub = _QuestionaryStub(
                 [
                     "create",
-                    [],
                     lambda choices: [choice.value for choice in choices],
                     "curious-storyteller",
                     "precise-historian",
@@ -588,7 +615,6 @@ class TestCliPromptCombinedFlows(unittest.TestCase):
             questionary_stub = _QuestionaryStub(
                 [
                     "create",
-                    [],
                     lambda choices: [choice.value for choice in choices],
                     "curious-storyteller",
                     "precise-historian",

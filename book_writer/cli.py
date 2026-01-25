@@ -83,26 +83,9 @@ def _prompt_for_outline_selection(outline_info: list["OutlineInfo"]) -> list["Ou
         )
         for info in outline_info
     ]
-    preview_selection = questionary.checkbox(
-        "Select outlines to preview (optional):",
-        choices=choices,
-    ).ask()
-    if preview_selection:
-        for info in preview_selection:
-            print(f"\nPreview for {info.path.name}:")
-            print(info.preview_text)
-
-    selection_choices = [
-        questionary.Choice(
-            title=f"{info.path.name} — {info.title or '(title will be generated)'}",
-            value=info,
-            checked=True,
-        )
-        for info in outline_info
-    ]
     selected = questionary.checkbox(
         "Select outlines to generate:",
-        choices=selection_choices,
+        choices=choices,
     ).ask()
     return selected or []
 
