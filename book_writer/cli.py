@@ -542,7 +542,7 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
     ).ask()
     instruct = questionary.text(
         "TTS instruct (optional):",
-        default=args.tts_instruct or "",
+        default=args.tts_instruct or "Read in a clear, professional, and confident adult narrator's voice. Speak at a natural, conversational pace - not too fast, not too slow. Maintain a mature, authoritative tone suitable for adult literature. Use subtle emphasis and natural pauses only where appropriate for clarity, avoiding any condescending or overly dramatic delivery.",
     ).ask()
     model_path = questionary.text(
         "Qwen3 model path:",
