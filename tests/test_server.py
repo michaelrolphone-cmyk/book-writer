@@ -24,7 +24,8 @@ class TestServerHelpers(unittest.TestCase):
         settings = server._parse_tts_settings({})
 
         self.assertTrue(settings.enabled)
-        self.assertEqual(settings.voice, "en-US-JennyNeural")
+        self.assertEqual(settings.voice, "Ryan")
+        self.assertEqual(settings.language, "English")
         self.assertEqual(settings.audio_dirname, "audio")
         self.assertFalse(settings.overwrite_audio)
         self.assertFalse(settings.book_only)

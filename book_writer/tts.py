@@ -1,28 +1,42 @@
 from __future__ import annotations
 
-import asyncio
+import functools
+import subprocess
 import re
 import tempfile
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Sequence
 
 
 class TTSSynthesisError(RuntimeError):
     """Raised when TTS synthesis fails but should not crash the workflow."""
 
 
+DEFAULT_QWEN3_MODEL_PATH = (
+    Path(__file__).resolve().parents[1].parent
+    / "audio"
+    / "models"
+    / "Qwen3-TTS-12Hz-1.7B-CustomVoice"
+)
+
+
 @dataclass(frozen=True)
 class TTSSettings:
     enabled: bool = False
-    voice: str = "en-US-JennyNeural"
+    voice: str = "Ryan"
+    language: str = "English"
+    instruct: str | None = None
+    model_path: str = str(DEFAULT_QWEN3_MODEL_PATH)
+    device_map: str = "auto"
+    dtype: str = "float32"
+    attn_implementation: str = "sdpa"
     rate: str = "+0%"
     pitch: str = "+0Hz"
     audio_dirname: str = "audio"
     overwrite_audio: bool = False
     book_only: bool = False
-    allow_network: bool = False
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -36,7 +50,6 @@ BULLET_LIST_PATTERN = re.compile(r"^[-*+]\s+")
 HEADING_PATTERN = re.compile(r"^#+\s*")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 MAX_TTS_CHARS = 3000
-MAX_TTS_RETRIES = 2
 
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
@@ -126,104 +139,128 @@ def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
     return [chunk for chunk in chunks if chunk]
 
 
-def _concat_audio_files(parts: Iterable[Path], output_path: Path) -> None:
-    with output_path.open("wb") as output:
-        for part in parts:
-            output.write(part.read_bytes())
+def _resolve_model_path(settings: TTSSettings) -> Path:
+    model_path = Path(settings.model_path or DEFAULT_QWEN3_MODEL_PATH)
+    model_path = model_path.expanduser()
+    if not model_path.exists():
+        raise TTSSynthesisError(
+            "Qwen3 model path not found. Update tts_settings.model_path "
+            f"or --tts-model-path (missing: {model_path})."
+        )
+    return model_path
 
 
-def _synthesize_with_edge_tts(
+@functools.lru_cache(maxsize=2)
+def _load_qwen3_model(
+    model_path: str,
+    dtype: str,
+    attn_implementation: str,
+    device_map: str,
+):
+    import torch
+    from qwen_tts import Qwen3TTSModel
+
+    dtype_value = getattr(torch, dtype, None)
+    if dtype_value is None:
+        raise TTSSynthesisError(f"Unsupported torch dtype '{dtype}'.")
+    return Qwen3TTSModel.from_pretrained(
+        model_path,
+        dtype=dtype_value,
+        attn_implementation=attn_implementation,
+        device_map=device_map,
+    )
+
+
+def _run_ffmpeg(wav_path: Path, output_path: Path) -> None:
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(wav_path),
+                "-codec:a",
+                "libmp3lame",
+                str(output_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise TTSSynthesisError(
+            "ffmpeg is required to convert Qwen3 audio to MP3. "
+            "Install ffmpeg and try again."
+        ) from error
+    if result.returncode != 0:
+        raise TTSSynthesisError(
+            "ffmpeg failed to convert the audio to MP3. "
+            f"stderr: {result.stderr.strip()}"
+        )
+
+
+def _write_mp3_from_waveform(
+    waveform: Sequence[float],
+    sample_rate: int,
+    output_path: Path,
+) -> None:
+    import soundfile as sf
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = Path(tmpdir) / "qwen3-tts.wav"
+        sf.write(str(wav_path), waveform, sample_rate)
+        _run_ffmpeg(wav_path, output_path)
+
+
+def _synthesize_with_qwen3_tts(
     text: str,
     output_path: Path,
     settings: TTSSettings,
 ) -> None:
-    if not settings.allow_network:
-        raise TTSSynthesisError(
-            "Edge TTS requires network access. Enable network access to continue."
-        )
-
-    import edge_tts
-
-    async def _save_with_retries(
-        communicate_factory: Callable[[], edge_tts.Communicate],
-        path: Path,
-    ) -> None:
-        for attempt in range(MAX_TTS_RETRIES + 1):
-            communicate = communicate_factory()
-            try:
-                await communicate.save(str(path))
-                return
-            except edge_tts.exceptions.NoAudioReceived as error:
-                if attempt >= MAX_TTS_RETRIES:
-                    raise TTSSynthesisError(
-                        "No audio was received from Edge TTS after retries. "
-                        "Verify the voice, rate, pitch, and network connectivity."
-                    ) from error
-
-    async def _save_text(text_part: str, path: Path) -> None:
-        await _save_with_retries(
-            lambda: edge_tts.Communicate(
-                text_part,
-                voice=settings.voice,
-                rate=settings.rate,
-                pitch=settings.pitch,
-            ),
-            path,
-        )
+    model_path = _resolve_model_path(settings)
+    tts = _load_qwen3_model(
+        str(model_path),
+        settings.dtype,
+        settings.attn_implementation,
+        settings.device_map,
+    )
 
     chunks = split_text_for_tts(text, MAX_TTS_CHARS)
     if not chunks:
         return
-    if len(chunks) == 1:
-        async def _run() -> None:
-            try:
-                await _save_text(chunks[0], output_path)
-            except Exception as error:
-                raise error
 
-        asyncio.run(_run())
-        return
+    waveforms: list[list[float]] = []
+    sample_rate: int | None = None
+    for chunk in chunks:
+        wavs, sr = tts.generate_custom_voice(
+            text=chunk,
+            language=settings.language,
+            speaker=settings.voice,
+            instruct=settings.instruct,
+        )
+        if not wavs:
+            raise TTSSynthesisError("Qwen3 returned no audio data.")
+        chunk_waveform = _normalize_waveform(wavs[0])
+        if sample_rate is None:
+            sample_rate = sr
+        elif sr != sample_rate:
+            raise TTSSynthesisError("Qwen3 returned mismatched sample rates.")
+        waveforms.append(chunk_waveform)
 
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            part_paths: list[Path] = []
-            chunk_error: TTSSynthesisError | None = None
-            for index, chunk in enumerate(chunks, start=1):
-                part_path = Path(tmpdir) / f"part-{index:03d}.mp3"
+    if sample_rate is None:
+        raise TTSSynthesisError("Qwen3 did not return a sample rate.")
+    combined = (
+        [sample for waveform in waveforms for sample in waveform]
+        if len(waveforms) > 1
+        else waveforms[0]
+    )
+    _write_mp3_from_waveform(combined, sample_rate, output_path)
 
-                async def _run_part(text_part: str, path: Path) -> None:
-                    try:
-                        await _save_text(text_part, path)
-                    except Exception as error:
-                        raise error
 
-                try:
-                    asyncio.run(_run_part(chunk, part_path))
-                except TTSSynthesisError as error:
-                    chunk_error = error
-                    break
-                except Exception as error:
-                    chunk_error = TTSSynthesisError(str(error))
-                    break
-                part_paths.append(part_path)
-
-            if chunk_error is not None:
-                raise chunk_error
-            if part_paths:
-                _concat_audio_files(part_paths, output_path)
-                return
-            return
-    except TTSSynthesisError as error:
-        async def _fallback() -> None:
-            try:
-                await _save_text(text, output_path)
-            except Exception as fallback_error:
-                raise fallback_error
-
-        try:
-            asyncio.run(_fallback())
-        except TTSSynthesisError:
-            raise error
+def _normalize_waveform(waveform: Sequence[float]) -> list[float]:
+    if hasattr(waveform, "tolist"):
+        return waveform.tolist()
+    return list(waveform)
 
 
 def synthesize_chapter_audio(
@@ -242,7 +279,7 @@ def synthesize_chapter_audio(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{chapter_path.stem}.mp3"
     try:
-        _synthesize_with_edge_tts(text, output_path, settings)
+        _synthesize_with_qwen3_tts(text, output_path, settings)
     except TTSSynthesisError as error:
         if output_path.exists():
             output_path.unlink()
@@ -270,7 +307,7 @@ def synthesize_text_audio(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _synthesize_with_edge_tts(cleaned, output_path, settings)
+        _synthesize_with_qwen3_tts(cleaned, output_path, settings)
     except TTSSynthesisError as error:
         if output_path.exists():
             output_path.unlink()

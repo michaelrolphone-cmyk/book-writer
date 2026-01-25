@@ -4,10 +4,9 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from book_writer.tts import (
-    MAX_TTS_CHARS,
     TTSSynthesisError,
     TTSSettings,
-    _synthesize_with_edge_tts,
+    _synthesize_with_qwen3_tts,
     sanitize_markdown_for_tts,
     split_text_for_tts,
     synthesize_chapter_audio,
@@ -51,7 +50,7 @@ class TestTTS(unittest.TestCase):
         self.assertEqual(" ".join(chunks), text)
         self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
 
-    @patch("book_writer.tts._synthesize_with_edge_tts")
+    @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_writes_mp3(
         self, synthesize_mock: Mock
     ) -> None:
@@ -77,7 +76,7 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Chapter One", called_text)
         self.assertIn("This is bold text.", called_text)
 
-    @patch("book_writer.tts._synthesize_with_edge_tts")
+    @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_text_audio_writes_mp3(self, synthesize_mock: Mock) -> None:
         settings = TTSSettings(enabled=True, audio_dirname="audio")
         text = "# Synopsis\n\nThis is a **synopsis**."
@@ -99,7 +98,7 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Synopsis", called_text)
         self.assertIn("This is a synopsis.", called_text)
 
-    @patch("book_writer.tts._synthesize_with_edge_tts")
+    @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_handles_tts_errors(
         self, synthesize_mock: Mock
     ) -> None:
@@ -124,7 +123,7 @@ class TestTTS(unittest.TestCase):
             self.assertIsNone(audio_path)
             self.assertFalse(expected_output.exists())
 
-    @patch("book_writer.tts._synthesize_with_edge_tts")
+    @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_text_audio_handles_tts_errors(
         self, synthesize_mock: Mock
     ) -> None:
@@ -146,140 +145,48 @@ class TestTTS(unittest.TestCase):
             self.assertIsNone(audio_path)
             self.assertFalse(output_path.exists())
 
-    def test_edge_tts_requires_network_permission(self) -> None:
+    @patch("book_writer.tts._write_mp3_from_waveform")
+    @patch("book_writer.tts._load_qwen3_model")
+    def test_synthesize_with_qwen3_tts_calls_model(
+        self,
+        load_mock: Mock,
+        write_mock: Mock,
+    ) -> None:
+        fake_model = Mock()
+        fake_model.generate_custom_voice.return_value = ([[0.1, 0.2]], 24000)
+        load_mock.return_value = fake_model
+        settings = TTSSettings(
+            enabled=True,
+            model_path="models",
+            voice="Ryan",
+            language="English",
+            instruct="Very happy.",
+            device_map="cpu",
+            dtype="float32",
+            attn_implementation="sdpa",
+        )
+
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "chapter.mp3"
-            with self.assertRaises(TTSSynthesisError) as context:
-                _synthesize_with_edge_tts(
+            with patch("book_writer.tts._resolve_model_path", return_value=Path("models")):
+                _synthesize_with_qwen3_tts(
                     text="Hello world.",
                     output_path=output_path,
-                    settings=TTSSettings(enabled=True, allow_network=False),
-                )
-            self.assertFalse(output_path.exists())
-            self.assertIn("network access", str(context.exception))
-
-    def test_edge_tts_retries_on_no_audio(self) -> None:
-        class FakeNoAudioReceived(Exception):
-            pass
-
-        class FakeCommunicate:
-            created = 0
-            save_calls = 0
-
-            def __init__(self, *_args: object, **_kwargs: object) -> None:
-                FakeCommunicate.created += 1
-
-            async def save(self, path: str) -> None:
-                FakeCommunicate.save_calls += 1
-                if FakeCommunicate.save_calls == 1:
-                    raise FakeNoAudioReceived("no audio")
-                Path(path).write_bytes(b"ok")
-
-        fake_edge_tts = Mock()
-        fake_edge_tts.Communicate = FakeCommunicate
-        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
-
-        with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
-                _synthesize_with_edge_tts(
-                    text="Hello world.",
-                    output_path=output_path,
-                    settings=TTSSettings(enabled=True, allow_network=True),
+                    settings=settings,
                 )
 
-            self.assertTrue(output_path.exists())
-            self.assertEqual(output_path.read_bytes(), b"ok")
-            self.assertGreaterEqual(FakeCommunicate.created, 2)
-
-    def test_edge_tts_raises_after_retries(self) -> None:
-        class FakeNoAudioReceived(Exception):
-            pass
-
-        class FakeCommunicate:
-            def __init__(self, *_args: object, **_kwargs: object) -> None:
-                pass
-
-            async def save(self, _path: str) -> None:
-                raise FakeNoAudioReceived("no audio")
-
-        fake_edge_tts = Mock()
-        fake_edge_tts.Communicate = FakeCommunicate
-        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
-
-        with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
-                with self.assertRaises(TTSSynthesisError):
-                    _synthesize_with_edge_tts(
-                        text="Hello world.",
-                        output_path=output_path,
-                        settings=TTSSettings(enabled=True, allow_network=True),
-                    )
-
-            self.assertFalse(output_path.exists())
-
-    def test_edge_tts_falls_back_to_single_request_on_chunk_failure(self) -> None:
-        class FakeNoAudioReceived(Exception):
-            pass
-
-        class FakeCommunicate:
-            def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
-                self.text = text
-
-            async def save(self, path: str) -> None:
-                if len(self.text) <= MAX_TTS_CHARS:
-                    raise FakeNoAudioReceived("no audio")
-                Path(path).write_bytes(b"ok")
-
-        fake_edge_tts = Mock()
-        fake_edge_tts.Communicate = FakeCommunicate
-        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeNoAudioReceived)
-
-        long_text = "A" * (MAX_TTS_CHARS + 1)
-
-        with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
-                _synthesize_with_edge_tts(
-                    text=long_text,
-                    output_path=output_path,
-                    settings=TTSSettings(enabled=True, allow_network=True),
-                )
-
-            self.assertTrue(output_path.exists())
-            self.assertEqual(output_path.read_bytes(), b"ok")
-
-    def test_edge_tts_raises_when_chunk_fails(self) -> None:
-        class FakeChunkError(Exception):
-            pass
-
-        class FakeCommunicate:
-            def __init__(self, text: str, *_args: object, **_kwargs: object) -> None:
-                self.text = text
-
-            async def save(self, path: str) -> None:
-                if "BAD" in self.text:
-                    raise FakeChunkError("bad chunk")
-                Path(path).write_bytes(b"part")
-
-        fake_edge_tts = Mock()
-        fake_edge_tts.Communicate = FakeCommunicate
-        fake_edge_tts.exceptions = Mock(NoAudioReceived=FakeChunkError)
-
-        long_text = ("A" * MAX_TTS_CHARS) + "BAD" + ("B" * 5)
-
-        with TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "chapter.mp3"
-            with patch.dict("sys.modules", {"edge_tts": fake_edge_tts}):
-                with self.assertRaises(TTSSynthesisError):
-                    _synthesize_with_edge_tts(
-                        text=long_text,
-                        output_path=output_path,
-                        settings=TTSSettings(enabled=True, allow_network=True),
-                    )
-
-            self.assertFalse(output_path.exists())
+        load_mock.assert_called_once_with("models", "float32", "sdpa", "cpu")
+        fake_model.generate_custom_voice.assert_called_once_with(
+            text="Hello world.",
+            language="English",
+            speaker="Ryan",
+            instruct="Very happy.",
+        )
+        write_mock.assert_called_once()
+        waveform_arg, sample_rate_arg, path_arg = write_mock.call_args[0]
+        self.assertEqual(waveform_arg, [0.1, 0.2])
+        self.assertEqual(sample_rate_arg, 24000)
+        self.assertEqual(path_arg, output_path)
 
 if __name__ == "__main__":
     unittest.main()
