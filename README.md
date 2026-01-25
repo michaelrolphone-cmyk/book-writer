@@ -96,6 +96,16 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
+### Run the interactive prompt flow
+
+```bash
+python -m book_writer --prompt
+```
+
+**Behavior**
+- Choose whether to create new books or manage existing ones.
+- When generating new books, select the outlines to generate once from the checklist prompt.
+
 ### Expand an existing completed book
 
 ```bash
