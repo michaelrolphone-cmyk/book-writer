@@ -220,5 +220,49 @@ class TestTTS(unittest.TestCase):
         _, output_arg = run_ffmpeg_mock.call_args[0]
         self.assertEqual(output_arg, output_path)
 
+    @patch("book_writer.tts._run_ffmpeg")
+    @patch("book_writer.tts._write_wav_streaming")
+    @patch("book_writer.tts._load_qwen3_model")
+    def test_synthesize_with_qwen3_tts_releases_model_when_unloaded(
+        self,
+        load_mock: Mock,
+        write_wav_mock: Mock,
+        run_ffmpeg_mock: Mock,
+    ) -> None:
+        fake_model = Mock()
+        fake_model.generate_custom_voice.return_value = ([[0.1, 0.2]], 24000)
+        load_mock.return_value = fake_model
+        settings = TTSSettings(
+            enabled=True,
+            model_path="models",
+            voice="Ryan",
+            language="English",
+            instruct=None,
+            device_map="cpu",
+            dtype="float32",
+            attn_implementation="sdpa",
+            keep_model_loaded=False,
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with patch("book_writer.tts._resolve_model_path", return_value=Path("models")):
+                write_wav_mock.side_effect = lambda chunk_iter, wav_path: 24000
+                fake_torch = Mock()
+                fake_torch.inference_mode.return_value = nullcontext()
+                fake_torch.cuda.is_available.return_value = False
+                with (
+                    patch.dict("sys.modules", {"torch": fake_torch}),
+                    patch("book_writer.tts.release_qwen3_model_cache") as release_mock,
+                ):
+                    _synthesize_with_qwen3_tts(
+                        text="Hello world.",
+                        output_path=output_path,
+                        settings=settings,
+                    )
+
+        release_mock.assert_called_once()
+        run_ffmpeg_mock.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()

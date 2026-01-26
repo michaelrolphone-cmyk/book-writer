@@ -1182,6 +1182,7 @@ def expand_book(
                     pitch=tts_settings.pitch,
                     audio_dirname=tts_settings.audio_dirname,
                     overwrite_audio=tts_settings.overwrite_audio,
+                    keep_model_loaded=tts_settings.keep_model_loaded,
                 )
             audio_path = synthesize_chapter_audio(
                 chapter_path=chapter_file,
