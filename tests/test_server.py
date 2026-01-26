@@ -21,9 +21,14 @@ def _write_chapter_summary(book_dir: Path, stem: str, text: str = "Summary") -> 
     (summary_dir / f"{stem}.md").write_text(text, encoding="utf-8")
 
 
-def _write_book_meta(book_dir: Path, genres: list[str]) -> None:
+def _write_book_meta(
+    book_dir: Path, genres: list[str], primary_genre: str | None = None
+) -> None:
+    payload: dict[str, object] = {"genres": genres}
+    if primary_genre:
+        payload["primary_genre"] = primary_genre
     (book_dir / "meta.json").write_text(
-        json.dumps({"genres": genres}, indent=2, sort_keys=True) + "\n",
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
@@ -202,6 +207,7 @@ class TestServerApi(unittest.TestCase):
         self.assertIsNone(result["books"][0]["book_audio_url"])
         self.assertFalse(result["books"][0]["has_cover"])
         self.assertEqual(result["books"][0]["genres"], [])
+        self.assertIsNone(result["books"][0]["primary_genre"])
         self.assertEqual(result["books"][0]["folder_mtime"], folder_mtime)
         expected_pages = server._estimate_page_count(
             first_content
@@ -220,6 +226,35 @@ class TestServerApi(unittest.TestCase):
             result = server.list_books({"books_dir": str(books_dir)})
 
         self.assertEqual(result["books"][0]["genres"], ["Mystery", "Thriller"])
+        self.assertEqual(result["books"][0]["primary_genre"], "Mystery")
+
+    def test_list_books_uses_existing_primary_genre(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+            _write_book_meta(book_dir, ["Romance", "Drama"], primary_genre="Drama")
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        self.assertEqual(result["books"][0]["primary_genre"], "Drama")
+
+    def test_list_books_populates_primary_genre_in_meta(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+            _write_book_meta(book_dir, ["Sci-Fi", "Space Opera"])
+
+            server.list_books({"books_dir": str(books_dir)})
+
+            meta = json.loads((book_dir / "meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(meta["primary_genre"], "Sci-Fi")
 
     def test_list_books_schedules_genre_generation_when_missing(self) -> None:
         with TemporaryDirectory() as tmpdir:

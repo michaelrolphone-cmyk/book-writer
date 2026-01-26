@@ -11,6 +11,39 @@ if TYPE_CHECKING:
 META_FILENAME = "meta.json"
 GENRE_LIMIT = 3
 _JSON_BLOCK_RE = re.compile(r"(\{.*\}|\[.*\])", re.DOTALL)
+_SIMPLE_GENRE_ORDER = [
+    "Sci-Fi",
+    "Fantasy",
+    "Romance",
+    "Drama",
+    "Mystery",
+    "Thriller",
+    "Horror",
+    "Historical",
+    "Nonfiction",
+    "Biography",
+    "Adventure",
+    "Young Adult",
+    "Children",
+    "Comedy",
+]
+_SIMPLE_GENRE_ALIASES = {
+    "scifi": "Sci-Fi",
+    "sciencefiction": "Sci-Fi",
+    "fantasy": "Fantasy",
+    "romance": "Romance",
+    "drama": "Drama",
+    "mystery": "Mystery",
+    "thriller": "Thriller",
+    "horror": "Horror",
+    "historical": "Historical",
+    "nonfiction": "Nonfiction",
+    "biography": "Biography",
+    "adventure": "Adventure",
+    "youngadult": "Young Adult",
+    "children": "Children",
+    "comedy": "Comedy",
+}
 
 
 def build_genre_prompt(synopsis: str) -> str:
@@ -31,6 +64,10 @@ def _normalize_genre(value: str) -> str:
     cleaned = re.sub(r"^[\s*\-•]+", "", value.strip())
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.rstrip(",.;")
+
+
+def _genre_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
 def _unique_preserve_order(values: Iterable[str]) -> list[str]:
@@ -85,6 +122,17 @@ def _split_genres(value: str) -> list[str]:
     return [chunk.strip() for chunk in re.split(separators, value) if chunk.strip()]
 
 
+def resolve_primary_genre(genres: Iterable[str]) -> str | None:
+    normalized = _unique_preserve_order(genres)
+    if not normalized:
+        return None
+    for genre in normalized:
+        key = _genre_key(genre)
+        if key in _SIMPLE_GENRE_ALIASES:
+            return _SIMPLE_GENRE_ALIASES[key]
+    return normalized[0]
+
+
 def parse_genres(response: str) -> list[str]:
     parsed = _extract_json(response)
     if parsed is not None:
@@ -109,14 +157,52 @@ def read_book_genres(book_dir: Path) -> list[str]:
     return genres[:GENRE_LIMIT]
 
 
-def write_book_meta(book_dir: Path, genres: Iterable[str]) -> None:
+def read_book_primary_genre(book_dir: Path) -> str | None:
+    meta = read_book_meta(book_dir)
+    primary = meta.get("primary_genre")
+    if isinstance(primary, str):
+        primary = _normalize_genre(primary)
+        if primary:
+            return primary
+    genres = _coerce_genres(meta)
+    return resolve_primary_genre(genres)
+
+
+def write_book_meta(
+    book_dir: Path,
+    genres: Iterable[str],
+    primary_genre: str | None = None,
+) -> None:
     normalized = _unique_preserve_order(genres)[:GENRE_LIMIT]
     if not normalized:
         return
     meta = read_book_meta(book_dir)
     meta["genres"] = normalized
+    resolved_primary = _normalize_genre(primary_genre) if primary_genre else None
+    if resolved_primary:
+        meta["primary_genre"] = resolved_primary
+    else:
+        resolved_primary = resolve_primary_genre(normalized)
+        if resolved_primary:
+            meta["primary_genre"] = resolved_primary
     meta_path = _meta_path(book_dir)
     meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def ensure_primary_genre(book_dir: Path, genres: Iterable[str]) -> str | None:
+    resolved = resolve_primary_genre(genres)
+    if not resolved:
+        return None
+    meta = read_book_meta(book_dir)
+    primary = meta.get("primary_genre")
+    if isinstance(primary, str):
+        primary = _normalize_genre(primary)
+        if primary:
+            return primary
+    meta["primary_genre"] = resolved
+    meta_path = _meta_path(book_dir)
+    meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return resolved
 
 
 def generate_book_genres(client: "LMStudioClient", synopsis: str) -> list[str]:
