@@ -1238,7 +1238,7 @@ def get_gui_html() -> str:
               </div>
             </div>
             <div class="now-playing-controls" id="nowPlayingControls"></div>
-            <div class="now-playing-settings">
+            <div class="now-playing-settings" id="nowPlayingSettings">
               <label>
                 <input type="checkbox" id="nowPlayingAutoplay" checked />
                 Autoplay next chapter
@@ -2227,6 +2227,7 @@ def get_gui_html() -> str:
       const nowPlayingControls = document.getElementById('nowPlayingControls');
       const nowPlayingClose = document.getElementById('nowPlayingClose');
       const nowPlayingAutoplay = document.getElementById('nowPlayingAutoplay');
+      const nowPlayingSettings = document.getElementById('nowPlayingSettings');
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
       const nowPlayingGenreSlot = document.getElementById('nowPlayingGenreSlot');
       const nowPlayingOutlineSlot = document.getElementById('nowPlayingOutlineSlot');
@@ -2875,12 +2876,21 @@ def get_gui_html() -> str:
         await openChapterView(bookDir, chapter);
       };
 
+      const eventHitsElement = (event, element) => {
+        if (!event || !element) return false;
+        if (typeof event.composedPath === 'function') {
+          return event.composedPath().includes(element);
+        }
+        return Boolean(event.target && element.contains(event.target));
+      };
+
       const shouldIgnoreNowPlayingClick = (event) => {
-        if (!event || !event.target) return false;
+        if (!event) return false;
         if (event.defaultPrevented) return true;
-        if (nowPlayingControls && nowPlayingControls.contains(event.target)) return true;
-        if (nowPlayingClose && nowPlayingClose.contains(event.target)) return true;
-        if (nowPlayingAutoplay && nowPlayingAutoplay.contains(event.target)) return true;
+        if (eventHitsElement(event, nowPlayingControls)) return true;
+        if (eventHitsElement(event, nowPlayingClose)) return true;
+        if (eventHitsElement(event, nowPlayingAutoplay)) return true;
+        if (eventHitsElement(event, nowPlayingSettings)) return true;
         return false;
       };
 
@@ -4267,7 +4277,29 @@ def get_gui_html() -> str:
         viewAllBooksSecondary.addEventListener('click', toggleViewAllBooks);
       }
 
+      const stopNowPlayingNavigation = (event) => {
+        if (!event) return;
+        event.stopPropagation();
+        suppressNowPlayingNavigation();
+      };
+
+      if (nowPlayingControls) {
+        nowPlayingControls.addEventListener('pointerdown', stopNowPlayingNavigation);
+        nowPlayingControls.addEventListener('click', stopNowPlayingNavigation);
+      }
+
+      if (nowPlayingSettings) {
+        nowPlayingSettings.addEventListener('pointerdown', stopNowPlayingNavigation);
+        nowPlayingSettings.addEventListener('click', stopNowPlayingNavigation);
+      }
+
+      if (nowPlayingAutoplay) {
+        nowPlayingAutoplay.addEventListener('pointerdown', stopNowPlayingNavigation);
+        nowPlayingAutoplay.addEventListener('click', stopNowPlayingNavigation);
+      }
+
       if (nowPlayingClose) {
+        nowPlayingClose.addEventListener('pointerdown', stopNowPlayingNavigation);
         nowPlayingClose.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
