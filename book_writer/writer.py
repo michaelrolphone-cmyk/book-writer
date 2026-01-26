@@ -1009,15 +1009,29 @@ def _summarize_cover_text(
 ) -> str:
     if not text.strip():
         return ""
+    trimmed_text = _truncate_cover_text(text)
     prompt = (
         f"Summarize the following {context_label} into a concise visual description "
         "for cover art. Focus on vivid imagery, setting, characters, and mood. "
         "Keep it under 400 characters and limit to 2-3 sentences. "
         "Return plain text only.\n\n"
-        f"{text}"
+        f"{trimmed_text}"
     )
     summary = client.generate(prompt).strip()
-    return summary or text
+    return summary or trimmed_text
+
+
+_MAX_COVER_SUMMARY_CHARS = 6000
+
+
+def _truncate_cover_text(
+    text: str, max_chars: int = _MAX_COVER_SUMMARY_CHARS
+) -> str:
+    normalized = text.strip()
+    if len(normalized) <= max_chars:
+        return normalized
+    clipped = normalized[: max_chars - 1].rstrip()
+    return f"{clipped}…"
 
 
 def generate_book_cover_asset(

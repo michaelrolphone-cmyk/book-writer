@@ -188,6 +188,9 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - `--chapter-cover-dir`: Directory name for chapter cover output (default `chapter_covers`).
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
 
+**Note**
+- Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
+
 ### CLI option reference
 
 These options are available across the CLI flows:
