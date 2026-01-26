@@ -39,6 +39,7 @@ class TTSSettings:
     overwrite_audio: bool = False
     book_only: bool = False
     max_tts_chars: int = 900
+    keep_model_loaded: bool = True
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -198,6 +199,10 @@ def _load_qwen3_model(
     )
 
 
+def release_qwen3_model_cache() -> None:
+    _load_qwen3_model.cache_clear()
+
+
 def _run_ffmpeg(wav_path: Path, output_path: Path) -> None:
     try:
         result = subprocess.run(
@@ -289,49 +294,63 @@ def _synthesize_with_qwen3_tts(
     import gc
     import torch
 
-    model_path = _resolve_model_path(settings)
-    tts = _load_qwen3_model(
-        str(model_path),
-        settings.dtype,
-        settings.attn_implementation,
-        settings.device_map,
-    )
+    tts = None
+    try:
+        model_path = _resolve_model_path(settings)
+        tts = _load_qwen3_model(
+            str(model_path),
+            settings.dtype,
+            settings.attn_implementation,
+            settings.device_map,
+        )
 
-    chunks = split_text_for_tts(text, settings.max_tts_chars)
-    for i in range(len(chunks) - 1):
-        a, b = chunks[i].rstrip(), chunks[i + 1].lstrip()
-        if a and b and a[-1].isalnum() and b[0].isalnum():
-            raise TTSSynthesisError(
-                f"Chunk boundary splits a word between chunk {i} and {i+1}: "
-                f"...{a[-20:]} | {b[:20]}..."
-            )
-    if not chunks:
-        return
-
-    def chunk_generator():
-        # inference_mode reduces autograd overhead + can lower memory
-        with torch.inference_mode():
-            for chunk in chunks:
-                wavs, sr = tts.generate_custom_voice(
-                    text=chunk,
-                    language=settings.language,
-                    speaker=settings.voice,
-                    instruct=settings.instruct,
+        chunks = split_text_for_tts(text, settings.max_tts_chars)
+        for i in range(len(chunks) - 1):
+            a, b = chunks[i].rstrip(), chunks[i + 1].lstrip()
+            if a and b and a[-1].isalnum() and b[0].isalnum():
+                raise TTSSynthesisError(
+                    f"Chunk boundary splits a word between chunk {i} and {i+1}: "
+                    f"...{a[-20:]} | {b[:20]}..."
                 )
-                if not wavs:
-                    raise TTSSynthesisError("Qwen3 returned no audio data.")
-                yield _normalize_waveform(wavs[0]), sr
+        if not chunks:
+            return
 
-                # Encourage prompt release of large tensors between chunks
-                del wavs
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+        def chunk_generator():
+            # inference_mode reduces autograd overhead + can lower memory
+            with torch.inference_mode():
+                for chunk in chunks:
+                    wavs, sr = tts.generate_custom_voice(
+                        text=chunk,
+                        language=settings.language,
+                        speaker=settings.voice,
+                        instruct=settings.instruct,
+                    )
+                    if not wavs:
+                        raise TTSSynthesisError("Qwen3 returned no audio data.")
+                    yield _normalize_waveform(wavs[0]), sr
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        wav_path = Path(tmpdir) / "qwen3-tts.wav"
-        sample_rate = _write_wav_streaming(chunk_generator(), wav_path)
-        _run_ffmpeg(wav_path, output_path)
+                    # Encourage prompt release of large tensors between chunks
+                    del wavs
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wav_path = Path(tmpdir) / "qwen3-tts.wav"
+            sample_rate = _write_wav_streaming(chunk_generator(), wav_path)
+            _run_ffmpeg(wav_path, output_path)
+    finally:
+        if not settings.keep_model_loaded:
+            if tts is not None:
+                del tts
+            release_qwen3_model_cache()
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+                torch.mps.empty_cache()
+            if hasattr(torch, "xpu") and hasattr(torch.xpu, "empty_cache"):
+                torch.xpu.empty_cache()
 
 
 def _bak_synthesize_with_qwen3_tts(

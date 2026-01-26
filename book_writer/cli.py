@@ -201,6 +201,7 @@ def _prompt_for_task_settings(
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        keep_model_loaded=not args.tts_unload_model,
     )
     if audio_enabled:
         voice = questionary.text(
@@ -227,6 +228,10 @@ def _prompt_for_task_settings(
             "Overwrite existing audio files?",
             args.tts_overwrite,
         )
+        unload_model = _prompt_yes_no(
+            "Unload the Qwen3 model between chapters to reduce memory usage?",
+            args.tts_unload_model,
+        )
         tts_settings = TTSSettings(
             enabled=True,
             voice=voice or args.tts_voice,
@@ -241,6 +246,7 @@ def _prompt_for_task_settings(
             audio_dirname=audio_dir or args.tts_audio_dir,
             overwrite_audio=overwrite_audio,
             book_only=args.tts_book_only,
+            keep_model_loaded=not unload_model,
         )
 
     video_enabled = "video" in selected
@@ -560,6 +566,10 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         "Generate only the full book audiobook (skip chapter audio)?",
         args.tts_book_only,
     )
+    unload_model = _prompt_yes_no(
+        "Unload the Qwen3 model between chapters to reduce memory usage?",
+        args.tts_unload_model,
+    )
     return TTSSettings(
         enabled=True,
         voice=voice or args.tts_voice,
@@ -574,6 +584,7 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         audio_dirname=audio_dir or args.tts_audio_dir,
         overwrite_audio=overwrite_audio,
         book_only=book_only,
+        keep_model_loaded=not unload_model,
     )
 
 
@@ -875,6 +886,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        keep_model_loaded=not args.tts_unload_model,
     )
     if generate_audio:
         tts_settings = _prompt_for_audio_settings(args)
@@ -1181,7 +1193,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tts-dtype",
-        default="float32",
+        default="float16",
         help="Torch dtype for Qwen3 (e.g., 'float32', 'float16').",
     )
     parser.add_argument(
@@ -1213,6 +1225,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--tts-book-only",
         action="store_true",
         help="Generate only the full book MP3 when producing audio narration.",
+    )
+    parser.add_argument(
+        "--tts-unload-model",
+        action="store_true",
+        help="Unload the Qwen3 model between chapters to reduce memory usage.",
     )
     parser.add_argument(
         "--video",
@@ -1493,6 +1510,7 @@ def main() -> int:
         audio_dirname=args.tts_audio_dir,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
+        keep_model_loaded=not args.tts_unload_model,
     )
     video_settings = VideoSettings(
         enabled=args.video,
