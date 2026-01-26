@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 from urllib.parse import quote
 from pathlib import Path
@@ -151,6 +152,8 @@ class TestServerApi(unittest.TestCase):
                 second_content, encoding="utf-8"
             )
             _write_book_summary(book_dir, "Saved summary")
+            folder_mtime = 1_700_000_000
+            os.utime(book_dir, (folder_mtime, folder_mtime))
 
             result = server.list_books({"books_dir": str(books_dir)})
 
@@ -160,6 +163,7 @@ class TestServerApi(unittest.TestCase):
         self.assertIsNone(result["books"][0]["book_audio_url"])
         self.assertFalse(result["books"][0]["has_cover"])
         self.assertEqual(result["books"][0]["genres"], [])
+        self.assertEqual(result["books"][0]["folder_mtime"], folder_mtime)
         expected_pages = server._estimate_page_count(
             first_content
         ) + server._estimate_page_count(second_content)

@@ -150,6 +150,13 @@ def _read_book_synopsis(book_dir: Path) -> str:
     return ""
 
 
+def _get_book_folder_mtime(book_dir: Path) -> float | None:
+    try:
+        return book_dir.stat().st_mtime
+    except OSError:
+        return None
+
+
 def _select_book_summary_source(book_dir: Path, chapter_files: list[Path]) -> tuple[str, str]:
     synopsis = _read_book_synopsis(book_dir)
     if synopsis:
@@ -640,6 +647,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "page_count": _sum_book_pages(book.path),
                 "summary": _ensure_book_summary_async(book.path, book.title, payload),
                 "genres": _ensure_book_genres_async(book.path, synopsis, payload),
+                "folder_mtime": _get_book_folder_mtime(book.path),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))
                     if (book.path / "cover.png").exists()

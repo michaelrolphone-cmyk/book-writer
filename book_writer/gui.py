@@ -223,6 +223,13 @@ def get_gui_html() -> str:
         box-shadow: 8px 8px 16px rgba(31, 111, 235, 0.35), -8px -8px 16px var(--shadow-light);
       }
 
+      .pill-button.ghost {
+        background: transparent;
+        box-shadow: none;
+        border: 1px solid rgba(31, 111, 235, 0.2);
+        color: var(--accent);
+      }
+
       .search-bar {
         display: flex;
         align-items: center;
@@ -283,6 +290,30 @@ def get_gui_html() -> str:
         gap: 20px;
       }
 
+      .scroll-shelf {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(220px, 1fr);
+        gap: 20px;
+        overflow-x: auto;
+        padding-bottom: 10px;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: thin;
+      }
+
+      .scroll-shelf::-webkit-scrollbar {
+        height: 8px;
+      }
+
+      .scroll-shelf::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.45);
+        border-radius: 999px;
+      }
+
+      .scroll-shelf .book-card {
+        scroll-snap-align: start;
+      }
+
       .chapter-shelf {
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       }
@@ -295,9 +326,45 @@ def get_gui_html() -> str:
         display: flex;
         flex-direction: column;
         gap: 16px;
+        height: 360px;
         overflow: hidden;
         position: relative;
         color: var(--card-text, var(--text));
+      }
+
+      .card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+      }
+
+      .card-description {
+        position: relative;
+        max-height: 96px;
+        min-height: 96px;
+        overflow: hidden;
+      }
+
+      .card-description::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 32px;
+        background: linear-gradient(
+          180deg,
+          rgba(8, 12, 20, 0) 0%,
+          var(--card-fade, rgba(8, 12, 20, 0.85)) 90%
+        );
+      }
+
+      .card-footer {
+        margin-top: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
 
       .book-card.cover-filled::before {
@@ -486,6 +553,10 @@ def get_gui_html() -> str:
         margin-bottom: 6px;
       }
 
+      .chapter-card {
+        height: 300px;
+      }
+
       .book-meta {
         display: flex;
         justify-content: space-between;
@@ -508,6 +579,13 @@ def get_gui_html() -> str:
         align-items: center;
         margin-bottom: 16px;
         gap: 16px;
+      }
+
+      .section-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
       }
 
       .section-header h2 {
@@ -1015,6 +1093,14 @@ def get_gui_html() -> str:
           gap: 14px;
         }
 
+        .scroll-shelf {
+          grid-auto-columns: minmax(200px, 80%);
+        }
+
+        .book-card {
+          height: 340px;
+        }
+
         .now-playing-info {
           width: 100%;
         }
@@ -1074,10 +1160,34 @@ def get_gui_html() -> str:
           <section class="shelf-section">
             <div class="section-header">
               <div>
-                <h2>Books</h2>
-                <p>Books tracked from the books directory, including media outputs.</p>
+                <h2>Newest books</h2>
+                <p>Latest 10 books based on folder activity.</p>
               </div>
-              <span class="count-pill" id="bookCount">0 books</span>
+              <button class="pill-button ghost" id="viewAllBooks">View all</button>
+            </div>
+            <div class="scroll-shelf" id="latestShelf"></div>
+          </section>
+
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Browse by genre</h2>
+                <p>Scroll through each genre to discover more reads.</p>
+              </div>
+              <div class="section-actions">
+                <span class="count-pill" id="bookCount">0 books</span>
+                <button class="pill-button ghost" id="viewAllBooksSecondary">View all</button>
+              </div>
+            </div>
+            <div id="genreShelves"></div>
+          </section>
+
+          <section class="shelf-section is-hidden" id="allBooksSection">
+            <div class="section-header">
+              <div>
+                <h2>All books</h2>
+                <p>The full library in one place.</p>
+              </div>
             </div>
             <div class="shelf" id="bookShelf"></div>
           </section>
@@ -1535,6 +1645,10 @@ def get_gui_html() -> str:
         card.style.setProperty('--card-cover', coverBackground);
         card.style.setProperty('--card-overlay', overlayBackground);
         card.style.setProperty('--card-text', '#f8f9fb');
+        card.style.setProperty(
+          '--card-fade',
+          coverUrl ? 'rgba(8, 12, 20, 0.85)' : 'rgba(243, 246, 251, 0.9)',
+        );
 
         const cover = document.createElement('div');
         cover.className = 'book-cover';
@@ -1547,10 +1661,11 @@ def get_gui_html() -> str:
         cover.appendChild(coverTitle);
 
         const content = document.createElement('div');
+        content.className = 'card-body';
         const heading = document.createElement('h2');
         heading.textContent = status;
         const meta = document.createElement('div');
-        meta.className = 'meta-line markdown';
+        meta.className = 'card-description meta-line markdown';
         meta.innerHTML = renderMarkdown(detail);
         content.appendChild(heading);
         content.appendChild(meta);
@@ -1558,15 +1673,16 @@ def get_gui_html() -> str:
         card.appendChild(cover);
         card.appendChild(content);
 
+        const footer = document.createElement('div');
+        footer.className = 'card-footer';
         if (typeof progress === 'number') {
           const progressWrap = document.createElement('div');
           progressWrap.className = 'progress';
           const progressFill = document.createElement('span');
           progressFill.style.width = `${Math.min(Math.max(progress, 0), 100)}%`;
           progressWrap.appendChild(progressFill);
-          card.appendChild(progressWrap);
+          footer.appendChild(progressWrap);
         }
-
         const metaRow = document.createElement('div');
         metaRow.className = 'book-meta';
         const tagEl = document.createElement('span');
@@ -1576,7 +1692,8 @@ def get_gui_html() -> str:
         accent.textContent = accentLabel;
         metaRow.appendChild(tagEl);
         metaRow.appendChild(accent);
-        card.appendChild(metaRow);
+        footer.appendChild(metaRow);
+        card.appendChild(footer);
 
         return card;
       };
@@ -1860,6 +1977,11 @@ def get_gui_html() -> str:
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
       const nowPlayingDetailSlot = document.getElementById('nowPlayingDetailSlot');
       const nowPlayingChapterSlot = document.getElementById('nowPlayingChapterSlot');
+      const latestShelf = document.getElementById('latestShelf');
+      const genreShelves = document.getElementById('genreShelves');
+      const allBooksSection = document.getElementById('allBooksSection');
+      const viewAllBooks = document.getElementById('viewAllBooks');
+      const viewAllBooksSecondary = document.getElementById('viewAllBooksSecondary');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -1889,6 +2011,8 @@ def get_gui_html() -> str:
         tones: [],
       };
 
+      let showAllBooks = false;
+
       const getSearchTerm = () => (searchInput?.value || '').trim().toLowerCase();
 
       const filterEntries = (entries, getFields) => {
@@ -1917,6 +2041,11 @@ def get_gui_html() -> str:
       const getPrimaryGenre = (book) => {
         const genres = normalizeGenres(book.genres);
         return genres.length ? genres[0] : 'Uncategorized';
+      };
+
+      const getBookFolderTimestamp = (book) => {
+        const value = Number(book?.folder_mtime);
+        return Number.isFinite(value) ? value : 0;
       };
 
       const getGenreLine = (book) => {
@@ -2897,6 +3026,46 @@ def get_gui_html() -> str:
         toggleCoverActions(active);
       };
 
+      const buildBookCard = (book) => {
+        const statusFlags = [];
+        if (book.has_text) statusFlags.push('Text');
+        if (book.has_audio) statusFlags.push('Audio');
+        if (book.has_video) statusFlags.push('Video');
+        if (book.has_compilation) statusFlags.push('Compiled');
+        const status = book.has_compilation
+          ? 'Compiled'
+          : book.has_text
+            ? 'Drafting'
+            : 'No chapters';
+        const summaryLine = book.summary || 'Summary coming soon.';
+        const detail = `${summaryLine}\n${getGenreLine(book)}\n${formatPageCount(
+          book.page_count,
+        )}\n${book.chapter_count || 0} chapters\n${
+          statusFlags.join(' • ') || 'No media yet'
+        }`;
+        const progress = (statusFlags.length / 4) * 100;
+        const displayTitle = displayBookTitle(book.title);
+        const card = createCard(
+          book.title,
+          status,
+          detail,
+          'Book',
+          book.path.split('/').pop(),
+          progress,
+          book.cover_url || null,
+          displayTitle,
+        );
+        card.classList.add('selectable');
+        card.dataset.type = 'book';
+        card.dataset.path = book.path;
+        card.addEventListener('click', () => {
+          bookSelect.value = book.path;
+          loadChapters(book.path);
+          selectEntry('book', book, card);
+        });
+        return card;
+      };
+
       const renderCatalog = () => {
         const term = getSearchTerm();
         const outlines = filterEntries(catalogState.outlines, (outline) => [
@@ -2984,66 +3153,88 @@ def get_gui_html() -> str:
           });
         }
 
+        if (latestShelf) {
+          latestShelf.innerHTML = '';
+        }
+        if (genreShelves) {
+          genreShelves.innerHTML = '';
+        }
+
+        const viewAllLabel = showAllBooks ? 'Hide full library' : 'View all';
+        [viewAllBooks, viewAllBooksSecondary].forEach((button) => {
+          if (button) {
+            button.textContent = viewAllLabel;
+          }
+        });
+        if (allBooksSection) {
+          allBooksSection.classList.toggle('is-hidden', !showAllBooks);
+        }
+
         if (!books.length) {
-          renderEmpty(bookShelf, bookEmptyMessage);
+          if (latestShelf) {
+            renderEmpty(latestShelf, bookEmptyMessage);
+          }
+          if (genreShelves) {
+            renderEmpty(genreShelves, bookEmptyMessage);
+          }
+          if (showAllBooks) {
+            renderEmpty(bookShelf, bookEmptyMessage);
+          }
         } else {
-          const groupedBooks = groupBooksByGenre(books);
-          const genreKeys = sortGenreKeys(Array.from(groupedBooks.keys()));
-          genreKeys.forEach((genre) => {
-            const section = document.createElement('section');
-            section.classList.add('shelf-section');
-            const heading = document.createElement('h4');
-            heading.classList.add('shelf-heading');
-            heading.textContent = genre;
-            const shelf = document.createElement('div');
-            shelf.classList.add('shelf');
-            section.appendChild(heading);
-            section.appendChild(shelf);
-            groupedBooks.get(genre).forEach((book) => {
-              const statusFlags = [];
-              if (book.has_text) statusFlags.push('Text');
-              if (book.has_audio) statusFlags.push('Audio');
-              if (book.has_video) statusFlags.push('Video');
-              if (book.has_compilation) statusFlags.push('Compiled');
-              const status = book.has_compilation
-                ? 'Compiled'
-                : book.has_text
-                  ? 'Drafting'
-                  : 'No chapters';
-              const summaryLine = book.summary || 'Summary coming soon.';
-              const detail = `${summaryLine}\\n${getGenreLine(book)}\\n${formatPageCount(
-                book.page_count,
-              )}\\n${book.chapter_count || 0} chapters\\n${
-                statusFlags.join(' • ') || 'No media yet'
-              }`;
-              const progress = (statusFlags.length / 4) * 100;
-              const displayTitle = displayBookTitle(book.title);
-              const card = createCard(
-                book.title,
-                status,
-                detail,
-                'Book',
-                book.path.split('/').pop(),
-                progress,
-                book.cover_url || null,
-                displayTitle,
-              );
-              card.classList.add('selectable');
-              card.dataset.type = 'book';
-              card.dataset.path = book.path;
-              card.addEventListener('click', () => {
-                bookSelect.value = book.path;
-                loadChapters(book.path);
-                selectEntry('book', book, card);
+          const latestBooks = [...books]
+            .sort((a, b) => getBookFolderTimestamp(b) - getBookFolderTimestamp(a))
+            .slice(0, 10);
+          if (latestShelf) {
+            if (!latestBooks.length) {
+              renderEmpty(latestShelf, bookEmptyMessage);
+            } else {
+              latestBooks.forEach((book) => {
+                latestShelf.appendChild(buildBookCard(book));
               });
-              shelf.appendChild(card);
+            }
+          }
+
+          if (genreShelves) {
+            const groupedBooks = groupBooksByGenre(books);
+            const genreKeys = sortGenreKeys(Array.from(groupedBooks.keys()));
+            if (!genreKeys.length) {
+              renderEmpty(genreShelves, bookEmptyMessage);
+            } else {
+              genreKeys.forEach((genre) => {
+                const section = document.createElement('section');
+                section.classList.add('shelf-section');
+                const heading = document.createElement('h4');
+                heading.classList.add('shelf-heading');
+                heading.textContent = genre;
+                const shelf = document.createElement('div');
+                shelf.classList.add('scroll-shelf');
+                section.appendChild(heading);
+                section.appendChild(shelf);
+                groupedBooks.get(genre).forEach((book) => {
+                  shelf.appendChild(buildBookCard(book));
+                });
+                genreShelves.appendChild(section);
+              });
+            }
+          }
+
+          if (showAllBooks) {
+            books.forEach((book) => {
+              bookShelf.appendChild(buildBookCard(book));
             });
-            bookShelf.appendChild(section);
-          });
+          }
         }
 
         if (currentSelection.type && currentSelection.path) {
           setSelectedCard(findCardByPath(currentSelection.type, currentSelection.path));
+        }
+      };
+
+      const toggleViewAllBooks = () => {
+        showAllBooks = !showAllBooks;
+        renderCatalog();
+        if (showAllBooks && allBooksSection) {
+          allBooksSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       };
 
@@ -3413,6 +3604,14 @@ def get_gui_html() -> str:
         searchInput.addEventListener('input', () => {
           renderCatalog();
         });
+      }
+
+      if (viewAllBooks) {
+        viewAllBooks.addEventListener('click', toggleViewAllBooks);
+      }
+
+      if (viewAllBooksSecondary) {
+        viewAllBooksSecondary.addEventListener('click', toggleViewAllBooks);
       }
 
       if (nowPlayingClose) {
