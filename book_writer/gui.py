@@ -367,6 +367,10 @@ def get_gui_html() -> str:
         color: var(--card-text, var(--text));
       }
 
+      .book-card.book-card-book {
+        height: 432px;
+      }
+
       .card-body {
         display: flex;
         flex-direction: column;
@@ -406,6 +410,12 @@ def get_gui_html() -> str:
         display: flex;
         flex-direction: column;
         gap: 12px;
+      }
+
+      .card-footer-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
       }
 
       .book-card.cover-filled::before {
@@ -1695,13 +1705,14 @@ def get_gui_html() -> str:
 
       const createCard = (
         title,
-        status,
+        headingLabel,
         detail,
         tag,
         accentLabel,
         progress,
         coverUrl = null,
         displayTitle = null,
+        footerLines = [],
       ) => {
         const card = document.createElement('article');
         card.className = 'book-card cover-filled';
@@ -1732,7 +1743,7 @@ def get_gui_html() -> str:
         const content = document.createElement('div');
         content.className = 'card-body';
         const heading = document.createElement('h2');
-        heading.textContent = status;
+        heading.textContent = headingLabel;
         const meta = document.createElement('div');
         meta.className = 'card-description meta-line markdown';
         meta.innerHTML = renderMarkdown(detail);
@@ -1752,16 +1763,33 @@ def get_gui_html() -> str:
           progressWrap.appendChild(progressFill);
           footer.appendChild(progressWrap);
         }
+        if (Array.isArray(footerLines) && footerLines.length) {
+          const footerLineWrap = document.createElement('div');
+          footerLineWrap.className = 'card-footer-lines';
+          footerLines.filter(Boolean).forEach((line) => {
+            const lineEl = document.createElement('p');
+            lineEl.className = 'meta-line';
+            lineEl.textContent = line;
+            footerLineWrap.appendChild(lineEl);
+          });
+          footer.appendChild(footerLineWrap);
+        }
         const metaRow = document.createElement('div');
         metaRow.className = 'book-meta';
-        const tagEl = document.createElement('span');
-        tagEl.className = 'tag';
-        tagEl.textContent = tag;
-        const accent = document.createElement('strong');
-        accent.textContent = accentLabel;
-        metaRow.appendChild(tagEl);
-        metaRow.appendChild(accent);
-        footer.appendChild(metaRow);
+        if (tag) {
+          const tagEl = document.createElement('span');
+          tagEl.className = 'tag';
+          tagEl.textContent = tag;
+          metaRow.appendChild(tagEl);
+        }
+        if (accentLabel) {
+          const accent = document.createElement('strong');
+          accent.textContent = accentLabel;
+          metaRow.appendChild(accent);
+        }
+        if (metaRow.childElementCount > 0) {
+          footer.appendChild(metaRow);
+        }
         card.appendChild(footer);
 
         return card;
@@ -3153,24 +3181,28 @@ def get_gui_html() -> str:
             ? 'Drafting'
             : 'No chapters';
         const summaryLine = book.summary || 'Summary coming soon.';
-        const detail = `${summaryLine}\n${getGenreLine(book)}\n${formatPageCount(
-          book.page_count,
-        )}\n${book.chapter_count || 0} chapters\n${
+        const detail = `${summaryLine}\n${getGenreLine(book)}\n${
           statusFlags.join(' • ') || 'No media yet'
         }`;
+        const footerLines = [
+          formatPageCount(book.page_count),
+          `${book.chapter_count || 0} chapters`,
+        ];
         const progress = (statusFlags.length / 4) * 100;
         const displayTitle = displayBookTitle(book.title);
+        const shortName = displayTitle ? '' : book.path.split('/').pop();
         const card = createCard(
           book.title,
-          status,
+          'Summary',
           detail,
-          'Book',
-          book.path.split('/').pop(),
+          status,
+          shortName,
           progress,
           book.cover_url || null,
           displayTitle,
+          footerLines,
         );
-        card.classList.add('selectable');
+        card.classList.add('selectable', 'book-card-book');
         card.dataset.type = 'book';
         card.dataset.path = book.path;
         card.addEventListener('click', () => {
