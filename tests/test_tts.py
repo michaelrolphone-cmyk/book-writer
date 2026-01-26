@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
@@ -49,6 +50,23 @@ class TestTTS(unittest.TestCase):
         self.assertGreater(len(chunks), 1)
         self.assertEqual(" ".join(chunks), text)
         self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
+
+    def test_split_text_for_tts_merges_soft_line_breaks(self) -> None:
+        text = (
+            "This is a sentence that\n"
+            "wraps onto the next line without a blank line.\n"
+            "Still the same paragraph."
+        )
+
+        chunks = split_text_for_tts(text, max_chars=200)
+
+        self.assertEqual(
+            chunks,
+            [
+                "This is a sentence that wraps onto the next line without a blank "
+                "line. Still the same paragraph."
+            ],
+        )
 
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_writes_mp3(
@@ -145,12 +163,14 @@ class TestTTS(unittest.TestCase):
             self.assertIsNone(audio_path)
             self.assertFalse(output_path.exists())
 
-    @patch("book_writer.tts._write_mp3_from_waveform")
+    @patch("book_writer.tts._run_ffmpeg")
+    @patch("book_writer.tts._write_wav_streaming")
     @patch("book_writer.tts._load_qwen3_model")
     def test_synthesize_with_qwen3_tts_calls_model(
         self,
         load_mock: Mock,
-        write_mock: Mock,
+        write_wav_mock: Mock,
+        run_ffmpeg_mock: Mock,
     ) -> None:
         fake_model = Mock()
         fake_model.generate_custom_voice.return_value = ([[0.1, 0.2]], 24000)
@@ -169,11 +189,24 @@ class TestTTS(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "chapter.mp3"
             with patch("book_writer.tts._resolve_model_path", return_value=Path("models")):
-                _synthesize_with_qwen3_tts(
-                    text="Hello world.",
-                    output_path=output_path,
-                    settings=settings,
-                )
+                def consume_chunks(chunk_iter, wav_path):
+                    chunks = list(chunk_iter)
+                    self.assertEqual(len(chunks), 1)
+                    waveform, sample_rate = chunks[0]
+                    self.assertEqual(waveform, [0.1, 0.2])
+                    self.assertEqual(sample_rate, 24000)
+                    return sample_rate
+
+                write_wav_mock.side_effect = consume_chunks
+                fake_torch = Mock()
+                fake_torch.inference_mode.return_value = nullcontext()
+                fake_torch.cuda.is_available.return_value = False
+                with patch.dict("sys.modules", {"torch": fake_torch}):
+                    _synthesize_with_qwen3_tts(
+                        text="Hello world.",
+                        output_path=output_path,
+                        settings=settings,
+                    )
 
         load_mock.assert_called_once_with("models", "float32", "sdpa", "cpu")
         fake_model.generate_custom_voice.assert_called_once_with(
@@ -182,11 +215,10 @@ class TestTTS(unittest.TestCase):
             speaker="Ryan",
             instruct="Very happy.",
         )
-        write_mock.assert_called_once()
-        waveform_arg, sample_rate_arg, path_arg = write_mock.call_args[0]
-        self.assertEqual(waveform_arg, [0.1, 0.2])
-        self.assertEqual(sample_rate_arg, 24000)
-        self.assertEqual(path_arg, output_path)
+        write_wav_mock.assert_called_once()
+        run_ffmpeg_mock.assert_called_once()
+        _, output_arg = run_ffmpeg_mock.call_args[0]
+        self.assertEqual(output_arg, output_path)
 
 if __name__ == "__main__":
     unittest.main()

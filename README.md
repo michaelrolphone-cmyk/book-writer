@@ -195,7 +195,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `base_url`, `model`, `timeout`, `author`: LM Studio configuration (same defaults as the CLI).
 - `tone`, `byline`, `resume`, `verbose`: Generation controls.
 - `tts_settings` object:
-  - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `overwrite_audio`, `book_only`
+  - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `overwrite_audio`, `book_only`, `max_tts_chars`
 - `video_settings` object:
   - `enabled`, `background_video`, `video_dirname`
   - `paragraph_images` object: `enabled`, `image_dirname`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `overwrite`, `command`
