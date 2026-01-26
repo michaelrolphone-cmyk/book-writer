@@ -1423,6 +1423,16 @@ def get_gui_html() -> str:
           </div>
 
           <div class="panel">
+            <h3>Server controls</h3>
+            <p class="meta-line">
+              Pull the latest code and restart the GUI server without leaving the dashboard.
+            </p>
+            <button class="pill-button" id="gitPullRestart">
+              Pull latest changes &amp; restart server
+            </button>
+          </div>
+
+          <div class="panel">
             <h3>Activity log</h3>
             <div class="action-log" id="actionLog">Waiting for actions...</div>
           </div>
@@ -2084,6 +2094,7 @@ def get_gui_html() -> str:
       const viewOutlines = document.getElementById('viewOutlines');
       const toggleUtilities = document.getElementById('toggleUtilities');
       const homeUtilities = document.getElementById('homeUtilities');
+      const gitPullRestart = document.getElementById('gitPullRestart');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -3977,6 +3988,29 @@ def get_gui_html() -> str:
           log(`Outline generation failed: ${error.message}`);
         }
       });
+
+      if (gitPullRestart) {
+        gitPullRestart.addEventListener('click', async () => {
+          gitPullRestart.disabled = true;
+          const originalLabel = gitPullRestart.textContent;
+          gitPullRestart.textContent = 'Pulling updates...';
+          log('Pulling latest changes and restarting server...');
+          try {
+            const result = await postJson('/api/git-pull-restart', {});
+            if (result.git_output) {
+              log(result.git_output);
+            }
+            log(result.message || 'Server restarting.');
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } catch (error) {
+            log(`Server restart failed: ${error.message}`);
+            gitPullRestart.disabled = false;
+            gitPullRestart.textContent = originalLabel;
+          }
+        });
+      }
 
       bookWorkspaceReader.addEventListener('click', () => {
         openReader.click();

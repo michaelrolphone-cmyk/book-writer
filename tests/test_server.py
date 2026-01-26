@@ -63,8 +63,32 @@ class TestServerHelpers(unittest.TestCase):
             with self.assertRaises(server.ApiError):
                 server._resolve_logo_path(Path(tmpdir))
 
+    def test_build_restart_command_includes_host_and_port(self) -> None:
+        command = server._build_restart_command("0.0.0.0", 9000)
+
+        self.assertIn("--gui", command)
+        self.assertIn("--gui-host", command)
+        self.assertIn("--gui-port", command)
+        self.assertIn("0.0.0.0", command)
+        self.assertIn("9000", command)
+
 
 class TestServerApi(unittest.TestCase):
+    def test_git_pull_restart_api_schedules_restart(self) -> None:
+        with patch("book_writer.server._git_pull_repo") as git_pull_mock, patch(
+            "book_writer.server._schedule_server_restart"
+        ) as restart_mock:
+            git_pull_mock.return_value = "Already up to date."
+            server._SERVER_CONFIG["host"] = "127.0.0.1"
+            server._SERVER_CONFIG["port"] = 8080
+
+            result = server.git_pull_restart_api({})
+
+        self.assertEqual(result["status"], "restarting")
+        self.assertIn("Pulled latest changes", result["message"])
+        self.assertEqual(result["git_output"], "Already up to date.")
+        restart_mock.assert_called_once_with("127.0.0.1", 8080)
+
     def test_send_file_handles_client_disconnect(self) -> None:
         with TemporaryDirectory() as tmpdir:
             media_path = Path(tmpdir) / "audio.mp3"

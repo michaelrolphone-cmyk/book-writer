@@ -85,6 +85,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"chapterCoverDir\"", html)
         self.assertIn("id=\"coverProgress\"", html)
         self.assertIn("id=\"coverProgressLabel\"", html)
+        self.assertIn("id=\"gitPullRestart\"", html)
+        self.assertIn("Pull latest changes", html)
         self.assertIn("Select a book before generating audio.", html)
         self.assertIn("Select a book before generating a cover.", html)
         self.assertIn("Select an outline before generating a book.", html)

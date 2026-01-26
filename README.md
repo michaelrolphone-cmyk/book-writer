@@ -34,6 +34,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - `POST /api/generate-audio`, `POST /api/generate-videos`
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
 - `POST /api/generate-outline`, `POST /api/save-outline`
+- `POST /api/git-pull-restart` (pull latest code and restart GUI server)
 - `GET /media` (chapter audio/video/cover assets)
 ### CLI quick reference
 

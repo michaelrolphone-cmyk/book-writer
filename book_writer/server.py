@@ -4,8 +4,12 @@ from __future__ import annotations
 import json
 import math
 import mimetypes
+import os
 import re
+import subprocess
+import sys
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -62,6 +66,7 @@ _SUMMARY_TASKS_LOCK = threading.Lock()
 _SUMMARY_TASKS: set[str] = set()
 _GENRE_TASKS_LOCK = threading.Lock()
 _GENRE_TASKS: set[str] = set()
+_SERVER_CONFIG = {"host": "127.0.0.1", "port": 8080}
 
 
 def _estimate_page_count(content: str) -> int:
@@ -628,6 +633,19 @@ def save_outline_api(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def git_pull_restart_api(_payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        output = _git_pull_repo(REPO_ROOT)
+    except subprocess.CalledProcessError as exc:
+        raise ApiError((exc.stderr or exc.stdout or "git pull failed").strip()) from exc
+    _schedule_server_restart(_SERVER_CONFIG["host"], _SERVER_CONFIG["port"])
+    return {
+        "status": "restarting",
+        "message": "Pulled latest changes. Restarting server.",
+        "git_output": output,
+    }
+
+
 def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     books_dir = Path(payload.get("books_dir", "books"))
     audio_dir = payload.get("tts_audio_dir", "audio")
@@ -1037,6 +1055,43 @@ def _resolve_logo_path(base_dir: Path | None = None) -> Path:
     return logo_path
 
 
+def _build_restart_command(host: str, port: int) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "book_writer.cli",
+        "--gui",
+        "--gui-host",
+        host,
+        "--gui-port",
+        str(port),
+    ]
+
+
+def _git_pull_repo(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "pull"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return (result.stdout or "").strip()
+
+
+def _restart_after_delay(host: str, port: int, delay: float = 0.6) -> None:
+    time.sleep(delay)
+    os.chdir(REPO_ROOT)
+    command = _build_restart_command(host, port)
+    os.execv(command[0], command)
+
+
+def _schedule_server_restart(host: str, port: int) -> None:
+    restart_thread = threading.Thread(
+        target=_restart_after_delay, args=(host, port), daemon=True
+    )
+    restart_thread.start()
+
+
 def _handle_api(handler: BaseHTTPRequestHandler) -> None:
     path = urlparse(handler.path).path
     try:
@@ -1088,6 +1143,7 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             "/api/generate-chapter-covers": generate_chapter_covers_api,
             "/api/generate-outline": generate_outline_api,
             "/api/save-outline": save_outline_api,
+            "/api/git-pull-restart": git_pull_restart_api,
         }
         handler_fn = routes.get(path)
         if handler_fn is None:
@@ -1146,6 +1202,8 @@ class BookWriterRequestHandler(BaseHTTPRequestHandler):
 
 def run_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
     """Run the Quilloquy HTTP server."""
+    _SERVER_CONFIG["host"] = host
+    _SERVER_CONFIG["port"] = port
     server = ThreadingHTTPServer((host, port), BookWriterRequestHandler)
     print(f"Quilloquy GUI available at http://{host}:{port}")
     server.serve_forever()
