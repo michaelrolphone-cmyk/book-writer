@@ -29,7 +29,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (book catalog, including `genres`, `primary_genre`, and overall `progress` completion totals for book cards)
+- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, and overall `progress` completion totals for book cards)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters?book_dir=books/my-book` (chapter list for a book)
@@ -281,9 +281,9 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `GET /api/completed-outlines?completed_outlines_dir=completed_outlines`
   - Returns `{ outlines: [...] }` for archived outlines.
 - `GET /api/books?books_dir=books&tts_audio_dir=audio&video_dir=video`
-  - Returns `{ books: [{ path, title, has_text, has_audio, has_video, has_compilation, has_cover, chapter_count, page_count, summary, genres, folder_mtime, cover_url, book_audio_url }] }`.
+  - Returns `{ books: [{ path, title, has_text, has_audio, has_video, has_compilation, has_cover, chapter_count, page_count, summary, genres, folder_created, cover_url, book_audio_url }] }`.
   - `genres` are populated from each book's `meta.json`. If the file is missing, the server will generate it in the background using the synopsis so the GUI can group books by genre.
-  - `folder_mtime` is the book directory modification timestamp (seconds since epoch) used for latest-book sorting in the GUI.
+  - `folder_created` is the book directory creation timestamp (seconds since epoch) used for latest-book sorting in the GUI.
 - `GET /api/authors?authors_dir=authors`
   - Returns `{ authors: ["persona-name", ...] }`.
 - `GET /api/tones?tones_dir=book_writer/tones`
