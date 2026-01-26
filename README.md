@@ -32,6 +32,13 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - `POST /api/generate-book`, `POST /api/expand-book` (generation flows)
 - `POST /api/compile-book`, `POST /api/generate-audio`, `POST /api/generate-videos`
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`, `POST /api/save-outline`
+### CLI quick reference
+
+- Launch GUI: `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080`
+- Generate from one outline: `python -m book_writer --outline OUTLINE.md --output-dir output`
+- Batch-generate from outlines: `python -m book_writer --outlines-dir outlines --books-dir books`
+- Expand a completed book: `python -m book_writer --expand-book books/my-book --expand-passes 2`
+- Generate cover assets: `python -m book_writer --cover-book books/my-book --cover`
 
 ### Launch the GUI server
 
@@ -209,6 +216,31 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 ## GUI API
 
 The GUI talks to a built-in HTTP server launched with `--gui`. All endpoints live under the same host/port used to serve the HTML. Responses are JSON unless noted.
+
+### Endpoint reference
+
+**GET**
+- `/api/books`
+- `/api/outlines`
+- `/api/completed-outlines`
+- `/api/authors`
+- `/api/tones`
+- `/api/chapters`
+- `/api/outline-content`
+- `/api/chapter-content`
+- `/api/book-content`
+- `/media`
+
+**POST**
+- `/api/generate-book`
+- `/api/expand-book`
+- `/api/compile-book`
+- `/api/generate-audio`
+- `/api/generate-videos`
+- `/api/generate-cover`
+- `/api/generate-chapter-covers`
+- `/api/generate-outline`
+- `/api/save-outline`
 
 ### Shared request settings
 

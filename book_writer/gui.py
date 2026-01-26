@@ -51,6 +51,10 @@ def get_gui_html() -> str:
         width: 100%;
       }
 
+      .outline-view {
+        width: 100%;
+      }
+
       .chapter-view {
         width: 100%;
       }
@@ -61,6 +65,12 @@ def get_gui_html() -> str:
         justify-content: space-between;
         gap: 24px;
         margin-bottom: 32px;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
 
       .now-playing {
@@ -278,10 +288,17 @@ def get_gui_html() -> str:
       }
 
       .home-utilities {
-        margin-top: 32px;
         display: grid;
         gap: 20px;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .home-utilities.is-collapsed {
+        display: none;
+      }
+
+      .utilities-section {
+        margin-top: 32px;
       }
 
       .shelf {
@@ -1136,13 +1153,14 @@ def get_gui_html() -> str:
             <h1>Book Writer Studio</h1>
             <p>Plan outlines, generate drafts, and manage finished books from one workspace.</p>
           </div>
-          <div class="status-chip">● API Connected</div>
+          <div class="header-actions">
+            <button class="pill-button ghost" id="viewOutlines">View outlines</button>
+          </div>
         </header>
 
         <section class="search-bar">
           <span>🔍</span>
           <input id="searchInput" type="text" placeholder="Search by title or file name" />
-          <button class="pill-button">Filters</button>
         </section>
 
         <div id="nowPlayingHomeSlot">
@@ -1203,30 +1221,19 @@ def get_gui_html() -> str:
             <div class="shelf" id="bookShelf"></div>
           </section>
 
-          <section class="shelf-section">
-            <div class="section-header">
-              <div>
-                <h2>Active outlines</h2>
-                <p>Ready-to-generate drafts pulled from the outlines directory.</p>
-              </div>
-              <span class="count-pill" id="outlineCount">0 outlines</span>
-            </div>
-            <div class="shelf" id="outlineShelf"></div>
-          </section>
-
-          <section class="shelf-section">
-            <div class="section-header">
-              <div>
-                <h2>Completed outlines</h2>
-                <p>Archived outlines already moved to completed_outlines.</p>
-              </div>
-              <span class="count-pill" id="completedOutlineCount">0 outlines</span>
-            </div>
-            <div class="shelf" id="completedOutlineShelf"></div>
-          </section>
         </section>
 
-        <section class="home-utilities">
+        <section class="utilities-section">
+          <div class="section-header">
+            <div>
+              <h2>Workspace tools</h2>
+              <p>Expand books, generate assets, and create new outlines when you need them.</p>
+            </div>
+            <button class="pill-button ghost" id="toggleUtilities" aria-expanded="false">
+              Show tools
+            </button>
+          </div>
+          <section class="home-utilities is-collapsed" id="homeUtilities">
           <div class="panel">
             <h3>Create outline wizard</h3>
             <label>Outline prompt</label>
@@ -1395,14 +1402,41 @@ def get_gui_html() -> str:
             <h3>Activity log</h3>
             <div class="action-log" id="actionLog">Waiting for actions...</div>
           </div>
+          </section>
         </section>
+      </main>
 
-        <section class="footer-panel">
-          <div>
-            <h3>Weekly focus</h3>
-            <p>Schedule two writing sessions and review outlines with your personas.</p>
+      <main class="detail-view outline-view is-hidden" id="outlineView">
+        <div class="detail-header">
+          <button class="pill-button" id="outlineBack">← Back to library</button>
+          <div class="detail-heading">
+            <h2>Outlines</h2>
+            <p>Review active outlines and archived drafts in one place.</p>
           </div>
-          <button class="pill-button">Open Planner</button>
+        </div>
+        <div id="nowPlayingOutlineSlot"></div>
+        <section class="catalog">
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Active outlines</h2>
+                <p>Ready-to-generate drafts pulled from the outlines directory.</p>
+              </div>
+              <span class="count-pill" id="outlineCount">0 outlines</span>
+            </div>
+            <div class="shelf" id="outlineShelf"></div>
+          </section>
+
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Completed outlines</h2>
+                <p>Archived outlines already moved to completed_outlines.</p>
+              </div>
+              <span class="count-pill" id="completedOutlineCount">0 outlines</span>
+            </div>
+            <div class="shelf" id="completedOutlineShelf"></div>
+          </section>
         </section>
       </main>
 
@@ -1946,6 +1980,8 @@ def get_gui_html() -> str:
       const homeView = document.getElementById('homeView');
       const detailView = document.getElementById('detailView');
       const detailBack = document.getElementById('detailBack');
+      const outlineView = document.getElementById('outlineView');
+      const outlineBack = document.getElementById('outlineBack');
       const detailHeading = document.getElementById('detailHeading');
       const detailSubheading = document.getElementById('detailSubheading');
       const detailSummary = document.getElementById('detailSummary');
@@ -2013,6 +2049,7 @@ def get_gui_html() -> str:
       const nowPlayingClose = document.getElementById('nowPlayingClose');
       const nowPlayingAutoplay = document.getElementById('nowPlayingAutoplay');
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
+      const nowPlayingOutlineSlot = document.getElementById('nowPlayingOutlineSlot');
       const nowPlayingDetailSlot = document.getElementById('nowPlayingDetailSlot');
       const nowPlayingChapterSlot = document.getElementById('nowPlayingChapterSlot');
       const latestShelf = document.getElementById('latestShelf');
@@ -2020,6 +2057,9 @@ def get_gui_html() -> str:
       const allBooksSection = document.getElementById('allBooksSection');
       const viewAllBooks = document.getElementById('viewAllBooks');
       const viewAllBooksSecondary = document.getElementById('viewAllBooksSecondary');
+      const viewOutlines = document.getElementById('viewOutlines');
+      const toggleUtilities = document.getElementById('toggleUtilities');
+      const homeUtilities = document.getElementById('homeUtilities');
 
       const setSelectOptions = (select, options, placeholder) => {
         select.innerHTML = '';
@@ -2134,6 +2174,7 @@ def get_gui_html() -> str:
 
       const showHomeView = () => {
         detailView.classList.add('is-hidden');
+        outlineView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
         homeView.classList.remove('is-hidden');
         updateNowPlayingPlacement();
@@ -2141,8 +2182,18 @@ def get_gui_html() -> str:
 
       const showDetailView = () => {
         homeView.classList.add('is-hidden');
+        outlineView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
         detailView.classList.remove('is-hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        updateNowPlayingPlacement();
+      };
+
+      const showOutlineView = () => {
+        homeView.classList.add('is-hidden');
+        detailView.classList.add('is-hidden');
+        chapterView.classList.add('is-hidden');
+        outlineView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         updateNowPlayingPlacement();
       };
@@ -2150,6 +2201,7 @@ def get_gui_html() -> str:
       const showChapterView = () => {
         homeView.classList.add('is-hidden');
         detailView.classList.add('is-hidden');
+        outlineView.classList.add('is-hidden');
         chapterView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         updateNowPlayingPlacement();
@@ -2388,6 +2440,7 @@ def get_gui_html() -> str:
 
       const getActiveViewSlot = () => {
         if (!homeView.classList.contains('is-hidden')) return nowPlayingHomeSlot;
+        if (!outlineView.classList.contains('is-hidden')) return nowPlayingOutlineSlot;
         if (!detailView.classList.contains('is-hidden')) return nowPlayingDetailSlot;
         if (!chapterView.classList.contains('is-hidden')) return nowPlayingChapterSlot;
         return nowPlayingHomeSlot;
@@ -3630,6 +3683,33 @@ def get_gui_html() -> str:
         await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
         showHomeView();
       });
+
+      if (outlineBack) {
+        outlineBack.addEventListener('click', async () => {
+          updateNowPlayingPlacement();
+          await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
+          showHomeView();
+        });
+      }
+
+      if (viewOutlines) {
+        viewOutlines.addEventListener('click', () => {
+          showOutlineView();
+        });
+      }
+
+      if (toggleUtilities && homeUtilities) {
+        const setUtilitiesState = (isCollapsed) => {
+          homeUtilities.classList.toggle('is-collapsed', isCollapsed);
+          toggleUtilities.setAttribute('aria-expanded', String(!isCollapsed));
+          toggleUtilities.textContent = isCollapsed ? 'Show tools' : 'Hide tools';
+        };
+        setUtilitiesState(true);
+        toggleUtilities.addEventListener('click', () => {
+          const isCollapsed = homeUtilities.classList.contains('is-collapsed');
+          setUtilitiesState(!isCollapsed);
+        });
+      }
 
       chapterBack.addEventListener('click', async () => {
         restoreChapterAudioToCard();
