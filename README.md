@@ -26,6 +26,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
 - `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
 - `python -m book_writer --prompt` (interactive outline and book workflow)
+- `python -m book_writer --help` (full CLI option list)
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
