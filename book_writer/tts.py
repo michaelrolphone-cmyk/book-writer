@@ -43,14 +43,24 @@ class TTSSettings:
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
+FENCED_CODE_PATTERN = re.compile(r"(```|~~~).*?\1", re.DOTALL)
+HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
+HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+IMAGE_PATTERN = re.compile(r"!\[([^\]]*)\]\([^)]+\)")
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 INLINE_CODE_PATTERN = re.compile(r"`([^`]+)`")
 BOLD_PATTERN = re.compile(r"\*\*([^*]+)\*\*")
+BOLD_UNDERSCORE_PATTERN = re.compile(r"__([^_]+)__")
 ITALIC_PATTERN = re.compile(r"\*([^*]+)\*")
 UNDERSCORE_PATTERN = re.compile(r"_([^_]+)_")
+STRIKETHROUGH_PATTERN = re.compile(r"~~([^~]+)~~")
 NUMBERED_LIST_PATTERN = re.compile(r"^\d+\.\s+")
 BULLET_LIST_PATTERN = re.compile(r"^[-*+]\s+")
+BLOCKQUOTE_PATTERN = re.compile(r"^>+\s*")
 HEADING_PATTERN = re.compile(r"^#+\s*")
+HORIZONTAL_RULE_PATTERN = re.compile(r"^(-{3,}|\*{3,}|_{3,})\s*$")
+REFERENCE_LINK_PATTERN = re.compile(r"^\[[^\]]+\]:\s+\S+")
+TABLE_DIVIDER_PATTERN = re.compile(r"^\s*\|?\s*(:?-{3,}:?\s*\|)+\s*$")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n+")
 MAX_TTS_CHARS = 3000
@@ -72,6 +82,8 @@ def _wrap_on_words(text: str, width: int) -> list[str]:
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
     cleaned = CODE_BLOCK_PATTERN.sub("", markdown)
+    cleaned = FENCED_CODE_PATTERN.sub("", cleaned)
+    cleaned = HTML_COMMENT_PATTERN.sub("", cleaned)
     cleaned = unicodedata.normalize("NFKC", cleaned)
     output_lines: list[str] = []
     for line in cleaned.splitlines():
@@ -79,14 +91,31 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
         if not stripped:
             output_lines.append("")
             continue
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            continue
+        if HORIZONTAL_RULE_PATTERN.match(stripped):
+            output_lines.append("")
+            continue
+        if TABLE_DIVIDER_PATTERN.match(stripped) or (
+            set(stripped) <= {"|", "-", " ", ":"} and "-" in stripped
+        ):
+            continue
+        if REFERENCE_LINK_PATTERN.match(stripped):
+            continue
         line_text = HEADING_PATTERN.sub("", stripped)
         line_text = NUMBERED_LIST_PATTERN.sub("", line_text)
         line_text = BULLET_LIST_PATTERN.sub("", line_text)
+        line_text = BLOCKQUOTE_PATTERN.sub("", line_text)
+        line_text = IMAGE_PATTERN.sub(r"\1", line_text)
         line_text = LINK_PATTERN.sub(r"\1", line_text)
         line_text = INLINE_CODE_PATTERN.sub(r"\1", line_text)
         line_text = BOLD_PATTERN.sub(r"\1", line_text)
+        line_text = BOLD_UNDERSCORE_PATTERN.sub(r"\1", line_text)
         line_text = ITALIC_PATTERN.sub(r"\1", line_text)
         line_text = UNDERSCORE_PATTERN.sub(r"\1", line_text)
+        line_text = STRIKETHROUGH_PATTERN.sub(r"\1", line_text)
+        line_text = HTML_TAG_PATTERN.sub("", line_text)
+        line_text = line_text.replace("|", " ")
         output_lines.append(line_text)
 
     collapsed: list[str] = []
@@ -101,6 +130,7 @@ def sanitize_markdown_for_tts(markdown: str) -> str:
             previous_blank = False
 
     cleaned_text = "\n".join(collapsed).strip()
+    cleaned_text = " ".join(cleaned_text.split())
     return "".join(
         ch
         for ch in cleaned_text
