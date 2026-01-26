@@ -22,7 +22,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080` (launch GUI server)
 - `python -m book_writer --outline OUTLINE.md --output-dir output` (generate a single book)
 - `python -m book_writer --outlines-dir outlines --books-dir books --completed-outlines-dir completed_outlines` (batch generate)
-- `python -m book_writer --expand-book books/my-book --expand-passes 2` (expand a finished book)
+- `python -m book_writer --expand-book books/my-book --expand-passes 2 --expand-only 1,3-4` (expand a finished book)
 - `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
 - `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
 - `python -m book_writer --prompt` (interactive outline and book workflow)
@@ -32,7 +32,10 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `GET /api/books` (book catalog, including `genres`, `primary_genre`, and overall `progress` completion totals for book cards)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
-- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content`, `GET /api/outline-content`
+- `GET /api/chapters?book_dir=books/my-book` (chapter list for a book)
+- `GET /api/book-content?book_dir=books/my-book` (book markdown content)
+- `GET /api/chapter-content?book_dir=books/my-book&chapter=1&audio_dirname=audio&video_dirname=video` (chapter markdown + media URLs)
+- `GET /api/outline-content?outline_path=outlines/my-outline.md` (outline markdown)
 - `GET /api/book-progress?book_dir=books/my-book&audio_dirname=audio&video_dirname=video&chapter_cover_dir=chapter_covers`
 - `POST /api/generate-book`, `POST /api/expand-book`, `POST /api/compile-book`
 - `POST /api/generate-audio`, `POST /api/generate-videos`

@@ -2273,6 +2273,7 @@ def get_gui_html() -> str:
       let showAllBooks = false;
       let activeGenreView = null;
       let currentBookProgress = null;
+      let suppressNowPlayingClick = false;
 
       const SIMPLE_GENRE_ORDER = [
         'Sci-Fi',
@@ -2876,10 +2877,18 @@ def get_gui_html() -> str:
 
       const shouldIgnoreNowPlayingClick = (event) => {
         if (!event || !event.target) return false;
+        if (event.defaultPrevented) return true;
         if (nowPlayingControls && nowPlayingControls.contains(event.target)) return true;
         if (nowPlayingClose && nowPlayingClose.contains(event.target)) return true;
         if (nowPlayingAutoplay && nowPlayingAutoplay.contains(event.target)) return true;
         return false;
+      };
+
+      const suppressNowPlayingNavigation = () => {
+        suppressNowPlayingClick = true;
+        window.setTimeout(() => {
+          suppressNowPlayingClick = false;
+        }, 0);
       };
 
       const stopActivePlayback = () => {
@@ -4260,13 +4269,19 @@ def get_gui_html() -> str:
 
       if (nowPlayingClose) {
         nowPlayingClose.addEventListener('click', (event) => {
+          event.preventDefault();
           event.stopPropagation();
+          suppressNowPlayingNavigation();
           stopActivePlayback();
         });
       }
 
       if (nowPlaying) {
         nowPlaying.addEventListener('click', async (event) => {
+          if (suppressNowPlayingClick) {
+            suppressNowPlayingClick = false;
+            return;
+          }
           if (shouldIgnoreNowPlayingClick(event)) {
             return;
           }
