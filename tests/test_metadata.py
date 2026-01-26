@@ -47,3 +47,8 @@ class TestMetadata(unittest.TestCase):
         )
 
         self.assertEqual(result, "Sci-Fi")
+
+    def test_resolve_primary_genre_maps_subgenres(self) -> None:
+        result = metadata.resolve_primary_genre(["Eco Thriller", "Crime Mystery"])
+
+        self.assertEqual(result, "Thriller")
