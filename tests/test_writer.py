@@ -37,6 +37,8 @@ from book_writer.writer import (
     generate_outline,
     save_book_progress,
     write_book,
+    _summarize_cover_text,
+    _truncate_cover_text,
 )
 
 
@@ -168,6 +170,33 @@ class TestWriter(unittest.TestCase):
             "\\textbackslash{}Office\\textbackslash{}text.",
             cleaned,
         )
+
+    def test_truncate_cover_text_returns_stripped_input(self) -> None:
+        text = "  Short synopsis.  "
+
+        result = _truncate_cover_text(text)
+
+        self.assertEqual(result, "Short synopsis.")
+
+    def test_truncate_cover_text_clips_long_input(self) -> None:
+        text = "a" * 7001
+
+        result = _truncate_cover_text(text)
+
+        self.assertEqual(len(result), 6000)
+        self.assertTrue(result.endswith("…"))
+
+    def test_summarize_cover_text_uses_trimmed_input(self) -> None:
+        long_text = "b" * 7001
+        trimmed_text = _truncate_cover_text(long_text)
+        client = MagicMock()
+        client.generate.return_value = "summary"
+
+        _summarize_cover_text(client, long_text, "book synopsis")
+
+        called_prompt = client.generate.call_args[0][0]
+        self.assertIn(trimmed_text, called_prompt)
+        self.assertNotIn(long_text, called_prompt)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_creates_numbered_files(self, run_mock: Mock) -> None:
