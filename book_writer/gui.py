@@ -297,10 +297,12 @@ def get_gui_html() -> str:
         gap: 20px;
         overflow-x: auto;
         overflow-y: visible;
-        padding: 6px 4px 16px;
-        scroll-snap-type: x mandatory;
+        padding: 6px 0 16px;
+        scroll-behavior: smooth;
+        scroll-snap-type: none;
         scrollbar-width: none;
         -ms-overflow-style: none;
+        background: transparent;
       }
 
       .scroll-shelf::-webkit-scrollbar {
@@ -1102,6 +1104,8 @@ def get_gui_html() -> str:
 
         .scroll-shelf {
           grid-auto-columns: minmax(220px, 66vw);
+          scroll-snap-type: x mandatory;
+          scroll-padding-inline: 12px;
         }
 
         .book-card {
@@ -1727,7 +1731,7 @@ def get_gui_html() -> str:
               return;
             }
             event.preventDefault();
-            shelf.scrollLeft += event.deltaY;
+            shelf.scrollBy({ left: event.deltaY, behavior: 'smooth' });
           },
           { passive: false },
         );

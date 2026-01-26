@@ -14,6 +14,25 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 
 ## Commands
 
+### CLI & API quick reference
+
+**CLI commands**
+- `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080` (launch GUI server)
+- `python -m book_writer --outline OUTLINE.md --output-dir output` (generate a single book)
+- `python -m book_writer --outlines-dir outlines --books-dir books --completed-outlines-dir completed_outlines` (batch generate)
+- `python -m book_writer --expand-book books/my-book --expand-passes 2` (expand a finished book)
+- `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
+- `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
+
+**GUI API endpoints**
+- `GET /` (GUI HTML)
+- `GET /api/books` (catalog of books)
+- `GET /api/outlines`, `GET /api/completed-outlines` (outline catalogs)
+- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content` (book content)
+- `POST /api/generate-book`, `POST /api/expand-book` (generation flows)
+- `POST /api/compile-book`, `POST /api/generate-audio`, `POST /api/generate-videos`
+- `POST /api/generate-cover`, `POST /api/generate-chapter-covers`, `POST /api/save-outline`
+
 ### Launch the GUI server
 
 ```bash
