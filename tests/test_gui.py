@@ -130,6 +130,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("cleaned = cleaned.replace(/^[\\-–—]+\\s*/, '');", html)
         self.assertIn("renderCatalog", html)
         self.assertIn("filterEntries", html)
+        self.assertIn("const genre = getPrimaryGenre(book);", html)
+        self.assertIn("return `Genre: ${primary}`;", html)
         self.assertIn("const refreshMode = options.refreshMode || 'full';", html)
         self.assertIn("loadCatalog({ selectCurrent: false, refreshMode: 'books' });", html)
         self.assertIn("chapterBack.addEventListener('click', async () => {", html)

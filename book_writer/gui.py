@@ -2292,9 +2292,8 @@ def get_gui_html() -> str:
       };
 
       const getGenreLine = (book) => {
-        const genres = getBookGenres(book);
-        if (!genres.length) return 'Genre: Uncategorized';
-        return `Genres: ${genres.join(', ')}`;
+        const primary = getPrimaryGenre(book);
+        return `Genre: ${primary}`;
       };
 
       const getFilteredBooks = () =>
@@ -2307,21 +2306,11 @@ def get_gui_html() -> str:
       const groupBooksByGenre = (books) => {
         const groups = new Map();
         books.forEach((book) => {
-          const genres = getBookGenres(book);
-          if (!genres.length) {
-            const genre = 'Uncategorized';
-            if (!groups.has(genre)) {
-              groups.set(genre, []);
-            }
-            groups.get(genre).push(book);
-            return;
+          const genre = getPrimaryGenre(book);
+          if (!groups.has(genre)) {
+            groups.set(genre, []);
           }
-          genres.forEach((genre) => {
-            if (!groups.has(genre)) {
-              groups.set(genre, []);
-            }
-            groups.get(genre).push(book);
-          });
+          groups.get(genre).push(book);
         });
         return groups;
       };
