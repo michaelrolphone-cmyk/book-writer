@@ -1181,7 +1181,7 @@ def get_gui_html() -> str:
         }
 
         .scroll-shelf {
-          grid-auto-columns: minmax(220px, 66vw);
+          grid-auto-columns: minmax(380px, 66vw);
           scroll-snap-type: x mandatory;
           scroll-padding-inline: calc(50vw - 50% + var(--page-padding));
         }
