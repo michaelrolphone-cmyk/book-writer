@@ -7,10 +7,12 @@ class TestGui(unittest.TestCase):
     def test_get_gui_html_contains_key_sections(self) -> None:
         html = gui.get_gui_html()
 
-        self.assertIn("Book Writer Studio", html)
+        self.assertIn("Quilloquy Studio", html)
         self.assertIn(
             "Plan outlines, generate drafts, and manage finished books from one workspace.", html
         )
+        self.assertIn("src=\"/logo.png\"", html)
+        self.assertIn("alt=\"Quilloquy logo\"", html)
         self.assertIn("id=\"searchInput\"", html)
         self.assertIn("id=\"viewOutlines\"", html)
         self.assertIn("id=\"toggleUtilities\"", html)
@@ -185,7 +187,7 @@ class TestGui(unittest.TestCase):
         search_bar_index = html.index("class=\"search-bar\"")
         now_playing_index = html.index("id=\"nowPlaying\"")
         self.assertLess(search_bar_index, now_playing_index)
-        self.assertIn("Neumorphic", gui.__doc__ or "")
+        self.assertIn("Quilloquy", gui.__doc__ or "")
 
     def test_save_gui_html_writes_file(self) -> None:
         with self.subTest("write and read back"):

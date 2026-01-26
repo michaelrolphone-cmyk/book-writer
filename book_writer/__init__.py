@@ -1,1 +1,1 @@
-"""Book writer package."""
+"""Quilloquy package."""

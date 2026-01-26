@@ -1,9 +1,9 @@
-"""Neumorphic GUI template for the Book Writer project."""
+"""Neumorphic GUI template for the Quilloquy project."""
 from __future__ import annotations
 
 from pathlib import Path
 
-GUI_TITLE = "Book Writer Catalogue"
+GUI_TITLE = "Quilloquy Catalogue"
 
 
 def get_gui_html() -> str:
@@ -68,11 +68,26 @@ def get_gui_html() -> str:
         margin-bottom: 32px;
       }
 
-      .header-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .brand-logo {
+          width: 54px;
+          height: 54px;
+          border-radius: 16px;
+          object-fit: cover;
+          box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+          background: var(--surface);
+        }
 
       .now-playing {
         max-width: 1280px;
@@ -1154,8 +1169,13 @@ def get_gui_html() -> str:
       <main class="home-view" id="homeView">
         <header class="header">
           <div class="header-title">
-            <h1>Book Writer Studio</h1>
-            <p>Plan outlines, generate drafts, and manage finished books from one workspace.</p>
+            <div class="brand">
+              <img class="brand-logo" src="/logo.png" alt="Quilloquy logo" />
+              <div>
+                <h1>Quilloquy Studio</h1>
+                <p>Plan outlines, generate drafts, and manage finished books from one workspace.</p>
+              </div>
+            </div>
           </div>
           <div class="header-actions">
             <button class="pill-button ghost" id="viewOutlines">View outlines</button>

@@ -1,4 +1,4 @@
-"""HTTP server exposing the Book Writer CLI functionality for the GUI."""
+"""HTTP server exposing the Quilloquy CLI functionality for the GUI."""
 from __future__ import annotations
 
 import json
@@ -56,6 +56,8 @@ SUMMARY_DIRNAME = "summaries"
 SUMMARY_CHAPTER_DIRNAME = "chapters"
 BOOK_SUMMARY_FILENAME = "book-summary.md"
 SUMMARY_SOURCE_LIMIT = 4000
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LOGO_FILENAME = "logo.png"
 _SUMMARY_TASKS_LOCK = threading.Lock()
 _SUMMARY_TASKS: set[str] = set()
 _GENRE_TASKS_LOCK = threading.Lock()
@@ -1027,6 +1029,14 @@ def _resolve_media_path(book_dir: Path, relative_path: str) -> Path:
     return candidate
 
 
+def _resolve_logo_path(base_dir: Path | None = None) -> Path:
+    base_dir = (base_dir or REPO_ROOT).resolve()
+    logo_path = (base_dir / LOGO_FILENAME).resolve()
+    if not logo_path.is_file():
+        raise ApiError("Logo file not found.")
+    return logo_path
+
+
 def _handle_api(handler: BaseHTTPRequestHandler) -> None:
     path = urlparse(handler.path).path
     try:
@@ -1104,12 +1114,23 @@ def _handle_media(handler: BaseHTTPRequestHandler) -> None:
         _send_json(handler, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
 
 
+def _handle_logo(handler: BaseHTTPRequestHandler) -> None:
+    try:
+        logo_path = _resolve_logo_path()
+        _send_file(handler, logo_path)
+    except ApiError as exc:
+        _send_json(handler, {"error": str(exc)}, HTTPStatus.NOT_FOUND)
+
+
 class BookWriterRequestHandler(BaseHTTPRequestHandler):
     """Serve the GUI and CLI-equivalent API endpoints."""
 
     def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
         if self.path.startswith("/api/"):
             _handle_api(self)
+            return
+        if self.path == "/logo.png":
+            _handle_logo(self)
             return
         if self.path.startswith("/media"):
             _handle_media(self)
@@ -1124,8 +1145,8 @@ class BookWriterRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
-    """Run the Book Writer HTTP server."""
+    """Run the Quilloquy HTTP server."""
     server = ThreadingHTTPServer((host, port), BookWriterRequestHandler)
-    print(f"Book Writer GUI available at http://{host}:{port}")
+    print(f"Quilloquy GUI available at http://{host}:{port}")
     server.serve_forever()
     return server
