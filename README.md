@@ -29,7 +29,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (book catalog, including `genres` and a high-level `primary_genre` for main-genre shelves)
+- `GET /api/books` (book catalog, including `genres`, `primary_genre`, and overall `progress` completion totals for book cards)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content`, `GET /api/outline-content`

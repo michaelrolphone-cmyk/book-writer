@@ -651,12 +651,19 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     books_dir = Path(payload.get("books_dir", "books"))
     audio_dir = payload.get("tts_audio_dir", "audio")
     video_dir = payload.get("video_dir", "video")
+    chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
     books = _book_directories(books_dir, audio_dir, video_dir)
     entries: list[dict[str, Any]] = []
     for book in books:
         synopsis = _read_book_synopsis(book.path)
         genres = _ensure_book_genres_async(book.path, synopsis, payload)
         primary_genre = ensure_primary_genre(book.path, genres) if genres else None
+        progress = _summarize_book_progress(
+            book.path,
+            audio_dir,
+            video_dir,
+            chapter_cover_dir,
+        )
         entries.append(
             {
                 "path": str(book.path),
@@ -682,6 +689,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     if (book.path / audio_dir / "book.mp3").exists()
                     else None
                 ),
+                "progress": progress,
+                "progress_total": progress["percent"],
             }
         )
     return {"books": entries}
@@ -965,6 +974,61 @@ def get_book_progress(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "chapters": chapters,
         "totals": totals,
+    }
+
+
+def _summarize_book_progress(
+    book_dir: Path,
+    audio_dirname: str,
+    video_dirname: str,
+    chapter_cover_dir: str,
+) -> dict[str, Any]:
+    chapter_files = _book_chapter_files(book_dir)
+    chapter_count = len(chapter_files)
+
+    cover_exists = (book_dir / "cover.png").exists()
+    book_summary_exists = bool(_read_summary(_book_summary_path(book_dir)))
+    book_audio_exists = (book_dir / audio_dirname / "book.mp3").exists()
+
+    totals = {
+        "images": {"complete": 0, "total": chapter_count + 1},
+        "summaries": {"complete": 0, "total": chapter_count + 1},
+        "audio": {"complete": 0, "total": chapter_count + 1},
+        "video": {"complete": 0, "total": chapter_count},
+    }
+
+    if cover_exists:
+        totals["images"]["complete"] += 1
+    if book_summary_exists:
+        totals["summaries"]["complete"] += 1
+    if book_audio_exists:
+        totals["audio"]["complete"] += 1
+
+    for chapter_file in chapter_files:
+        chapter_summary_exists = bool(
+            _read_summary(_chapter_summary_path(book_dir, chapter_file))
+        )
+        chapter_cover_exists = (
+            book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
+        ).exists()
+        chapter_audio_exists = (
+            book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+        ).exists()
+        chapter_video_exists = (
+            book_dir / video_dirname / f"{chapter_file.stem}.mp4"
+        ).exists()
+
+        totals["images"]["complete"] += int(chapter_cover_exists)
+        totals["summaries"]["complete"] += int(chapter_summary_exists)
+        totals["audio"]["complete"] += int(chapter_audio_exists)
+        totals["video"]["complete"] += int(chapter_video_exists)
+
+    overall_complete = sum(entry["complete"] for entry in totals.values())
+    overall_total = sum(entry["total"] for entry in totals.values())
+    return {
+        "complete": overall_complete,
+        "total": overall_total,
+        "percent": _completion_percent(overall_complete, overall_total),
     }
 
 
