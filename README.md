@@ -23,15 +23,18 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - `python -m book_writer --expand-book books/my-book --expand-passes 2` (expand a finished book)
 - `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
 - `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
+- `python -m book_writer --prompt` (interactive outline and book workflow)
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (catalog of books)
-- `GET /api/outlines`, `GET /api/completed-outlines` (outline catalogs)
-- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content` (book content)
-- `POST /api/generate-book`, `POST /api/expand-book` (generation flows)
-- `POST /api/compile-book`, `POST /api/generate-audio`, `POST /api/generate-videos`
-- `POST /api/generate-cover`, `POST /api/generate-chapter-covers`, `POST /api/save-outline`
+- `GET /api/books`, `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
+- `GET /api/authors`, `GET /api/tones` (author and tone options)
+- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content`, `GET /api/outline-content`
+- `POST /api/generate-book`, `POST /api/expand-book`, `POST /api/compile-book`
+- `POST /api/generate-audio`, `POST /api/generate-videos`
+- `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
+- `POST /api/generate-outline`, `POST /api/save-outline`
+- `GET /media` (chapter audio/video/cover assets)
 ### CLI quick reference
 
 - Launch GUI: `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080`
