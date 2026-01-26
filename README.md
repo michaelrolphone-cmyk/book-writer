@@ -14,6 +14,8 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 
 ## Commands
 
+The CLI commands and GUI API endpoints are summarized in the quick reference below for fast lookup.
+
 ### CLI & API quick reference
 
 **CLI commands**

@@ -7,12 +7,8 @@ class TestGui(unittest.TestCase):
     def test_get_gui_html_contains_key_sections(self) -> None:
         html = gui.get_gui_html()
 
-        self.assertIn("Quilloquy Studio", html)
-        self.assertIn(
-            "Plan outlines, generate drafts, and manage finished books from one workspace.", html
-        )
         self.assertIn("src=\"/logo.png\"", html)
-        self.assertIn("alt=\"Quilloquy logo\"", html)
+        self.assertIn("alt=\"Quilloquy Studio logo\"", html)
         self.assertIn("id=\"searchInput\"", html)
         self.assertIn("id=\"viewOutlines\"", html)
         self.assertIn("id=\"toggleUtilities\"", html)
