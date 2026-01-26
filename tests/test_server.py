@@ -542,6 +542,33 @@ class TestServerApi(unittest.TestCase):
             self.assertEqual(len(started), 1)
             self.assertFalse(summary_path.exists())
 
+    def test_list_books_reports_progress_totals(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            audio_dir = book_dir / "audio"
+            cover_dir = book_dir / "chapter_covers"
+            summaries_dir = book_dir / "summaries" / "chapters"
+            book_dir.mkdir(parents=True)
+            audio_dir.mkdir()
+            cover_dir.mkdir()
+            summaries_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text(
+                "# Chapter One\n\nContent", encoding="utf-8"
+            )
+            (book_dir / "cover.png").write_text("cover", encoding="utf-8")
+            _write_book_summary(book_dir, "Book summary")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Chapter summary")
+            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        progress = result["books"][0]["progress"]
+        self.assertEqual(progress["complete"], 4)
+        self.assertEqual(progress["total"], 7)
+        self.assertAlmostEqual(progress["percent"], 57.14, places=2)
+        self.assertEqual(result["books"][0]["progress_total"], progress["percent"])
+
     def test_list_chapters_schedules_summary_generation_when_missing(self) -> None:
         started: list[object] = []
 

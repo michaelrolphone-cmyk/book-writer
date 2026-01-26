@@ -3212,32 +3212,36 @@ def get_gui_html() -> str:
         if (!progress) return '';
         const bookStatus = progress.book?.status || {};
         const chapters = progress.chapters || [];
+        const overallPercent = progress.completion?.percent ?? 0;
         const categories = [
           { key: 'images', label: 'Cover art' },
           { key: 'summaries', label: 'Summaries' },
           { key: 'audio', label: 'Audio' },
           { key: 'video', label: 'Video' },
         ];
-        return categories
-          .map((category) => {
+        const lines = [
+          `Overall completion: ${formatPercent(overallPercent)}.`,
+          ...categories.map((category) => {
             const bookLabel = bookStatus[category.key] ? 'Book complete' : 'Book incomplete';
             const chapterLabel = summarizeChapterTask(chapters, category.key);
             return `${category.label}: ${bookLabel} — ${chapterLabel}`;
-          })
-          .join(`\n`);
+          }),
+        ];
+        return lines.join(`\n`);
       };
 
       const buildChapterProgressSummary = (chapter) => {
         if (!chapter || !chapter.status) return '';
+        const percent = chapter.completion?.percent ?? 0;
         const needs = [];
         if (!chapter.status.images) needs.push('cover art');
         if (!chapter.status.summaries) needs.push('summary');
         if (!chapter.status.audio) needs.push('audio');
         if (!chapter.status.video) needs.push('video');
         if (!needs.length) {
-          return 'All chapter tasks are complete.';
+          return `Completion: ${formatPercent(percent)}. All chapter tasks are complete.`;
         }
-        return `Still needed: ${needs.join(', ')}.`;
+        return `Completion: ${formatPercent(percent)}. Still needed: ${needs.join(', ')}.`;
       };
 
       const calculateCategoryPercent = (totals, key) => {
@@ -3267,88 +3271,24 @@ def get_gui_html() -> str:
       const renderBookProgress = (progress) => {
         if (!bookProgressShelf) return;
         bookProgressShelf.innerHTML = '';
+        bookProgressShelf.classList.add('is-hidden');
         if (!progress) {
-          setSummaryText(bookProgressSummary, '');
-          renderEmpty(bookProgressShelf, 'No progress data available yet.');
+          setSummaryText(bookProgressSummary, 'No progress data available yet.');
           return;
         }
         const summaryText = buildBookProgressSummary(progress);
         setSummaryText(bookProgressSummary, summaryText);
-        const overallPercent = progress.completion?.percent ?? 0;
-        const overallCard = createProgressCard({
-          title: 'Overall',
-          heading: 'Overall completion',
-          detail: 'Progress across book and chapter assets.',
-          tag: 'Book',
-          accent: formatPercent(overallPercent),
-          progress: overallPercent,
-          footerLines: [`${formatPercent(overallPercent)} complete`],
-        });
-        bookProgressShelf.appendChild(overallCard);
-        const categories = [
-          { key: 'images', label: 'Cover art', detail: 'Book and chapter cover art.' },
-          { key: 'summaries', label: 'Summaries', detail: 'Book and chapter summaries.' },
-          { key: 'audio', label: 'Audio', detail: 'Book and chapter narration.' },
-          { key: 'video', label: 'Video', detail: 'Chapter video assets.' },
-        ];
-        categories.forEach((category) => {
-          const percent = calculateCategoryPercent(progress.totals, category.key);
-          const bookComplete = progress.book?.status?.[category.key];
-          const chapterSummary = summarizeChapterTask(progress.chapters || [], category.key);
-          const detail = `${bookComplete ? 'Book complete' : 'Book incomplete'}. ${chapterSummary}.`;
-          const card = createProgressCard({
-            title: category.label,
-            heading: category.label,
-            detail,
-            tag: 'Progress',
-            accent: formatPercent(percent),
-            progress: percent,
-            footerLines: [`${formatPercent(percent)} complete`],
-          });
-          bookProgressShelf.appendChild(card);
-        });
       };
 
       const renderChapterProgress = (chapter) => {
         if (!chapterProgressShelf) return;
         chapterProgressShelf.innerHTML = '';
+        chapterProgressShelf.classList.add('is-hidden');
         if (!chapter) {
-          setSummaryText(chapterProgressSummary, '');
-          renderEmpty(chapterProgressShelf, 'No chapter progress available yet.');
+          setSummaryText(chapterProgressSummary, 'No chapter progress available yet.');
           return;
         }
         setSummaryText(chapterProgressSummary, buildChapterProgressSummary(chapter));
-        const overallPercent = chapter.completion?.percent ?? 0;
-        const overallCard = createProgressCard({
-          title: 'Chapter completion',
-          heading: 'Overall completion',
-          detail: 'Progress for this chapter.',
-          tag: 'Chapter',
-          accent: formatPercent(overallPercent),
-          progress: overallPercent,
-          footerLines: [`${formatPercent(overallPercent)} complete`],
-        });
-        chapterProgressShelf.appendChild(overallCard);
-        const tasks = [
-          { key: 'images', label: 'Cover art' },
-          { key: 'summaries', label: 'Summary' },
-          { key: 'audio', label: 'Audio' },
-          { key: 'video', label: 'Video' },
-        ];
-        tasks.forEach((task) => {
-          const complete = Boolean(chapter.status?.[task.key]);
-          const percent = complete ? 100 : 0;
-          const card = createProgressCard({
-            title: task.label,
-            heading: task.label,
-            detail: complete ? 'Complete.' : 'Still needed.',
-            tag: 'Task',
-            accent: complete ? 'Complete' : 'Missing',
-            progress: percent,
-            footerLines: [complete ? '100% complete' : '0% complete'],
-          });
-          chapterProgressShelf.appendChild(card);
-        });
       };
 
       const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
@@ -3686,7 +3626,11 @@ def get_gui_html() -> str:
           formatPageCount(book.page_count),
           `${book.chapter_count || 0} chapters`,
         ];
-        const progress = (statusFlags.length / 4) * 100;
+        const progress =
+          Number.isFinite(book.progress_total) ||
+          Number.isFinite(book.progress?.percent)
+            ? book.progress_total ?? book.progress?.percent ?? 0
+            : (statusFlags.length / 4) * 100;
         const displayTitle = displayBookTitle(book.title);
         const shortName = displayTitle ? '' : book.path.split('/').pop();
         const card = createCard(
