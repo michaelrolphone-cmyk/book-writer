@@ -77,10 +77,12 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             "Content for book one",
             "Context for book one",
             "Synopsis for book one",
+            '{"genres": ["Sci-Fi"]}',
             "Title for book two",
             "Content for book two",
             "Context for book two",
             "Synopsis for book two",
+            '{"genres": ["Fantasy"]}',
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -561,6 +563,8 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                     "",
                     "",
                     "",
+                    "",
+                    False,
                     False,
                     False,
                     "curious-storyteller",

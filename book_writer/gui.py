@@ -60,6 +60,10 @@ def get_gui_html() -> str:
         width: 100%;
       }
 
+      .genre-view {
+        width: 100%;
+      }
+
       .header {
         display: flex;
         align-items: center;
@@ -644,6 +648,15 @@ def get_gui_html() -> str:
         align-items: center;
         margin-bottom: 16px;
         gap: 16px;
+      }
+
+      .section-header.genre-header {
+        margin-bottom: 12px;
+      }
+
+      .section-header.genre-header .shelf-heading {
+        margin: 0;
+        font-size: 16px;
       }
 
       .section-actions {
@@ -1456,6 +1469,41 @@ def get_gui_html() -> str:
         </section>
       </main>
 
+      <main class="detail-view genre-view is-hidden" id="genreView">
+        <div class="detail-header">
+          <button class="pill-button" id="genreBack">← Back to library</button>
+          <div class="detail-heading">
+            <h2 id="genreDetailHeading">Genre</h2>
+            <p id="genreDetailSubheading">
+              Explore every title and subgenre tagged within this genre.
+            </p>
+          </div>
+          <span class="count-pill" id="genreDetailCount">0 books</span>
+        </div>
+        <div id="nowPlayingGenreSlot"></div>
+        <section class="catalog">
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2 id="genreDetailShelfHeading">All books</h2>
+                <p>Every book tagged in this genre.</p>
+              </div>
+            </div>
+            <div class="scroll-shelf" id="genreDetailShelf"></div>
+          </section>
+
+          <section class="shelf-section">
+            <div class="section-header">
+              <div>
+                <h2>Subgenres</h2>
+                <p>Explore deeper tags that roll up to this genre.</p>
+              </div>
+            </div>
+            <div id="genreDetailSubShelves"></div>
+          </section>
+        </section>
+      </main>
+
       <main class="detail-view outline-view is-hidden" id="outlineView">
         <div class="detail-header">
           <button class="pill-button" id="outlineBack">← Back to library</button>
@@ -2048,6 +2096,7 @@ def get_gui_html() -> str:
       const bookAudio = document.getElementById('bookAudio');
       const bookCoverImage = document.getElementById('bookCoverImage');
       const homeView = document.getElementById('homeView');
+      const genreView = document.getElementById('genreView');
       const detailView = document.getElementById('detailView');
       const detailBack = document.getElementById('detailBack');
       const outlineView = document.getElementById('outlineView');
@@ -2073,6 +2122,13 @@ def get_gui_html() -> str:
       const chapterGenerateAudio = document.getElementById('chapterGenerateAudio');
       const chapterGenerateVideo = document.getElementById('chapterGenerateVideo');
       const chapterGenerateCover = document.getElementById('chapterGenerateCover');
+      const genreBack = document.getElementById('genreBack');
+      const genreDetailHeading = document.getElementById('genreDetailHeading');
+      const genreDetailSubheading = document.getElementById('genreDetailSubheading');
+      const genreDetailCount = document.getElementById('genreDetailCount');
+      const genreDetailShelfHeading = document.getElementById('genreDetailShelfHeading');
+      const genreDetailShelf = document.getElementById('genreDetailShelf');
+      const genreDetailSubShelves = document.getElementById('genreDetailSubShelves');
       const workspaceEmpty = document.getElementById('workspaceEmpty');
       const outlineWorkspace = document.getElementById('outlineWorkspace');
       const outlineWorkspaceState = document.getElementById('outlineWorkspaceState');
@@ -2119,6 +2175,7 @@ def get_gui_html() -> str:
       const nowPlayingClose = document.getElementById('nowPlayingClose');
       const nowPlayingAutoplay = document.getElementById('nowPlayingAutoplay');
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
+      const nowPlayingGenreSlot = document.getElementById('nowPlayingGenreSlot');
       const nowPlayingOutlineSlot = document.getElementById('nowPlayingOutlineSlot');
       const nowPlayingDetailSlot = document.getElementById('nowPlayingDetailSlot');
       const nowPlayingChapterSlot = document.getElementById('nowPlayingChapterSlot');
@@ -2161,6 +2218,24 @@ def get_gui_html() -> str:
       };
 
       let showAllBooks = false;
+      let activeGenreView = null;
+
+      const SIMPLE_GENRE_ORDER = [
+        'Sci-Fi',
+        'Fantasy',
+        'Romance',
+        'Drama',
+        'Mystery',
+        'Thriller',
+        'Horror',
+        'Historical',
+        'Nonfiction',
+        'Biography',
+        'Adventure',
+        'Young Adult',
+        'Children',
+        'Comedy',
+      ];
 
       const getSearchTerm = () => (searchInput?.value || '').trim().toLowerCase();
 
@@ -2172,6 +2247,11 @@ def get_gui_html() -> str:
         );
       };
 
+      const normalizeGenreKey = (value) =>
+        String(value || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '');
+
       const normalizeGenres = (genres) => {
         if (!Array.isArray(genres)) return [];
         const unique = [];
@@ -2179,7 +2259,7 @@ def get_gui_html() -> str:
         genres.forEach((genre) => {
           const cleaned = String(genre || '').trim().replace(/[.,;]+$/, '');
           if (!cleaned) return;
-          const key = cleaned.toLowerCase();
+          const key = normalizeGenreKey(cleaned);
           if (seen.has(key)) return;
           seen.add(key);
           unique.push(cleaned);
@@ -2187,8 +2267,22 @@ def get_gui_html() -> str:
         return unique;
       };
 
+      const getBookGenres = (book) => {
+        const genres = normalizeGenres(book?.genres || []);
+        const primary = String(book?.primary_genre || '').trim();
+        if (primary) {
+          const key = normalizeGenreKey(primary);
+          if (!genres.some((genre) => normalizeGenreKey(genre) === key)) {
+            genres.unshift(primary);
+          }
+        }
+        return genres;
+      };
+
       const getPrimaryGenre = (book) => {
-        const genres = normalizeGenres(book.genres);
+        const primary = String(book?.primary_genre || '').trim();
+        if (primary) return primary;
+        const genres = getBookGenres(book);
         return genres.length ? genres[0] : 'Uncategorized';
       };
 
@@ -2198,33 +2292,149 @@ def get_gui_html() -> str:
       };
 
       const getGenreLine = (book) => {
-        const genres = normalizeGenres(book.genres);
+        const genres = getBookGenres(book);
         if (!genres.length) return 'Genre: Uncategorized';
         return `Genres: ${genres.join(', ')}`;
       };
 
+      const getFilteredBooks = () =>
+        filterEntries(catalogState.books, (book) => [
+          displayBookTitle(book.title || ''),
+          book.path || '',
+          getBookGenres(book).join(' '),
+        ]);
+
       const groupBooksByGenre = (books) => {
         const groups = new Map();
         books.forEach((book) => {
-          const genre = getPrimaryGenre(book);
-          if (!groups.has(genre)) {
-            groups.set(genre, []);
+          const genres = getBookGenres(book);
+          if (!genres.length) {
+            const genre = 'Uncategorized';
+            if (!groups.has(genre)) {
+              groups.set(genre, []);
+            }
+            groups.get(genre).push(book);
+            return;
           }
-          groups.get(genre).push(book);
+          genres.forEach((genre) => {
+            if (!groups.has(genre)) {
+              groups.set(genre, []);
+            }
+            groups.get(genre).push(book);
+          });
         });
         return groups;
       };
 
       const sortGenreKeys = (keys) => {
-        const sorted = [...keys].sort((a, b) => a.localeCompare(b));
-        const uncategorizedIndex = sorted.findIndex(
-          (genre) => genre.toLowerCase() === 'uncategorized',
+        const orderMap = new Map(
+          SIMPLE_GENRE_ORDER.map((genre, index) => [normalizeGenreKey(genre), index]),
         );
-        if (uncategorizedIndex > -1) {
-          const [uncategorized] = sorted.splice(uncategorizedIndex, 1);
-          sorted.push(uncategorized);
+        return [...keys].sort((a, b) => {
+          const aKey = normalizeGenreKey(a);
+          const bKey = normalizeGenreKey(b);
+          if (aKey === 'uncategorized') return 1;
+          if (bKey === 'uncategorized') return -1;
+          const aOrder = orderMap.get(aKey);
+          const bOrder = orderMap.get(bKey);
+          if (aOrder !== undefined || bOrder !== undefined) {
+            if (aOrder === undefined) return 1;
+            if (bOrder === undefined) return -1;
+            return aOrder - bOrder;
+          }
+          return a.localeCompare(b);
+        });
+      };
+
+      const groupBooksBySubgenre = (books, parentGenre) => {
+        const groups = new Map();
+        const parentKey = normalizeGenreKey(parentGenre);
+        books.forEach((book) => {
+          const genres = getBookGenres(book);
+          genres.forEach((genre) => {
+            if (normalizeGenreKey(genre) === parentKey) {
+              return;
+            }
+            if (!groups.has(genre)) {
+              groups.set(genre, []);
+            }
+            groups.get(genre).push(book);
+          });
+        });
+        return groups;
+      };
+
+      const renderGenreDetail = (genre) => {
+        if (!genre) return;
+        const books = getFilteredBooks();
+        const genreKey = normalizeGenreKey(genre);
+        const genreBooks = books.filter((book) =>
+          getBookGenres(book).some((item) => normalizeGenreKey(item) === genreKey),
+        );
+        if (genreDetailHeading) {
+          genreDetailHeading.textContent = genre;
         }
-        return sorted;
+        if (genreDetailShelfHeading) {
+          genreDetailShelfHeading.textContent = `All ${genre} books`;
+        }
+        if (genreDetailSubheading) {
+          genreDetailSubheading.textContent = genreBooks.length
+            ? `Explore ${genre} titles and their related subgenres.`
+            : `No books tagged with ${genre} yet.`;
+        }
+        if (genreDetailCount) {
+          genreDetailCount.textContent = `${genreBooks.length} books`;
+        }
+        if (genreDetailShelf) {
+          genreDetailShelf.innerHTML = '';
+          if (!genreBooks.length) {
+            renderEmpty(genreDetailShelf, `No books tagged with ${genre} yet.`);
+          } else {
+            genreBooks.forEach((book) => {
+              genreDetailShelf.appendChild(buildBookCard(book));
+            });
+          }
+        }
+        if (genreDetailSubShelves) {
+          genreDetailSubShelves.innerHTML = '';
+          const subgroups = groupBooksBySubgenre(genreBooks, genre);
+          const subgenreKeys = sortGenreKeys(Array.from(subgroups.keys()));
+          if (!subgenreKeys.length) {
+            renderEmpty(genreDetailSubShelves, 'No subgenres tagged yet.');
+          } else {
+            subgenreKeys.forEach((subgenre) => {
+              const section = document.createElement('section');
+              section.classList.add('shelf-section');
+              const header = document.createElement('div');
+              header.classList.add('section-header', 'genre-header');
+              const heading = document.createElement('h4');
+              heading.classList.add('shelf-heading');
+              heading.textContent = subgenre;
+              const actions = document.createElement('div');
+              actions.classList.add('section-actions');
+              const count = document.createElement('span');
+              count.classList.add('count-pill');
+              count.textContent = `${subgroups.get(subgenre).length} books`;
+              actions.appendChild(count);
+              header.appendChild(heading);
+              header.appendChild(actions);
+              const shelf = document.createElement('div');
+              shelf.classList.add('scroll-shelf');
+              section.appendChild(header);
+              section.appendChild(shelf);
+              subgroups.get(subgenre).forEach((book) => {
+                shelf.appendChild(buildBookCard(book));
+              });
+              genreDetailSubShelves.appendChild(section);
+            });
+          }
+        }
+      };
+
+      const openGenreDetail = (genre) => {
+        activeGenreView = genre;
+        renderGenreDetail(genre);
+        showGenreView();
       };
 
       let currentSelection = {
@@ -2247,6 +2457,7 @@ def get_gui_html() -> str:
         detailView.classList.add('is-hidden');
         outlineView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
+        genreView.classList.add('is-hidden');
         homeView.classList.remove('is-hidden');
         updateNowPlayingPlacement();
       };
@@ -2255,6 +2466,7 @@ def get_gui_html() -> str:
         homeView.classList.add('is-hidden');
         outlineView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
+        genreView.classList.add('is-hidden');
         detailView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         updateNowPlayingPlacement();
@@ -2264,6 +2476,7 @@ def get_gui_html() -> str:
         homeView.classList.add('is-hidden');
         detailView.classList.add('is-hidden');
         chapterView.classList.add('is-hidden');
+        genreView.classList.add('is-hidden');
         outlineView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         updateNowPlayingPlacement();
@@ -2273,7 +2486,18 @@ def get_gui_html() -> str:
         homeView.classList.add('is-hidden');
         detailView.classList.add('is-hidden');
         outlineView.classList.add('is-hidden');
+        genreView.classList.add('is-hidden');
         chapterView.classList.remove('is-hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        updateNowPlayingPlacement();
+      };
+
+      const showGenreView = () => {
+        homeView.classList.add('is-hidden');
+        detailView.classList.add('is-hidden');
+        outlineView.classList.add('is-hidden');
+        chapterView.classList.add('is-hidden');
+        genreView.classList.remove('is-hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
         updateNowPlayingPlacement();
       };
@@ -2511,6 +2735,7 @@ def get_gui_html() -> str:
 
       const getActiveViewSlot = () => {
         if (!homeView.classList.contains('is-hidden')) return nowPlayingHomeSlot;
+        if (!genreView.classList.contains('is-hidden')) return nowPlayingGenreSlot;
         if (!outlineView.classList.contains('is-hidden')) return nowPlayingOutlineSlot;
         if (!detailView.classList.contains('is-hidden')) return nowPlayingDetailSlot;
         if (!chapterView.classList.contains('is-hidden')) return nowPlayingChapterSlot;
@@ -3242,11 +3467,7 @@ def get_gui_html() -> str:
           outline.title || '',
           outline.path || '',
         ]);
-        const books = filterEntries(catalogState.books, (book) => [
-          displayBookTitle(book.title || ''),
-          book.path || '',
-          normalizeGenres(book.genres).join(' '),
-        ]);
+        const books = getFilteredBooks();
 
         const outlineShelf = document.getElementById('outlineShelf');
         const completedShelf = document.getElementById('completedOutlineShelf');
@@ -3369,12 +3590,31 @@ def get_gui_html() -> str:
               genreKeys.forEach((genre) => {
                 const section = document.createElement('section');
                 section.classList.add('shelf-section');
+                const header = document.createElement('div');
+                header.classList.add('section-header', 'genre-header');
                 const heading = document.createElement('h4');
                 heading.classList.add('shelf-heading');
                 heading.textContent = genre;
+                const actions = document.createElement('div');
+                actions.classList.add('section-actions');
+                const count = document.createElement('span');
+                count.classList.add('count-pill');
+                count.textContent = `${groupedBooks.get(genre).length} books`;
+                const viewMore = document.createElement('button');
+                viewMore.classList.add('pill-button', 'ghost');
+                viewMore.type = 'button';
+                viewMore.textContent = 'View more';
+                viewMore.addEventListener('click', (event) => {
+                  event.stopPropagation();
+                  openGenreDetail(genre);
+                });
+                actions.appendChild(count);
+                actions.appendChild(viewMore);
+                header.appendChild(heading);
+                header.appendChild(actions);
                 const shelf = document.createElement('div');
                 shelf.classList.add('scroll-shelf');
-                section.appendChild(heading);
+                section.appendChild(header);
                 section.appendChild(shelf);
                 groupedBooks.get(genre).forEach((book) => {
                   shelf.appendChild(buildBookCard(book));
@@ -3759,6 +3999,14 @@ def get_gui_html() -> str:
         showHomeView();
       });
 
+      if (genreBack) {
+        genreBack.addEventListener('click', async () => {
+          updateNowPlayingPlacement();
+          await loadCatalog({ selectCurrent: false, refreshMode: 'books' });
+          showHomeView();
+        });
+      }
+
       if (outlineBack) {
         outlineBack.addEventListener('click', async () => {
           updateNowPlayingPlacement();
@@ -3798,6 +4046,9 @@ def get_gui_html() -> str:
       if (searchInput) {
         searchInput.addEventListener('input', () => {
           renderCatalog();
+          if (genreView && !genreView.classList.contains('is-hidden') && activeGenreView) {
+            renderGenreDetail(activeGenreView);
+          }
         });
       }
 

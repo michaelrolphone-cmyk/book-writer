@@ -26,6 +26,7 @@ from book_writer.cli import (
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.gui import get_gui_html
 from book_writer.metadata import (
+    ensure_primary_genre,
     generate_book_genres,
     read_book_genres,
     write_book_meta,
@@ -654,6 +655,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     entries: list[dict[str, Any]] = []
     for book in books:
         synopsis = _read_book_synopsis(book.path)
+        genres = _ensure_book_genres_async(book.path, synopsis, payload)
+        primary_genre = ensure_primary_genre(book.path, genres) if genres else None
         entries.append(
             {
                 "path": str(book.path),
@@ -666,7 +669,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "chapter_count": len(_book_chapter_files(book.path)),
                 "page_count": _sum_book_pages(book.path),
                 "summary": _ensure_book_summary_async(book.path, book.title, payload),
-                "genres": _ensure_book_genres_async(book.path, synopsis, payload),
+                "genres": genres,
+                "primary_genre": primary_genre,
                 "folder_mtime": _get_book_folder_mtime(book.path),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))

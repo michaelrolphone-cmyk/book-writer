@@ -39,3 +39,11 @@ class TestMetadata(unittest.TestCase):
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
         self.assertEqual(meta["genres"], ["Sci-Fi", "Space Opera"])
+        self.assertEqual(meta["primary_genre"], "Sci-Fi")
+
+    def test_resolve_primary_genre_prefers_simple_genres(self) -> None:
+        result = metadata.resolve_primary_genre(
+            ["Space Opera", "Science Fiction", "Adventure"]
+        )
+
+        self.assertEqual(result, "Sci-Fi")

@@ -29,7 +29,8 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books`, `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
+- `GET /api/books` (book catalog, including `genres` and `primary_genre`)
+- `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters`, `GET /api/book-content`, `GET /api/book-progress`, `GET /api/chapter-content`, `GET /api/outline-content`
 - `POST /api/generate-book`, `POST /api/expand-book`, `POST /api/compile-book`
@@ -118,7 +119,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `book.md`: Compiled markdown containing the title, outline, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
-- `meta.json`: LM-generated metadata (including genre tags for the GUI catalog).
+- `meta.json`: LM-generated metadata (including `genres` and `primary_genre` for the GUI catalog).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
