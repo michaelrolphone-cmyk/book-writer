@@ -344,6 +344,14 @@ def get_gui_html() -> str:
         margin-bottom: 28px;
       }
 
+      .shelf-heading {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: 0.02em;
+      }
+
       .book-cover {
         border-radius: 24px 24px 0 0;
         margin: -22px -22px 0;
@@ -1891,6 +1899,56 @@ def get_gui_html() -> str:
         );
       };
 
+      const normalizeGenres = (genres) => {
+        if (!Array.isArray(genres)) return [];
+        const unique = [];
+        const seen = new Set();
+        genres.forEach((genre) => {
+          const cleaned = String(genre || '').trim().replace(/[.,;]+$/, '');
+          if (!cleaned) return;
+          const key = cleaned.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          unique.push(cleaned);
+        });
+        return unique;
+      };
+
+      const getPrimaryGenre = (book) => {
+        const genres = normalizeGenres(book.genres);
+        return genres.length ? genres[0] : 'Uncategorized';
+      };
+
+      const getGenreLine = (book) => {
+        const genres = normalizeGenres(book.genres);
+        if (!genres.length) return 'Genre: Uncategorized';
+        return `Genres: ${genres.join(', ')}`;
+      };
+
+      const groupBooksByGenre = (books) => {
+        const groups = new Map();
+        books.forEach((book) => {
+          const genre = getPrimaryGenre(book);
+          if (!groups.has(genre)) {
+            groups.set(genre, []);
+          }
+          groups.get(genre).push(book);
+        });
+        return groups;
+      };
+
+      const sortGenreKeys = (keys) => {
+        const sorted = [...keys].sort((a, b) => a.localeCompare(b));
+        const uncategorizedIndex = sorted.findIndex(
+          (genre) => genre.toLowerCase() === 'uncategorized',
+        );
+        if (uncategorizedIndex > -1) {
+          const [uncategorized] = sorted.splice(uncategorizedIndex, 1);
+          sorted.push(uncategorized);
+        }
+        return sorted;
+      };
+
       let currentSelection = {
         type: null,
         path: null,
@@ -2852,6 +2910,7 @@ def get_gui_html() -> str:
         const books = filterEntries(catalogState.books, (book) => [
           displayBookTitle(book.title || ''),
           book.path || '',
+          normalizeGenres(book.genres).join(' '),
         ]);
 
         const outlineShelf = document.getElementById('outlineShelf');
@@ -2928,42 +2987,58 @@ def get_gui_html() -> str:
         if (!books.length) {
           renderEmpty(bookShelf, bookEmptyMessage);
         } else {
-          books.forEach((book) => {
-            const statusFlags = [];
-            if (book.has_text) statusFlags.push('Text');
-            if (book.has_audio) statusFlags.push('Audio');
-            if (book.has_video) statusFlags.push('Video');
-            if (book.has_compilation) statusFlags.push('Compiled');
-            const status = book.has_compilation
-              ? 'Compiled'
-              : book.has_text
-                ? 'Drafting'
-                : 'No chapters';
-            const summaryLine = book.summary || 'Summary coming soon.';
-            const detail = `${summaryLine}\\n${formatPageCount(book.page_count)}\\n${
-              book.chapter_count || 0
-            } chapters\\n${statusFlags.join(' • ') || 'No media yet'}`;
-            const progress = (statusFlags.length / 4) * 100;
-            const displayTitle = displayBookTitle(book.title);
-            const card = createCard(
-              book.title,
-              status,
-              detail,
-              'Book',
-              book.path.split('/').pop(),
-              progress,
-              book.cover_url || null,
-              displayTitle,
-            );
-            card.classList.add('selectable');
-            card.dataset.type = 'book';
-            card.dataset.path = book.path;
-            card.addEventListener('click', () => {
-              bookSelect.value = book.path;
-              loadChapters(book.path);
-              selectEntry('book', book, card);
+          const groupedBooks = groupBooksByGenre(books);
+          const genreKeys = sortGenreKeys(Array.from(groupedBooks.keys()));
+          genreKeys.forEach((genre) => {
+            const section = document.createElement('section');
+            section.classList.add('shelf-section');
+            const heading = document.createElement('h4');
+            heading.classList.add('shelf-heading');
+            heading.textContent = genre;
+            const shelf = document.createElement('div');
+            shelf.classList.add('shelf');
+            section.appendChild(heading);
+            section.appendChild(shelf);
+            groupedBooks.get(genre).forEach((book) => {
+              const statusFlags = [];
+              if (book.has_text) statusFlags.push('Text');
+              if (book.has_audio) statusFlags.push('Audio');
+              if (book.has_video) statusFlags.push('Video');
+              if (book.has_compilation) statusFlags.push('Compiled');
+              const status = book.has_compilation
+                ? 'Compiled'
+                : book.has_text
+                  ? 'Drafting'
+                  : 'No chapters';
+              const summaryLine = book.summary || 'Summary coming soon.';
+              const detail = `${summaryLine}\\n${getGenreLine(book)}\\n${formatPageCount(
+                book.page_count,
+              )}\\n${book.chapter_count || 0} chapters\\n${
+                statusFlags.join(' • ') || 'No media yet'
+              }`;
+              const progress = (statusFlags.length / 4) * 100;
+              const displayTitle = displayBookTitle(book.title);
+              const card = createCard(
+                book.title,
+                status,
+                detail,
+                'Book',
+                book.path.split('/').pop(),
+                progress,
+                book.cover_url || null,
+                displayTitle,
+              );
+              card.classList.add('selectable');
+              card.dataset.type = 'book';
+              card.dataset.path = book.path;
+              card.addEventListener('click', () => {
+                bookSelect.value = book.path;
+                loadChapters(book.path);
+                selectEntry('book', book, card);
+              });
+              shelf.appendChild(card);
             });
-            bookShelf.appendChild(card);
+            bookShelf.appendChild(section);
           });
         }
 

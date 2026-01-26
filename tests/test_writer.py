@@ -181,6 +181,7 @@ class TestWriter(unittest.TestCase):
             "Chapter context summary",
             "Section content",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -212,6 +213,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -235,6 +237,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -266,6 +269,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -287,7 +291,7 @@ class TestWriter(unittest.TestCase):
             def __init__(self) -> None:
                 self.base_prompt = "BASE PROMPT"
                 self._responses = iter(
-                    ["Chapter content", "Chapter summary", "Synopsis text"]
+                    ["Chapter content", "Chapter summary", "Synopsis text", "Mystery"]
                 )
 
             def render_prompt(self, prompt: str) -> str:
@@ -332,6 +336,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
@@ -753,6 +758,7 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Section content",
             "Synopsis text",
+            "Mystery",
         ]
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
@@ -827,6 +833,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
         video_settings = VideoSettings(enabled=True, background_video=Path("bg.mp4"))
 
@@ -874,6 +881,7 @@ class TestWriter(unittest.TestCase):
             "Chapter two content",
             "Chapter two summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -896,6 +904,7 @@ class TestWriter(unittest.TestCase):
             "Chapter two content",
             "Chapter two summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -948,6 +957,7 @@ class TestWriter(unittest.TestCase):
             "New chapter content",
             "New chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -994,6 +1004,7 @@ class TestWriter(unittest.TestCase):
             "New chapter content",
             "New chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1039,6 +1050,7 @@ class TestWriter(unittest.TestCase):
             "Intro paragraph.\n\n## Implementation Details\n\nUse a cache.\n\n## Wrap-up\n\nDone.",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1068,13 +1080,14 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Section content",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
             write_book(items, output_dir, client)
 
-        synopsis_prompt = client.generate.call_args_list[-1][0][0]
+        synopsis_prompt = client.generate.call_args_list[-2][0][0]
         self.assertIn("Outline:\n- Chapter One\n  - Section A", synopsis_prompt)
         run_mock.assert_called_once()
 
@@ -1158,6 +1171,7 @@ class TestWriter(unittest.TestCase):
             "Chapter content",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1184,6 +1198,7 @@ class TestWriter(unittest.TestCase):
             "# Chapter One\n\nBody text.",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1204,6 +1219,7 @@ class TestWriter(unittest.TestCase):
             "**Chapter One**\n\nBody text.",
             "Chapter summary",
             "Synopsis text",
+            "Mystery",
         ]
 
         with TemporaryDirectory() as tmpdir:

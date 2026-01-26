@@ -85,6 +85,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `book.md`: Compiled markdown containing the title, outline, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc.
 - `back-cover-synopsis.md`: LM-generated synopsis.
+- `meta.json`: LM-generated metadata (including genre tags for the GUI catalog).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
@@ -210,7 +211,8 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `GET /api/completed-outlines?completed_outlines_dir=completed_outlines`
   - Returns `{ outlines: [...] }` for archived outlines.
 - `GET /api/books?books_dir=books&tts_audio_dir=audio&video_dir=video`
-  - Returns `{ books: [{ path, title, has_text, has_audio, has_video, has_compilation, has_cover, chapter_count, page_count, summary, cover_url, book_audio_url }] }`.
+  - Returns `{ books: [{ path, title, has_text, has_audio, has_video, has_compilation, has_cover, chapter_count, page_count, summary, genres, cover_url, book_audio_url }] }`.
+  - `genres` are populated from each book's `meta.json`. If the file is missing, the server will generate it in the background using the synopsis so the GUI can group books by genre.
 - `GET /api/authors?authors_dir=authors`
   - Returns `{ authors: ["persona-name", ...] }`.
 - `GET /api/tones?tones_dir=book_writer/tones`

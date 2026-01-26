@@ -1,3 +1,4 @@
+import json
 import unittest
 from urllib.parse import quote
 from pathlib import Path
@@ -17,6 +18,13 @@ def _write_chapter_summary(book_dir: Path, stem: str, text: str = "Summary") -> 
     summary_dir = book_dir / "summaries" / "chapters"
     summary_dir.mkdir(parents=True, exist_ok=True)
     (summary_dir / f"{stem}.md").write_text(text, encoding="utf-8")
+
+
+def _write_book_meta(book_dir: Path, genres: list[str]) -> None:
+    (book_dir / "meta.json").write_text(
+        json.dumps({"genres": genres}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 class TestServerHelpers(unittest.TestCase):
@@ -151,10 +159,41 @@ class TestServerApi(unittest.TestCase):
         self.assertEqual(result["books"][0]["chapter_count"], 2)
         self.assertIsNone(result["books"][0]["book_audio_url"])
         self.assertFalse(result["books"][0]["has_cover"])
+        self.assertEqual(result["books"][0]["genres"], [])
         expected_pages = server._estimate_page_count(
             first_content
         ) + server._estimate_page_count(second_content)
         self.assertEqual(result["books"][0]["page_count"], expected_pages)
+
+    def test_list_books_reads_genres_from_meta(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+            _write_book_meta(book_dir, ["Mystery", "Thriller"])
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        self.assertEqual(result["books"][0]["genres"], ["Mystery", "Thriller"])
+
+    def test_list_books_schedules_genre_generation_when_missing(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+            (book_dir / "back-cover-synopsis.md").write_text(
+                "Synopsis text.", encoding="utf-8"
+            )
+
+            with patch("book_writer.server._schedule_genre_task") as schedule_mock:
+                result = server.list_books({"books_dir": str(books_dir)})
+
+        self.assertEqual(result["books"][0]["genres"], [])
+        schedule_mock.assert_called_once()
 
     def test_list_books_handles_unreadable_chapters(self) -> None:
         with TemporaryDirectory() as tmpdir:

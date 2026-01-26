@@ -21,6 +21,11 @@ from book_writer.cli import (
 )
 from book_writer.cover import CoverSettings, parse_cover_command
 from book_writer.gui import get_gui_html
+from book_writer.metadata import (
+    generate_book_genres,
+    read_book_genres,
+    write_book_meta,
+)
 from book_writer.outline import parse_outline_with_title
 from book_writer.tts import TTSSettings
 from book_writer.video import (
@@ -53,6 +58,8 @@ BOOK_SUMMARY_FILENAME = "book-summary.md"
 SUMMARY_SOURCE_LIMIT = 4000
 _SUMMARY_TASKS_LOCK = threading.Lock()
 _SUMMARY_TASKS: set[str] = set()
+_GENRE_TASKS_LOCK = threading.Lock()
+_GENRE_TASKS: set[str] = set()
 
 
 def _estimate_page_count(content: str) -> int:
@@ -202,6 +209,27 @@ def _schedule_summary_task(task_key: str, task: Callable[[], str | None]) -> Non
     thread.start()
 
 
+def _genre_task_key(book_dir: Path) -> str:
+    return f"genre:{book_dir.resolve()}"
+
+
+def _schedule_genre_task(task_key: str, task: Callable[[], None]) -> None:
+    with _GENRE_TASKS_LOCK:
+        if task_key in _GENRE_TASKS:
+            return
+        _GENRE_TASKS.add(task_key)
+
+    def runner() -> None:
+        try:
+            task()
+        finally:
+            with _GENRE_TASKS_LOCK:
+                _GENRE_TASKS.discard(task_key)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+
+
 def _generate_book_summary(
     book_dir: Path, book_title: str, payload: dict[str, Any]
 ) -> str:
@@ -283,6 +311,35 @@ def _ensure_chapter_summary_async(
         ),
     )
     return ""
+
+
+def _generate_book_genres_task(
+    book_dir: Path, synopsis: str, payload: dict[str, Any]
+) -> None:
+    if not synopsis.strip():
+        return
+    try:
+        client = _build_client(payload)
+        genres = generate_book_genres(client, synopsis)
+    except (HTTPError, URLError, OSError, ValueError):
+        return
+    if genres:
+        write_book_meta(book_dir, genres)
+
+
+def _ensure_book_genres_async(
+    book_dir: Path, synopsis: str, payload: dict[str, Any]
+) -> list[str]:
+    genres = read_book_genres(book_dir)
+    if genres:
+        return genres
+    if not synopsis.strip():
+        return []
+    task_key = _genre_task_key(book_dir)
+    _schedule_genre_task(
+        task_key, lambda: _generate_book_genres_task(book_dir, synopsis, payload)
+    )
+    return []
 
 
 def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
@@ -567,8 +624,10 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     audio_dir = payload.get("tts_audio_dir", "audio")
     video_dir = payload.get("video_dir", "video")
     books = _book_directories(books_dir, audio_dir, video_dir)
-    return {
-        "books": [
+    entries: list[dict[str, Any]] = []
+    for book in books:
+        synopsis = _read_book_synopsis(book.path)
+        entries.append(
             {
                 "path": str(book.path),
                 "title": book.title,
@@ -580,6 +639,7 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                 "chapter_count": len(_book_chapter_files(book.path)),
                 "page_count": _sum_book_pages(book.path),
                 "summary": _ensure_book_summary_async(book.path, book.title, payload),
+                "genres": _ensure_book_genres_async(book.path, synopsis, payload),
                 "cover_url": (
                     _build_media_url(book.path, Path("cover.png"))
                     if (book.path / "cover.png").exists()
@@ -591,9 +651,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 ),
             }
-            for book in books
-        ]
-    }
+        )
+    return {"books": entries}
 
 
 def _chapter_title_from_content(content: str, fallback: str) -> str:
