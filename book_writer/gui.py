@@ -24,6 +24,7 @@ def get_gui_html() -> str:
         --text: #1f2430;
         --muted: #6c7485;
         --surface: #f3f6fb;
+        --page-padding: 32px;
       }
 
       * {
@@ -39,7 +40,7 @@ def get_gui_html() -> str:
 
       .app {
         min-height: 100vh;
-        padding: 36px 32px 72px;
+        padding: 36px var(--page-padding) 72px;
       }
 
       .home-view {
@@ -315,11 +316,14 @@ def get_gui_html() -> str:
         overflow-x: auto;
         overflow-y: visible;
         padding: 6px 0 16px;
+        padding-inline: calc(50vw - 50% + var(--page-padding));
         scroll-behavior: smooth;
         scroll-snap-type: none;
         scrollbar-width: none;
         -ms-overflow-style: none;
         background: transparent;
+        margin-inline: calc(50% - 50vw);
+        scroll-padding-inline: calc(50vw - 50% + var(--page-padding));
       }
 
       .scroll-shelf::-webkit-scrollbar {
@@ -1122,7 +1126,7 @@ def get_gui_html() -> str:
         .scroll-shelf {
           grid-auto-columns: minmax(220px, 66vw);
           scroll-snap-type: x mandatory;
-          scroll-padding-inline: 12px;
+          scroll-padding-inline: calc(50vw - 50% + var(--page-padding));
         }
 
         .book-card {
