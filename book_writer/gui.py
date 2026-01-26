@@ -379,6 +379,15 @@ def get_gui_html() -> str:
         min-height: 175px;
       }
 
+      .book-card.progress-card {
+        height: 260px;
+      }
+
+      .book-card.progress-card .card-description {
+        max-height: 72px;
+        min-height: 72px;
+      }
+
       .card-body {
         display: flex;
         flex-direction: column;
@@ -1630,6 +1639,16 @@ def get_gui_html() -> str:
               <div class="detail-section">
                 <div class="section-header">
                   <div>
+                    <h4>Progress</h4>
+                    <p>Track what still needs to be completed for this book.</p>
+                  </div>
+                </div>
+                <p class="meta-line is-hidden" id="bookProgressSummary"></p>
+                <div class="shelf" id="bookProgressShelf"></div>
+              </div>
+              <div class="detail-section">
+                <div class="section-header">
+                  <div>
                     <h4>Chapters</h4>
                     <p>Navigate deeper by selecting a chapter card.</p>
                   </div>
@@ -1686,6 +1705,11 @@ def get_gui_html() -> str:
               <button class="pill-button" id="chapterGenerateVideo">Generate video</button>
               <button class="pill-button" id="chapterGenerateCover">Generate cover</button>
             </div>
+          </div>
+          <div class="panel" id="chapterProgressPanel">
+            <h3>Chapter progress</h3>
+            <p class="meta-line is-hidden" id="chapterProgressSummary"></p>
+            <div class="shelf" id="chapterProgressShelf"></div>
           </div>
           <div class="panel reader-panel active" id="chapterReaderPanel">
             <div class="cover-header reader-cover" id="chapterReaderCover">
@@ -1858,6 +1882,30 @@ def get_gui_html() -> str:
         }
         card.appendChild(footer);
 
+        return card;
+      };
+
+      const createProgressCard = ({
+        title,
+        heading,
+        detail,
+        tag,
+        accent,
+        progress,
+        footerLines = [],
+      }) => {
+        const card = createCard(
+          title,
+          heading,
+          detail,
+          tag,
+          accent,
+          progress,
+          null,
+          title,
+          footerLines,
+        );
+        card.classList.add('progress-card');
         return card;
       };
 
@@ -2112,6 +2160,9 @@ def get_gui_html() -> str:
       const chapterPageCount = document.getElementById('chapterPageCount');
       const chapterReaderTitle = document.getElementById('chapterReaderTitle');
       const chapterReaderBody = document.getElementById('chapterReaderBody');
+      const chapterProgressPanel = document.getElementById('chapterProgressPanel');
+      const chapterProgressSummary = document.getElementById('chapterProgressSummary');
+      const chapterProgressShelf = document.getElementById('chapterProgressShelf');
       const chapterViewAudioBlock = document.getElementById('chapterViewAudioBlock');
       const chapterViewVideoBlock = document.getElementById('chapterViewVideoBlock');
       const chapterViewAudio = document.getElementById('chapterViewAudio');
@@ -2157,6 +2208,8 @@ def get_gui_html() -> str:
       const bookWorkspacePages = document.getElementById('bookWorkspacePages');
       const bookContentHeading = document.getElementById('bookContentHeading');
       const bookWorkspaceContent = document.getElementById('bookWorkspaceContent');
+      const bookProgressSummary = document.getElementById('bookProgressSummary');
+      const bookProgressShelf = document.getElementById('bookProgressShelf');
       const chapterShelf = document.getElementById('chapterShelf');
       const chapterCount = document.getElementById('chapterCount');
       const bookWorkspaceReader = document.getElementById('bookWorkspaceReader');
@@ -2219,6 +2272,7 @@ def get_gui_html() -> str:
 
       let showAllBooks = false;
       let activeGenreView = null;
+      let currentBookProgress = null;
 
       const SIMPLE_GENRE_ORDER = [
         'Sci-Fi',
@@ -3117,6 +3171,164 @@ def get_gui_html() -> str:
         return outlineSelect.value || '';
       };
 
+      const formatPercent = (value) => {
+        if (!Number.isFinite(value)) {
+          return '0%';
+        }
+        return `${Math.round(value)}%`;
+      };
+
+      const summarizeChapterTask = (chapters, key) => {
+        if (!Array.isArray(chapters) || !chapters.length) {
+          return 'No chapters yet';
+        }
+        const hasIncomplete = chapters.some((chapter) => !chapter?.status?.[key]);
+        return hasIncomplete ? 'Chapters incomplete' : 'Chapters complete';
+      };
+
+      const buildBookProgressSummary = (progress) => {
+        if (!progress) return '';
+        const bookStatus = progress.book?.status || {};
+        const chapters = progress.chapters || [];
+        const categories = [
+          { key: 'images', label: 'Cover art' },
+          { key: 'summaries', label: 'Summaries' },
+          { key: 'audio', label: 'Audio' },
+          { key: 'video', label: 'Video' },
+        ];
+        return categories
+          .map((category) => {
+            const bookLabel = bookStatus[category.key] ? 'Book complete' : 'Book incomplete';
+            const chapterLabel = summarizeChapterTask(chapters, category.key);
+            return `${category.label}: ${bookLabel} — ${chapterLabel}`;
+          })
+          .join(`\n`);
+      };
+
+      const buildChapterProgressSummary = (chapter) => {
+        if (!chapter || !chapter.status) return '';
+        const needs = [];
+        if (!chapter.status.images) needs.push('cover art');
+        if (!chapter.status.summaries) needs.push('summary');
+        if (!chapter.status.audio) needs.push('audio');
+        if (!chapter.status.video) needs.push('video');
+        if (!needs.length) {
+          return 'All chapter tasks are complete.';
+        }
+        return `Still needed: ${needs.join(', ')}.`;
+      };
+
+      const calculateCategoryPercent = (totals, key) => {
+        const entry = totals?.[key];
+        if (!entry || entry.total <= 0) {
+          return 0;
+        }
+        return (entry.complete / entry.total) * 100;
+      };
+
+      const loadBookProgress = async (bookDir) => {
+        if (!bookDir) return null;
+        const audioDir = document.getElementById('audioDir').value || 'audio';
+        const videoDir = document.getElementById('videoDir').value || 'video';
+        const chapterCoverDir =
+          document.getElementById('chapterCoverDir').value || 'chapter_covers';
+        const params = new URLSearchParams({
+          book_dir: bookDir,
+          audio_dirname: audioDir,
+          video_dirname: videoDir,
+          chapter_cover_dir: chapterCoverDir,
+        });
+        const result = await fetchJson(`/api/book-progress?${params.toString()}`);
+        return result;
+      };
+
+      const renderBookProgress = (progress) => {
+        if (!bookProgressShelf) return;
+        bookProgressShelf.innerHTML = '';
+        if (!progress) {
+          setSummaryText(bookProgressSummary, '');
+          renderEmpty(bookProgressShelf, 'No progress data available yet.');
+          return;
+        }
+        const summaryText = buildBookProgressSummary(progress);
+        setSummaryText(bookProgressSummary, summaryText);
+        const overallPercent = progress.completion?.percent ?? 0;
+        const overallCard = createProgressCard({
+          title: 'Overall',
+          heading: 'Overall completion',
+          detail: 'Progress across book and chapter assets.',
+          tag: 'Book',
+          accent: formatPercent(overallPercent),
+          progress: overallPercent,
+          footerLines: [`${formatPercent(overallPercent)} complete`],
+        });
+        bookProgressShelf.appendChild(overallCard);
+        const categories = [
+          { key: 'images', label: 'Cover art', detail: 'Book and chapter cover art.' },
+          { key: 'summaries', label: 'Summaries', detail: 'Book and chapter summaries.' },
+          { key: 'audio', label: 'Audio', detail: 'Book and chapter narration.' },
+          { key: 'video', label: 'Video', detail: 'Chapter video assets.' },
+        ];
+        categories.forEach((category) => {
+          const percent = calculateCategoryPercent(progress.totals, category.key);
+          const bookComplete = progress.book?.status?.[category.key];
+          const chapterSummary = summarizeChapterTask(progress.chapters || [], category.key);
+          const detail = `${bookComplete ? 'Book complete' : 'Book incomplete'}. ${chapterSummary}.`;
+          const card = createProgressCard({
+            title: category.label,
+            heading: category.label,
+            detail,
+            tag: 'Progress',
+            accent: formatPercent(percent),
+            progress: percent,
+            footerLines: [`${formatPercent(percent)} complete`],
+          });
+          bookProgressShelf.appendChild(card);
+        });
+      };
+
+      const renderChapterProgress = (chapter) => {
+        if (!chapterProgressShelf) return;
+        chapterProgressShelf.innerHTML = '';
+        if (!chapter) {
+          setSummaryText(chapterProgressSummary, '');
+          renderEmpty(chapterProgressShelf, 'No chapter progress available yet.');
+          return;
+        }
+        setSummaryText(chapterProgressSummary, buildChapterProgressSummary(chapter));
+        const overallPercent = chapter.completion?.percent ?? 0;
+        const overallCard = createProgressCard({
+          title: 'Chapter completion',
+          heading: 'Overall completion',
+          detail: 'Progress for this chapter.',
+          tag: 'Chapter',
+          accent: formatPercent(overallPercent),
+          progress: overallPercent,
+          footerLines: [`${formatPercent(overallPercent)} complete`],
+        });
+        chapterProgressShelf.appendChild(overallCard);
+        const tasks = [
+          { key: 'images', label: 'Cover art' },
+          { key: 'summaries', label: 'Summary' },
+          { key: 'audio', label: 'Audio' },
+          { key: 'video', label: 'Video' },
+        ];
+        tasks.forEach((task) => {
+          const complete = Boolean(chapter.status?.[task.key]);
+          const percent = complete ? 100 : 0;
+          const card = createProgressCard({
+            title: task.label,
+            heading: task.label,
+            detail: complete ? 'Complete.' : 'Still needed.',
+            tag: 'Task',
+            accent: complete ? 'Complete' : 'Missing',
+            progress: percent,
+            footerLines: [complete ? '100% complete' : '0% complete'],
+          });
+          chapterProgressShelf.appendChild(card);
+        });
+      };
+
       const loadWorkspaceChapterContent = async (bookDir, chapterValue) => {
         if (!bookDir || !chapterValue) return;
         if (currentBookSynopsis) {
@@ -3183,6 +3395,18 @@ def get_gui_html() -> str:
           mediaTitle: displayReaderTitle,
         });
         handoffChapterAudioToDetail(cardAudio, result.audio_url);
+        if (!currentBookProgress || currentBookProgress.book_dir !== bookDir) {
+          try {
+            currentBookProgress = await loadBookProgress(bookDir);
+          } catch (error) {
+            log(`Book progress failed: ${error.message}`);
+            currentBookProgress = null;
+          }
+        }
+        const chapterProgress = currentBookProgress?.chapters?.find(
+          (entry) => String(entry.index) === String(chapterIndex),
+        );
+        renderChapterProgress(chapterProgress || null);
         await loadWorkspaceChapterContent(bookDir, chapterIndex);
         showChapterView();
       };
@@ -3248,6 +3472,14 @@ def get_gui_html() -> str:
             setBookSynopsis(bookContent.synopsis);
           } else {
             setBookSynopsis('');
+          }
+          try {
+            currentBookProgress = await loadBookProgress(entry.path);
+            renderBookProgress(currentBookProgress);
+          } catch (error) {
+            log(`Book progress failed: ${error.message}`);
+            currentBookProgress = null;
+            renderBookProgress(null);
           }
           const chapters = await loadChapters(entry.path);
           renderChapterShelf(entry.path, chapters);

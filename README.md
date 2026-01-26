@@ -32,7 +32,8 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `GET /api/books` (book catalog, including `genres` and `primary_genre`)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
-- `GET /api/chapters`, `GET /api/book-content`, `GET /api/book-progress`, `GET /api/chapter-content`, `GET /api/outline-content`
+- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content`, `GET /api/outline-content`
+- `GET /api/book-progress?book_dir=books/my-book&audio_dirname=audio&video_dirname=video&chapter_cover_dir=chapter_covers`
 - `POST /api/generate-book`, `POST /api/expand-book`, `POST /api/compile-book`
 - `POST /api/generate-audio`, `POST /api/generate-videos`
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
