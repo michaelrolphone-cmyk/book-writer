@@ -1230,7 +1230,7 @@ def get_gui_html() -> str:
             <button class="now-playing-close" id="nowPlayingClose" aria-label="Close now playing">
               ×
             </button>
-            <div class="now-playing-info">
+            <div class="now-playing-info" id="nowPlayingInfo">
               <span class="tag">Now playing</span>
               <div>
                 <h2 id="nowPlayingTitle">Nothing playing</h2>
@@ -2228,6 +2228,7 @@ def get_gui_html() -> str:
       const nowPlayingClose = document.getElementById('nowPlayingClose');
       const nowPlayingAutoplay = document.getElementById('nowPlayingAutoplay');
       const nowPlayingSettings = document.getElementById('nowPlayingSettings');
+      const nowPlayingInfo = document.getElementById('nowPlayingInfo');
       const nowPlayingHomeSlot = document.getElementById('nowPlayingHomeSlot');
       const nowPlayingGenreSlot = document.getElementById('nowPlayingGenreSlot');
       const nowPlayingOutlineSlot = document.getElementById('nowPlayingOutlineSlot');
@@ -2874,24 +2875,6 @@ def get_gui_html() -> str:
           return;
         }
         await openChapterView(bookDir, chapter);
-      };
-
-      const eventHitsElement = (event, element) => {
-        if (!event || !element) return false;
-        if (typeof event.composedPath === 'function') {
-          return event.composedPath().includes(element);
-        }
-        return Boolean(event.target && element.contains(event.target));
-      };
-
-      const shouldIgnoreNowPlayingClick = (event) => {
-        if (!event) return false;
-        if (event.defaultPrevented) return true;
-        if (eventHitsElement(event, nowPlayingControls)) return true;
-        if (eventHitsElement(event, nowPlayingClose)) return true;
-        if (eventHitsElement(event, nowPlayingAutoplay)) return true;
-        if (eventHitsElement(event, nowPlayingSettings)) return true;
-        return false;
       };
 
       const suppressNowPlayingNavigation = () => {
@@ -4308,13 +4291,10 @@ def get_gui_html() -> str:
         });
       }
 
-      if (nowPlaying) {
-        nowPlaying.addEventListener('click', async (event) => {
+      if (nowPlayingInfo) {
+        nowPlayingInfo.addEventListener('click', async (event) => {
           if (suppressNowPlayingClick) {
             suppressNowPlayingClick = false;
-            return;
-          }
-          if (shouldIgnoreNowPlayingClick(event)) {
             return;
           }
           if (!activePlayback) return;
