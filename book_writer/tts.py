@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import textwrap
 import functools
 import subprocess
 import re
@@ -30,13 +31,14 @@ class TTSSettings:
     instruct: str | None = None
     model_path: str = str(DEFAULT_QWEN3_MODEL_PATH)
     device_map: str = "auto"
-    dtype: str = "float32"
+    dtype: str = "float16"
     attn_implementation: str = "sdpa"
     rate: str = "+0%"
     pitch: str = "+0Hz"
     audio_dirname: str = "audio"
     overwrite_audio: bool = False
     book_only: bool = False
+    max_tts_chars: int = 900
 
 
 CODE_BLOCK_PATTERN = re.compile(r"```.*?```", re.DOTALL)
@@ -51,6 +53,20 @@ HEADING_PATTERN = re.compile(r"^#+\s*")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 MAX_TTS_CHARS = 3000
 
+
+def _wrap_on_words(text: str, width: int) -> list[str]:
+    parts = textwrap.wrap(
+        text,
+        width=width,
+        break_long_words=False,   # critical: don't split words
+        break_on_hyphens=False,
+    )
+    if parts:
+        return [p.strip() for p in parts if p.strip()]
+
+    # Fallback: if the string contains a single token longer than width,
+    # textwrap can return []. In that case, do a safe-ish fallback split.
+    return [text[i:i+width].strip() for i in range(0, len(text), width) if text[i:i+width].strip()]
 
 def sanitize_markdown_for_tts(markdown: str) -> str:
     cleaned = CODE_BLOCK_PATTERN.sub("", markdown)
@@ -120,9 +136,11 @@ def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
                     chunks.append(" ".join(buffer).strip())
                     buffer = []
                     buffer_len = 0
-                for idx in range(0, sentence_len, max_chars):
-                    chunks.append(sentence[idx : idx + max_chars].strip())
+                chunks.extend(_wrap_on_words(sentence, max_chars))
                 continue
+                ## for idx in range(0, sentence_len, max_chars):
+                ##     chunks.append(sentence[idx : idx + max_chars].strip())
+                ## continue
             if buffer_len + sentence_len + 1 > max_chars and buffer:
                 chunks.append(" ".join(buffer).strip())
                 buffer = []
@@ -198,6 +216,47 @@ def _run_ffmpeg(wav_path: Path, output_path: Path) -> None:
             f"stderr: {result.stderr.strip()}"
         )
 
+def _write_wav_streaming(
+    chunk_iter,
+    wav_path: Path,
+) -> int:
+    """
+    Writes PCM data incrementally to a WAV on disk.
+    Returns the sample rate.
+    """
+    import numpy as np
+    import soundfile as sf
+
+    sample_rate: int | None = None
+    wav_file: sf.SoundFile | None = None
+
+    try:
+        for chunk_waveform, sr in chunk_iter:
+            if sample_rate is None:
+                sample_rate = sr
+                # Mono output assumed; adjust channels if your model returns stereo
+                wav_file = sf.SoundFile(
+                    str(wav_path),
+                    mode="w",
+                    samplerate=sample_rate,
+                    channels=1,
+                    subtype="FLOAT",
+                )
+            elif sr != sample_rate:
+                raise TTSSynthesisError("Qwen3 returned mismatched sample rates.")
+
+            # Ensure we write a numpy float32/float64 array (not Python lists)
+            arr = np.asarray(chunk_waveform)
+            if arr.ndim != 1:
+                arr = arr.reshape(-1)
+            wav_file.write(arr)
+
+        if sample_rate is None:
+            raise TTSSynthesisError("Qwen3 returned no audio data.")
+        return sample_rate
+    finally:
+        if wav_file is not None:
+            wav_file.close()
 
 def _write_mp3_from_waveform(
     waveform: Sequence[float],
@@ -207,12 +266,66 @@ def _write_mp3_from_waveform(
     import soundfile as sf
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        printf(tmpdir)
         wav_path = Path(tmpdir) / "qwen3-tts.wav"
         sf.write(str(wav_path), waveform, sample_rate)
         _run_ffmpeg(wav_path, output_path)
 
 
 def _synthesize_with_qwen3_tts(
+    text: str,
+    output_path: Path,
+    settings: TTSSettings,
+) -> None:
+    import gc
+    import torch
+
+    model_path = _resolve_model_path(settings)
+    tts = _load_qwen3_model(
+        str(model_path),
+        settings.dtype,
+        settings.attn_implementation,
+        settings.device_map,
+    )
+
+    chunks = split_text_for_tts(text, settings.max_tts_chars)
+    for i in range(len(chunks) - 1):
+        a, b = chunks[i].rstrip(), chunks[i + 1].lstrip()
+        if a and b and a[-1].isalnum() and b[0].isalnum():
+            raise TTSSynthesisError(
+                f"Chunk boundary splits a word between chunk {i} and {i+1}: "
+                f"...{a[-20:]} | {b[:20]}..."
+            )
+    if not chunks:
+        return
+
+    def chunk_generator():
+        # inference_mode reduces autograd overhead + can lower memory
+        with torch.inference_mode():
+            for chunk in chunks:
+                wavs, sr = tts.generate_custom_voice(
+                    text=chunk,
+                    language=settings.language,
+                    speaker=settings.voice,
+                    instruct=settings.instruct,
+                )
+                if not wavs:
+                    raise TTSSynthesisError("Qwen3 returned no audio data.")
+                yield _normalize_waveform(wavs[0]), sr
+
+                # Encourage prompt release of large tensors between chunks
+                del wavs
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = Path(tmpdir) / "qwen3-tts.wav"
+        sample_rate = _write_wav_streaming(chunk_generator(), wav_path)
+        _run_ffmpeg(wav_path, output_path)
+
+
+def _bak_synthesize_with_qwen3_tts(
     text: str,
     output_path: Path,
     settings: TTSSettings,
@@ -257,11 +370,13 @@ def _synthesize_with_qwen3_tts(
     _write_mp3_from_waveform(combined, sample_rate, output_path)
 
 
-def _normalize_waveform(waveform: Sequence[float]) -> list[float]:
-    if hasattr(waveform, "tolist"):
-        return waveform.tolist()
-    return list(waveform)
-
+def _normalize_waveform(waveform: Sequence[float]):
+    # Keep as ndarray/tensor-like if possible; avoid .tolist()
+    if hasattr(waveform, "detach") and hasattr(waveform, "cpu"):
+        return waveform.detach().cpu().numpy()
+    if hasattr(waveform, "numpy"):
+        return waveform.numpy()
+    return waveform  # soundfile/numpy can usually coerce this
 
 def synthesize_chapter_audio(
     chapter_path: Path,
