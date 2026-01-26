@@ -371,8 +371,8 @@ def get_gui_html() -> str:
       }
 
       .book-card.book-card-book .card-description {
-        max-height: 144px;
-        min-height: 144px;
+        max-height: 175px;
+        min-height: 175px;
       }
 
       .card-body {
@@ -481,7 +481,7 @@ def get_gui_html() -> str:
         background: rgba(12, 16, 24, 0.4);
         color: inherit;
         font-weight: 600;
-        height: 120px;
+        height: 90px;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
