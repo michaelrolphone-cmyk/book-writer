@@ -26,11 +26,22 @@ class TestTTS(unittest.TestCase):
             "- Bullet item\n"
             "1. Numbered item\n\n"
             "`inline code` and _italic_ text.\n\n"
+            "> Blockquote line.\n\n"
+            "![Cover](https://example.com/cover.png)\n\n"
+            "Name | Value\n"
+            "--- | ---\n"
+            "Alpha | Beta\n\n"
+            "<em>HTML</em> <strong>tags</strong>.\n\n"
+            "---\n\n"
             "Emoji check 😃.\n\n"
             "Bad control \u0007 with zero width \u200b spaces.\n\n"
+            "[ref]: https://example.com\n\n"
             "```python\n"
             "print('code block')\n"
             "```\n"
+            "~~~js\n"
+            "console.log('more code')\n"
+            "~~~\n"
         )
 
         cleaned = sanitize_markdown_for_tts(markdown)
@@ -40,10 +51,17 @@ class TestTTS(unittest.TestCase):
         self.assertIn("Bullet item", cleaned)
         self.assertIn("Numbered item", cleaned)
         self.assertIn("inline code and italic text.", cleaned)
+        self.assertIn("Blockquote line.", cleaned)
+        self.assertIn("Cover", cleaned)
+        self.assertIn("Name Value", cleaned)
+        self.assertIn("Alpha Beta", cleaned)
+        self.assertIn("HTML tags.", cleaned)
         self.assertNotIn("😃", cleaned)
         self.assertNotIn("\u0007", cleaned)
         self.assertNotIn("\u200b", cleaned)
+        self.assertNotIn("ref", cleaned)
         self.assertNotIn("print('code block')", cleaned)
+        self.assertNotIn("console.log('more code')", cleaned)
 
     def test_split_text_for_tts_chunks_long_text(self) -> None:
         text = "Sentence one. Sentence two. Sentence three."
