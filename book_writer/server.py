@@ -844,6 +844,126 @@ def get_book_content(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _completion_percent(complete: int, total: int) -> float:
+    if total <= 0:
+        return 0.0
+    return round((complete / total) * 100, 2)
+
+
+def get_book_progress(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    book_dir = Path(book_dir_value)
+    audio_dirname = payload.get("audio_dirname", "audio")
+    video_dirname = payload.get("video_dirname", "video")
+    chapter_cover_dir = payload.get("chapter_cover_dir", "chapter_covers")
+    chapter_files = _book_chapter_files(book_dir)
+    chapter_count = len(chapter_files)
+
+    cover_exists = (book_dir / "cover.png").exists()
+    book_summary_exists = bool(_read_summary(_book_summary_path(book_dir)))
+    book_audio_exists = (book_dir / audio_dirname / "book.mp3").exists()
+
+    totals = {
+        "images": {"complete": 0, "total": chapter_count + 1},
+        "summaries": {"complete": 0, "total": chapter_count + 1},
+        "audio": {"complete": 0, "total": chapter_count + 1},
+        "video": {"complete": 0, "total": chapter_count},
+    }
+
+    if cover_exists:
+        totals["images"]["complete"] += 1
+    if book_summary_exists:
+        totals["summaries"]["complete"] += 1
+    if book_audio_exists:
+        totals["audio"]["complete"] += 1
+
+    chapters: list[dict[str, Any]] = []
+    for index, chapter_file in enumerate(chapter_files, start=1):
+        try:
+            content = chapter_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            content = ""
+        title = (
+            _chapter_title_from_content(content, chapter_file.stem)
+            if content
+            else chapter_file.stem
+        )
+        chapter_summary_exists = bool(
+            _read_summary(_chapter_summary_path(book_dir, chapter_file))
+        )
+        chapter_cover_exists = (
+            book_dir / chapter_cover_dir / f"{chapter_file.stem}.png"
+        ).exists()
+        chapter_audio_exists = (
+            book_dir / audio_dirname / f"{chapter_file.stem}.mp3"
+        ).exists()
+        chapter_video_exists = (
+            book_dir / video_dirname / f"{chapter_file.stem}.mp4"
+        ).exists()
+
+        chapter_complete = sum(
+            [
+                chapter_cover_exists,
+                chapter_summary_exists,
+                chapter_audio_exists,
+                chapter_video_exists,
+            ]
+        )
+
+        totals["images"]["complete"] += int(chapter_cover_exists)
+        totals["summaries"]["complete"] += int(chapter_summary_exists)
+        totals["audio"]["complete"] += int(chapter_audio_exists)
+        totals["video"]["complete"] += int(chapter_video_exists)
+
+        chapters.append(
+            {
+                "index": index,
+                "name": chapter_file.name,
+                "stem": chapter_file.stem,
+                "title": title,
+                "status": {
+                    "images": chapter_cover_exists,
+                    "summaries": chapter_summary_exists,
+                    "audio": chapter_audio_exists,
+                    "video": chapter_video_exists,
+                },
+                "completion": {
+                    "complete": chapter_complete,
+                    "total": 4,
+                    "percent": _completion_percent(chapter_complete, 4),
+                },
+            }
+        )
+
+    overall_complete = sum(entry["complete"] for entry in totals.values())
+    overall_total = sum(entry["total"] for entry in totals.values())
+    video_complete = totals["video"]["total"] > 0 and (
+        totals["video"]["complete"] == totals["video"]["total"]
+    )
+
+    return {
+        "book_dir": str(book_dir),
+        "title": _read_book_title(book_dir),
+        "completion": {
+            "complete": overall_complete,
+            "total": overall_total,
+            "percent": _completion_percent(overall_complete, overall_total),
+        },
+        "book": {
+            "status": {
+                "images": cover_exists,
+                "summaries": book_summary_exists,
+                "audio": book_audio_exists,
+                "video": video_complete,
+            }
+        },
+        "chapters": chapters,
+        "totals": totals,
+    }
+
+
 def generate_book(payload: dict[str, Any]) -> dict[str, Any]:
     outline_path_value = payload.get("outline_path")
     if not outline_path_value:
@@ -1129,6 +1249,10 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             return
         if path == "/api/book-content":
             response = get_book_content(_parse_query(handler))
+            _send_json(handler, response, HTTPStatus.OK)
+            return
+        if path == "/api/book-progress":
+            response = get_book_progress(_parse_query(handler))
             _send_json(handler, response, HTTPStatus.OK)
             return
 

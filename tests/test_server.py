@@ -440,6 +440,43 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(result["synopsis"], "Synopsis text.")
 
+    def test_get_book_progress_reports_completion(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            audio_dir = book_dir / "audio"
+            video_dir = book_dir / "video"
+            cover_dir = book_dir / "chapter_covers"
+            summaries_dir = book_dir / "summaries" / "chapters"
+            book_dir.mkdir()
+            audio_dir.mkdir()
+            video_dir.mkdir()
+            cover_dir.mkdir()
+            summaries_dir.mkdir(parents=True)
+            (book_dir / "cover.png").write_text("cover", encoding="utf-8")
+            (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+            _write_book_summary(book_dir, "Summary")
+            first = book_dir / "001-chapter-one.md"
+            second = book_dir / "002-chapter-two.md"
+            first.write_text("# Chapter One\n\nContent", encoding="utf-8")
+            second.write_text("# Chapter Two\n\nContent", encoding="utf-8")
+            (audio_dir / "001-chapter-one.mp3").write_text("audio", encoding="utf-8")
+            (video_dir / "001-chapter-one.mp4").write_text("video", encoding="utf-8")
+            (cover_dir / "001-chapter-one.png").write_text("cover", encoding="utf-8")
+            _write_chapter_summary(book_dir, "001-chapter-one", "Summary")
+
+            result = server.get_book_progress({"book_dir": str(book_dir)})
+
+        self.assertEqual(result["totals"]["images"]["total"], 3)
+        self.assertEqual(result["totals"]["summaries"]["total"], 3)
+        self.assertEqual(result["totals"]["audio"]["total"], 3)
+        self.assertEqual(result["totals"]["video"]["total"], 2)
+        self.assertEqual(result["completion"]["complete"], 7)
+        self.assertAlmostEqual(result["completion"]["percent"], 63.64, places=2)
+        self.assertFalse(result["book"]["status"]["video"])
+        self.assertEqual(len(result["chapters"]), 2)
+        self.assertEqual(result["chapters"][0]["completion"]["complete"], 4)
+        self.assertEqual(result["chapters"][1]["completion"]["complete"], 0)
+
     def test_list_books_schedules_summary_generation_when_missing(self) -> None:
         started: list[object] = []
 
