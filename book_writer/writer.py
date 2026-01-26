@@ -15,6 +15,7 @@ from book_writer.cover import (
     generate_book_cover,
     generate_chapter_cover,
 )
+from book_writer.metadata import generate_book_genres, write_book_meta
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
     TTSSynthesisError,
@@ -1517,6 +1518,14 @@ def write_book(
     )
     if verbose:
         print("[write] Wrote back-cover-synopsis.md.")
+    try:
+        genres = generate_book_genres(client, synopsis)
+    except (HTTPError, OSError, ValueError):
+        genres = []
+    if genres:
+        write_book_meta(output_dir, genres)
+        if verbose:
+            print("[write] Wrote meta.json with genres.")
     if cover_settings.enabled:
         cover_synopsis = _summarize_cover_text(
             client, synopsis, "book synopsis"
