@@ -280,7 +280,6 @@ def _write_mp3_from_waveform(
     import soundfile as sf
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        printf(tmpdir)
         wav_path = Path(tmpdir) / "qwen3-tts.wav"
         sf.write(str(wav_path), waveform, sample_rate)
         _run_ffmpeg(wav_path, output_path)

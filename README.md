@@ -219,7 +219,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
   - Returns `{ chapters: [{ index, name, stem, title, page_count, summary, cover_url, audio_url, video_url }] }`.
 - `GET /api/outline-content?outline_path=/path/to/outline.md`
   - Returns `{ outline_path, title, content, item_count }`.
-- `GET /api/chapter-content?book_dir=/path/to/book&chapter=1`
+- `GET /api/chapter-content?book_dir=/path/to/book&chapter=1&audio_dirname=audio&video_dirname=video&chapter_cover_dir=chapter_covers`
   - Returns `{ chapter, title, content, page_count, summary, cover_url, audio_url, video_url }`.
 - `GET /api/book-content?book_dir=/path/to/book`
   - Returns `{ book_dir, title, summary, synopsis }`.

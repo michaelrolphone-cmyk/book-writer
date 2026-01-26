@@ -1,13 +1,16 @@
+import sys
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import ModuleType
 from unittest.mock import Mock, patch
 
 from book_writer.tts import (
     TTSSynthesisError,
     TTSSettings,
     _synthesize_with_qwen3_tts,
+    _write_mp3_from_waveform,
     sanitize_markdown_for_tts,
     split_text_for_tts,
     synthesize_chapter_audio,
@@ -115,6 +118,33 @@ class TestTTS(unittest.TestCase):
         called_text = synthesize_mock.call_args[0][0]
         self.assertIn("Synopsis", called_text)
         self.assertIn("This is a synopsis.", called_text)
+
+    @patch("book_writer.tts._run_ffmpeg")
+    def test_write_mp3_from_waveform_uses_temp_wav(
+        self,
+        run_ffmpeg: Mock,
+    ) -> None:
+        waveform = [0.0, 0.1, -0.1]
+        sample_rate = 22050
+        fake_soundfile = ModuleType("soundfile")
+        fake_soundfile.write = Mock()
+
+        with patch.dict(sys.modules, {"soundfile": fake_soundfile}):
+            with TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / "output.mp3"
+                _write_mp3_from_waveform(waveform, sample_rate, output_path)
+
+        fake_soundfile.write.assert_called_once()
+        wav_path = Path(fake_soundfile.write.call_args[0][0])
+        self.assertEqual(wav_path.name, "qwen3-tts.wav")
+        self.assertEqual(fake_soundfile.write.call_args[0][1], waveform)
+        self.assertEqual(fake_soundfile.write.call_args[0][2], sample_rate)
+
+        run_ffmpeg.assert_called_once()
+        called_wav_path = run_ffmpeg.call_args[0][0]
+        called_output_path = run_ffmpeg.call_args[0][1]
+        self.assertEqual(Path(called_wav_path).name, "qwen3-tts.wav")
+        self.assertEqual(called_output_path, output_path)
 
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_handles_tts_errors(
