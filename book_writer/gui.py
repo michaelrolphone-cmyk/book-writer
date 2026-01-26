@@ -296,18 +296,15 @@ def get_gui_html() -> str:
         grid-auto-columns: minmax(220px, 1fr);
         gap: 20px;
         overflow-x: auto;
-        padding-bottom: 10px;
+        overflow-y: visible;
+        padding: 6px 4px 16px;
         scroll-snap-type: x mandatory;
-        scrollbar-width: thin;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
       }
 
       .scroll-shelf::-webkit-scrollbar {
-        height: 8px;
-      }
-
-      .scroll-shelf::-webkit-scrollbar-thumb {
-        background: rgba(148, 163, 184, 0.45);
-        border-radius: 999px;
+        display: none;
       }
 
       .scroll-shelf .book-card {
@@ -337,6 +334,12 @@ def get_gui_html() -> str:
         flex-direction: column;
         gap: 12px;
         flex: 1;
+        padding-top: 4px;
+      }
+
+      .card-body h2 {
+        margin: 0;
+        line-height: 1.3;
       }
 
       .card-description {
@@ -356,7 +359,7 @@ def get_gui_html() -> str:
         background: linear-gradient(
           180deg,
           rgba(8, 12, 20, 0) 0%,
-          var(--card-fade, rgba(8, 12, 20, 0.85)) 90%
+          var(--card-fade, rgba(8, 12, 20, 0.6)) 100%
         );
       }
 
@@ -428,7 +431,9 @@ def get_gui_html() -> str:
         font-weight: 600;
         height: 150px;
         display: flex;
-        align-items: flex-end;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: flex-start;
         overflow: hidden;
         position: relative;
         box-shadow: inset 4px 4px 10px rgba(255, 255, 255, 0.08),
@@ -443,7 +448,9 @@ def get_gui_html() -> str:
         padding: 24px;
         min-height: 150px;
         display: flex;
-        align-items: flex-end;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: flex-start;
         overflow: hidden;
         position: relative;
         color: var(--card-text, var(--text));
@@ -1094,7 +1101,7 @@ def get_gui_html() -> str:
         }
 
         .scroll-shelf {
-          grid-auto-columns: minmax(200px, 80%);
+          grid-auto-columns: minmax(220px, 66vw);
         }
 
         .book-card {
@@ -1647,7 +1654,7 @@ def get_gui_html() -> str:
         card.style.setProperty('--card-text', '#f8f9fb');
         card.style.setProperty(
           '--card-fade',
-          coverUrl ? 'rgba(8, 12, 20, 0.85)' : 'rgba(243, 246, 251, 0.9)',
+          coverUrl ? 'rgba(8, 12, 20, 0.55)' : 'rgba(243, 246, 251, 0.85)',
         );
 
         const cover = document.createElement('div');
@@ -1703,6 +1710,33 @@ def get_gui_html() -> str:
         empty.className = 'empty-state';
         empty.textContent = message;
         container.appendChild(empty);
+      };
+
+      const enableShelfWheelScroll = (shelf) => {
+        if (!shelf || shelf.dataset.wheelBound === 'true') {
+          return;
+        }
+        shelf.dataset.wheelBound = 'true';
+        shelf.addEventListener(
+          'wheel',
+          (event) => {
+            if (event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+              return;
+            }
+            if (shelf.scrollWidth <= shelf.clientWidth) {
+              return;
+            }
+            event.preventDefault();
+            shelf.scrollLeft += event.deltaY;
+          },
+          { passive: false },
+        );
+      };
+
+      const bindShelfWheelScroll = () => {
+        document.querySelectorAll('.scroll-shelf').forEach((shelf) => {
+          enableShelfWheelScroll(shelf);
+        });
       };
 
       const escapeHtml = (value) =>
@@ -3228,6 +3262,8 @@ def get_gui_html() -> str:
         if (currentSelection.type && currentSelection.path) {
           setSelectedCard(findCardByPath(currentSelection.type, currentSelection.path));
         }
+
+        bindShelfWheelScroll();
       };
 
       const toggleViewAllBooks = () => {

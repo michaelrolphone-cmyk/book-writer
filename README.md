@@ -21,6 +21,7 @@ python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080
 ```
 
 Open `http://127.0.0.1:8080` in your browser after the server starts. You can also launch the GUI from the interactive CLI by running `python -m book_writer --prompt` and choosing **Launch GUI server** from the first menu.
+Run `python -m book_writer --help` for the full CLI command reference.
 
 ### Generate a single book from an outline
 
@@ -206,6 +207,8 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 
 ### GET endpoints
 
+- `GET /`
+  - Returns the GUI HTML page.
 - `GET /api/outlines?outlines_dir=outlines`
   - Returns `{ outlines: [{ path, title, preview, item_count }] }`.
 - `GET /api/completed-outlines?completed_outlines_dir=completed_outlines`
