@@ -2290,6 +2290,22 @@ def get_gui_html() -> str:
         'Children',
         'Comedy',
       ];
+      const SIMPLE_GENRE_KEYWORDS = {
+        'Sci-Fi': ['scifi', 'sciencefiction'],
+        Fantasy: ['fantasy'],
+        Romance: ['romance'],
+        Drama: ['drama'],
+        Mystery: ['mystery'],
+        Thriller: ['thriller'],
+        Horror: ['horror'],
+        Historical: ['historical', 'history'],
+        Nonfiction: ['nonfiction'],
+        Biography: ['biography'],
+        Adventure: ['adventure'],
+        'Young Adult': ['youngadult'],
+        Children: ['children'],
+        Comedy: ['comedy'],
+      };
 
       const getSearchTerm = () => (searchInput?.value || '').trim().toLowerCase();
 
@@ -2305,6 +2321,18 @@ def get_gui_html() -> str:
         String(value || '')
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '');
+
+      const resolveSimpleGenre = (value) => {
+        const key = normalizeGenreKey(value);
+        if (!key) return null;
+        for (const genre of SIMPLE_GENRE_ORDER) {
+          const keywords = SIMPLE_GENRE_KEYWORDS[genre] || [normalizeGenreKey(genre)];
+          if (keywords.some((keyword) => key.includes(keyword))) {
+            return genre;
+          }
+        }
+        return null;
+      };
 
       const normalizeGenres = (genres) => {
         if (!Array.isArray(genres)) return [];
@@ -2335,8 +2363,13 @@ def get_gui_html() -> str:
 
       const getPrimaryGenre = (book) => {
         const primary = String(book?.primary_genre || '').trim();
-        if (primary) return primary;
+        if (primary) return resolveSimpleGenre(primary) || primary;
         const genres = getBookGenres(book);
+        const resolved = genres.reduce(
+          (match, genre) => match || resolveSimpleGenre(genre),
+          null,
+        );
+        if (resolved) return resolved;
         return genres.length ? genres[0] : 'Uncategorized';
       };
 

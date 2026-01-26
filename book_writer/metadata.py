@@ -44,6 +44,22 @@ _SIMPLE_GENRE_ALIASES = {
     "children": "Children",
     "comedy": "Comedy",
 }
+_SIMPLE_GENRE_KEYWORDS = {
+    "Sci-Fi": {"scifi", "sciencefiction"},
+    "Fantasy": {"fantasy"},
+    "Romance": {"romance"},
+    "Drama": {"drama"},
+    "Mystery": {"mystery"},
+    "Thriller": {"thriller"},
+    "Horror": {"horror"},
+    "Historical": {"historical", "history"},
+    "Nonfiction": {"nonfiction"},
+    "Biography": {"biography"},
+    "Adventure": {"adventure"},
+    "Young Adult": {"youngadult"},
+    "Children": {"children"},
+    "Comedy": {"comedy"},
+}
 
 
 def build_genre_prompt(synopsis: str) -> str:
@@ -51,6 +67,8 @@ def build_genre_prompt(synopsis: str) -> str:
     return (
         "You are tagging book genres. Based on the synopsis below, return a JSON object "
         'with a key "genres" that contains an array of 1-3 genre strings. '
+        "Use high-level categories like Thriller, Mystery, Sci-Fi, Romance, or Fantasy, "
+        "not detailed subgenres. "
         "Return only JSON.\n\n"
         f"Synopsis:\n{synopsis_text}"
     )
@@ -122,14 +140,28 @@ def _split_genres(value: str) -> list[str]:
     return [chunk.strip() for chunk in re.split(separators, value) if chunk.strip()]
 
 
+def _resolve_simple_genre(value: str) -> str | None:
+    key = _genre_key(value)
+    if not key:
+        return None
+    alias = _SIMPLE_GENRE_ALIASES.get(key)
+    if alias:
+        return alias
+    for genre in _SIMPLE_GENRE_ORDER:
+        keywords = _SIMPLE_GENRE_KEYWORDS.get(genre, {_genre_key(genre)})
+        if any(keyword in key for keyword in keywords):
+            return genre
+    return None
+
+
 def resolve_primary_genre(genres: Iterable[str]) -> str | None:
     normalized = _unique_preserve_order(genres)
     if not normalized:
         return None
     for genre in normalized:
-        key = _genre_key(genre)
-        if key in _SIMPLE_GENRE_ALIASES:
-            return _SIMPLE_GENRE_ALIASES[key]
+        resolved = _resolve_simple_genre(genre)
+        if resolved:
+            return resolved
     return normalized[0]
 
 
