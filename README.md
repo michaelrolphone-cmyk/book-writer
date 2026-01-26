@@ -1,6 +1,6 @@
-# Book Writer
+# Quilloquy
 
-Generate full-length books from Markdown outlines using LM Studio, and expand completed books with additional depth and detail. This repository provides a CLI interface for generating chapters, compiling PDFs, and expanding existing books.
+Generate full-length books from Markdown outlines using LM Studio, and expand completed books with additional depth and detail. Quilloquy provides a CLI interface for generating chapters, compiling PDFs, and expanding existing books.
 
 ## Requirements
 

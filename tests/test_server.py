@@ -48,6 +48,21 @@ class TestServerHelpers(unittest.TestCase):
         self.assertFalse(settings.paragraph_images.enabled)
         self.assertEqual(settings.paragraph_images.image_dirname, "video_images")
 
+    def test_resolve_logo_path_returns_logo(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            logo_path = base_dir / "logo.png"
+            logo_path.write_text("logo", encoding="utf-8")
+
+            resolved = server._resolve_logo_path(base_dir)
+
+        self.assertEqual(resolved, logo_path)
+
+    def test_resolve_logo_path_requires_file(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            with self.assertRaises(server.ApiError):
+                server._resolve_logo_path(Path(tmpdir))
+
 
 class TestServerApi(unittest.TestCase):
     def test_send_file_handles_client_disconnect(self) -> None:
