@@ -196,10 +196,11 @@ class TestServerApi(unittest.TestCase):
                 second_content, encoding="utf-8"
             )
             _write_book_summary(book_dir, "Saved summary")
-            folder_mtime = 1_700_000_000
-            os.utime(book_dir, (folder_mtime, folder_mtime))
-
-            result = server.list_books({"books_dir": str(books_dir)})
+            folder_created = 1_700_000_000
+            with patch.object(
+                server, "_get_book_folder_created", return_value=folder_created
+            ):
+                result = server.list_books({"books_dir": str(books_dir)})
 
         self.assertEqual(len(result["books"]), 1)
         self.assertTrue(result["books"][0]["has_text"])
@@ -208,7 +209,7 @@ class TestServerApi(unittest.TestCase):
         self.assertFalse(result["books"][0]["has_cover"])
         self.assertEqual(result["books"][0]["genres"], [])
         self.assertIsNone(result["books"][0]["primary_genre"])
-        self.assertEqual(result["books"][0]["folder_mtime"], folder_mtime)
+        self.assertEqual(result["books"][0]["folder_created"], folder_created)
         expected_pages = server._estimate_page_count(
             first_content
         ) + server._estimate_page_count(second_content)

@@ -2377,7 +2377,7 @@ def get_gui_html() -> str:
       };
 
       const getBookFolderTimestamp = (book) => {
-        const value = Number(book?.folder_mtime);
+        const value = Number(book?.folder_created ?? book?.folder_mtime);
         return Number.isFinite(value) ? value : 0;
       };
 
