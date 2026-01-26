@@ -51,6 +51,7 @@ NUMBERED_LIST_PATTERN = re.compile(r"^\d+\.\s+")
 BULLET_LIST_PATTERN = re.compile(r"^[-*+]\s+")
 HEADING_PATTERN = re.compile(r"^#+\s*")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
+PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n+")
 MAX_TTS_CHARS = 3000
 
 
@@ -112,20 +113,28 @@ def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
     cleaned = text.strip()
     if not cleaned:
         return []
-    if len(cleaned) <= max_chars:
-        return [cleaned]
+    paragraph_texts = [
+        " ".join(line.strip() for line in paragraph.splitlines() if line.strip())
+        for paragraph in PARAGRAPH_SPLIT_PATTERN.split(cleaned)
+        if paragraph.strip()
+    ]
+    if not paragraph_texts:
+        return []
+    normalized_text = "\n\n".join(paragraph_texts)
+    if len(normalized_text) <= max_chars:
+        return [normalized_text]
 
     chunks: list[str] = []
     buffer: list[str] = []
     buffer_len = 0
-    for paragraph in cleaned.splitlines():
-        if not paragraph.strip():
+    for paragraph_text in paragraph_texts:
+        if not paragraph_text:
             if buffer:
                 chunks.append(" ".join(buffer).strip())
                 buffer = []
                 buffer_len = 0
             continue
-        sentences = SENTENCE_SPLIT_PATTERN.split(paragraph.strip())
+        sentences = SENTENCE_SPLIT_PATTERN.split(paragraph_text)
         for sentence in sentences:
             if not sentence:
                 continue
