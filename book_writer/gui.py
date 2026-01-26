@@ -81,12 +81,11 @@ def get_gui_html() -> str:
         }
 
         .brand-logo {
-          width: 54px;
-          height: 54px;
-          border-radius: 16px;
-          object-fit: cover;
-          box-shadow: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
-          background: var(--surface);
+          width: min(280px, 42vw);
+          height: auto;
+          aspect-ratio: 7 / 3;
+          object-fit: contain;
+          display: block;
         }
 
       .now-playing {
@@ -1170,11 +1169,7 @@ def get_gui_html() -> str:
         <header class="header">
           <div class="header-title">
             <div class="brand">
-              <img class="brand-logo" src="/logo.png" alt="Quilloquy logo" />
-              <div>
-                <h1>Quilloquy Studio</h1>
-                <p>Plan outlines, generate drafts, and manage finished books from one workspace.</p>
-              </div>
+              <img class="brand-logo" src="/logo.png" alt="Quilloquy Studio logo" />
             </div>
           </div>
           <div class="header-actions">
