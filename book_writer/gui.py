@@ -371,6 +371,11 @@ def get_gui_html() -> str:
         height: 432px;
       }
 
+      .book-card.book-card-book .card-description {
+        max-height: 144px;
+        min-height: 144px;
+      }
+
       .card-body {
         display: flex;
         flex-direction: column;
@@ -477,7 +482,7 @@ def get_gui_html() -> str:
         background: rgba(12, 16, 24, 0.4);
         color: inherit;
         font-weight: 600;
-        height: 150px;
+        height: 120px;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
@@ -572,6 +577,12 @@ def get_gui_html() -> str:
       .book-cover-title {
         position: relative;
         z-index: 2;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        line-height: 1.2;
+        max-height: calc(1.2em * 2);
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
       }
 
@@ -1742,12 +1753,14 @@ def get_gui_html() -> str:
 
         const content = document.createElement('div');
         content.className = 'card-body';
-        const heading = document.createElement('h2');
-        heading.textContent = headingLabel;
+        if (headingLabel) {
+          const heading = document.createElement('h2');
+          heading.textContent = headingLabel;
+          content.appendChild(heading);
+        }
         const meta = document.createElement('div');
         meta.className = 'card-description meta-line markdown';
         meta.innerHTML = renderMarkdown(detail);
-        content.appendChild(heading);
         content.appendChild(meta);
 
         card.appendChild(cover);
@@ -3193,7 +3206,7 @@ def get_gui_html() -> str:
         const shortName = displayTitle ? '' : book.path.split('/').pop();
         const card = createCard(
           book.title,
-          'Summary',
+          null,
           detail,
           status,
           shortName,
