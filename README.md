@@ -31,7 +31,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `GET /` (GUI HTML)
 - `GET /api/books`, `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
-- `GET /api/chapters`, `GET /api/book-content`, `GET /api/chapter-content`, `GET /api/outline-content`
+- `GET /api/chapters`, `GET /api/book-content`, `GET /api/book-progress`, `GET /api/chapter-content`, `GET /api/outline-content`
 - `POST /api/generate-book`, `POST /api/expand-book`, `POST /api/compile-book`
 - `POST /api/generate-audio`, `POST /api/generate-videos`
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
@@ -235,6 +235,7 @@ The GUI talks to a built-in HTTP server launched with `--gui`. All endpoints liv
 - `/api/outline-content`
 - `/api/chapter-content`
 - `/api/book-content`
+- `/api/book-progress`
 - `/media`
 
 **POST**
@@ -286,6 +287,8 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
   - Returns `{ chapter, title, content, page_count, summary, cover_url, audio_url, video_url }`.
 - `GET /api/book-content?book_dir=/path/to/book`
   - Returns `{ book_dir, title, summary, synopsis }`.
+- `GET /api/book-progress?book_dir=/path/to/book&audio_dirname=audio&video_dirname=video&chapter_cover_dir=chapter_covers`
+  - Returns `{ book_dir, title, completion, book, chapters, totals }` for images/summaries/audio/video completion by book and chapter, including an overall percent.
 - `GET /media?book_dir=/path/to/book&path=audio/book.mp3`
   - Streams static assets (audio/video/images) referenced by `*_url` fields.
 
