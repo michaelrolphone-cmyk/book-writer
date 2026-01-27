@@ -7,6 +7,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - Python 3.12+
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
 - [`pandoc`](https://pandoc.org/) for compiling PDFs/EPUBs (required for `book.pdf` and `book.epub` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
+- Optional LaTeX `background.sty` (from the `background` package) to render chapter cover backgrounds; if unavailable, PDF compilation skips background artwork.
 - [`ffmpeg`](https://ffmpeg.org/) for converting Qwen3 TTS audio to MP3 and for generating chapter MP4 videos when `--video` is enabled.
 - [`qwen_tts`](https://github.com/QwenLM/Qwen3-TTS) with compatible model weights, plus `torch` and `soundfile`, for local Qwen3 narration.
 - [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).

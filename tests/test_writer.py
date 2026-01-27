@@ -1233,6 +1233,20 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn('lang: "fr"', markdown)
 
+    def test_build_book_markdown_adds_background_fallback(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            "- Chapter One",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+        )
+
+        self.assertIn("\\usepackage{graphicx}", markdown)
+        self.assertIn("\\usepackage{xcolor}", markdown)
+        self.assertIn("\\IfFileExists{background.sty}", markdown)
+        self.assertIn("\\newcommand{\\backgroundsetup}", markdown)
+        self.assertIn("\\newcommand{\\BgThispage}", markdown)
+
     def test_build_book_title_prompt_mentions_outline_and_first_chapter(self) -> None:
         prompt = build_book_title_prompt("- Chapter One", "Chapter One")
 
