@@ -776,8 +776,33 @@ def generate_book_pdf(
     pdf_path = output_dir / "book.pdf"
     epub_path = output_dir / "book.epub"
     try:
-        run_pandoc(markdown_path, pdf_path, ["--pdf-engine=xelatex"])
-        run_pandoc(markdown_path, epub_path)
+        subprocess.run(
+            [
+                "pandoc",
+                str(markdown_path),
+                "--from",
+                "markdown-yaml_metadata_block",
+                "--pdf-engine=xelatex",
+                "-o",
+                str(pdf_path),
+            ],
+            check=True,
+            cwd=output_dir,
+        )
+
+        subprocess.run(
+            [
+                "pandoc",
+                str(markdown_path),
+                "--from",
+                "markdown-yaml_metadata_block",
+                "-o",
+                str(epub_path),
+            ],
+            check=True,
+            cwd=output_dir,
+        )
+      
     except FileNotFoundError as exc:
         message = (
             "pandoc is required to generate PDFs and EPUBs but was not found on "
