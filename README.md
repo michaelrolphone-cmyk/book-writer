@@ -1,12 +1,12 @@
 # Quilloquy
 
-Generate full-length books from Markdown outlines using LM Studio, and expand completed books with additional depth and detail. Quilloquy provides a CLI interface for generating chapters, compiling PDFs, and expanding existing books.
+Generate full-length books from Markdown outlines using LM Studio, and expand completed books with additional depth and detail. Quilloquy provides a CLI interface for generating chapters, compiling PDFs/EPUBs, and expanding existing books.
 
 ## Requirements
 
 - Python 3.12+
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
-- [`pandoc`](https://pandoc.org/) for compiling PDFs (required for `book.pdf` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
+- [`pandoc`](https://pandoc.org/) for compiling PDFs/EPUBs (required for `book.pdf` and `book.epub` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
 - [`ffmpeg`](https://ffmpeg.org/) for converting Qwen3 TTS audio to MP3 and for generating chapter MP4 videos when `--video` is enabled.
 - [`qwen_tts`](https://github.com/QwenLM/Qwen3-TTS) with compatible model weights, plus `torch` and `soundfile`, for local Qwen3 narration.
 - [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).
@@ -35,7 +35,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url` when a compiled `book.pdf` exists)
+- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url`/`book_epub_url` when compiled assets exist)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters?book_dir=books/my-book` (chapter list for a book)
@@ -48,7 +48,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
 - `POST /api/generate-outline`, `POST /api/save-outline`
 - `POST /api/git-pull-restart` (pull latest code and restart GUI server)
-- `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf` files when requested by `path=book.pdf`)
+- `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf`/`book.epub` files when requested by `path=book.pdf` or `path=book.epub`)
 ### CLI quick reference
 
 - Launch GUI: `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080`
@@ -129,6 +129,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing cover/title pages, outline, chapter title pages, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and back-cover synopsis when available.
+- `book.epub`: Generated from `book.md` via pandoc for ebook readers.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `meta.json`: LM-generated metadata (including `genres` and `primary_genre` for the GUI catalog).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
@@ -147,7 +148,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - `outlines/`: Directory containing one or more outline markdown files.
 
 **Outputs**
-- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
+- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `book.epub`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
@@ -174,11 +175,11 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 
 **Behavior**
 - Each paragraph/section in every chapter is expanded using the previous and next paragraph context.
-- After expansion completes, `book.pdf` is regenerated from updated content.
+- After expansion completes, `book.pdf` and `book.epub` are regenerated from updated content.
 
 **Outputs**
 - Updated chapter markdown files written in-place.
-- Updated `book.md` and regenerated `book.pdf`.
+- Updated `book.md` and regenerated `book.pdf`/`book.epub`.
 - Regenerated `audio/*.mp3` files when `--tts` is enabled.
 - Regenerated `video/*.mp4` files when `--video` is enabled.
 - Updated `cover.png` and `chapter_covers/` when cover generation is enabled.
@@ -200,7 +201,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
 
 **PDF compilation**
-- `book.pdf` uses `cover.png` as the front cover, chapter cover images from `chapter_covers/` for chapter title pages, and `back-cover-synopsis.md` for the back cover when those assets are present.
+- `book.pdf` and `book.epub` use `cover.png` as the front cover, chapter cover images from `chapter_covers/` for chapter title pages, and `back-cover-synopsis.md` for the back cover when those assets are present.
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
@@ -234,7 +235,7 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 ## Notes
 
 - Author personas live in `authors/` as markdown files (for example, `authors/curious-storyteller.md`). Provide the filename stem with `--author` to select a persona.
-- `pandoc` and `pdflatex` must be available on your PATH for PDF generation. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
+- `pandoc` and `pdflatex` must be available on your PATH for PDF generation. EPUB output only needs pandoc. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
 - Install the Qwen3 dependencies (`qwen_tts`, `torch`, and `soundfile`) and download the Qwen3 model weights to enable local MP3 narration.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
 

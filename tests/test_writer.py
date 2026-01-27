@@ -12,6 +12,7 @@ from book_writer.video import ParagraphImageSettings, VideoSettings
 from book_writer.cover import CoverSettings
 from book_writer.writer import (
     ChapterContext,
+    ChapterLayout,
     LMStudioClient,
     build_audiobook_text,
     build_book_markdown,
@@ -230,7 +231,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Chapter content", first_content)
         self.assertIn("## Section A", second_content)
         self.assertIn("Section content", second_content)
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_clears_existing_chapters(
@@ -256,7 +257,7 @@ class TestWriter(unittest.TestCase):
             self.assertEqual(len(files), 1)
             self.assertFalse(stale_path.exists())
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_logs_verbose_steps(self, run_mock: Mock) -> None:
@@ -277,8 +278,8 @@ class TestWriter(unittest.TestCase):
         print_mock.assert_any_call(
             "[write] Step 1/1: Generating chapter 'Chapter One'."
         )
-        print_mock.assert_any_call("[write] Generated book.pdf from chapters.")
-        run_mock.assert_called_once()
+        print_mock.assert_any_call("[write] Generated book.pdf and book.epub from chapters.")
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_skips_bullet_outline_items(
@@ -308,7 +309,7 @@ class TestWriter(unittest.TestCase):
             self.assertEqual(len(files), 1)
             self.assertTrue(files[0].name.startswith("001-"))
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_logs_prompts_when_enabled(
@@ -346,7 +347,7 @@ class TestWriter(unittest.TestCase):
                 if call.args
             )
         )
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
@@ -843,7 +844,7 @@ class TestWriter(unittest.TestCase):
         )
         self.assertEqual(synthesize_text_mock.call_count, 2)
         synthesize_video_mock.assert_not_called()
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
@@ -893,7 +894,7 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(
             video_kwargs["output_dir"], written_files[0].parent / "video"
         )
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_includes_previous_chapter_in_next_prompt(
@@ -920,7 +921,7 @@ class TestWriter(unittest.TestCase):
         second_prompt = client.generate.call_args_list[2][0][0]
         self.assertIn("Previous chapter context:", second_prompt)
         self.assertIn("Chapter one summary", second_prompt)
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_resumes_from_progress(self, run_mock: Mock) -> None:
@@ -974,7 +975,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Previous chapter context:", first_prompt)
         self.assertIn("Saved summary", first_prompt)
         self.assertEqual(progress["status"], "completed")
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_restarts_when_outline_hash_changes(
@@ -1021,7 +1022,7 @@ class TestWriter(unittest.TestCase):
             self.assertFalse(stale_path.exists())
             self.assertIn("# Chapter One", files[0].read_text(encoding="utf-8"))
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_restarts_when_outline_hash_missing(
@@ -1067,7 +1068,7 @@ class TestWriter(unittest.TestCase):
             self.assertFalse(stale_path.exists())
             self.assertIn("# Chapter One", files[0].read_text(encoding="utf-8"))
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_saves_implementation_details(
@@ -1095,7 +1096,7 @@ class TestWriter(unittest.TestCase):
             chapter_text = files[0].read_text(encoding="utf-8")
             self.assertNotIn("Implementation Details", chapter_text)
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_synopsis_includes_outline(self, run_mock: Mock) -> None:
@@ -1118,7 +1119,7 @@ class TestWriter(unittest.TestCase):
 
         synopsis_prompt = client.generate.call_args_list[-2][0][0]
         self.assertIn("Outline:\n- Chapter One\n  - Section A", synopsis_prompt)
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     def test_build_chapter_context_prompt_mentions_chapter(self) -> None:
         prompt = build_chapter_context_prompt("Chapter One", "Some chapter text.")
@@ -1144,12 +1145,15 @@ class TestWriter(unittest.TestCase):
 
     def test_build_book_markdown_includes_title_outline_and_chapters(self) -> None:
         markdown = build_book_markdown(
-            "Book Title", "- Chapter One", ["# Chapter One\n\nText"], "Marissa Bard"
+            "Book Title",
+            "- Chapter One",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
         )
 
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
-        self.assertIn("## Outline", markdown)
+        self.assertIn("# Outline", markdown)
         self.assertIn("# Chapter One", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
@@ -1168,7 +1172,11 @@ class TestWriter(unittest.TestCase):
         markdown = build_book_markdown(
             "Book 🌙 Title",
             "- Chapter 🌙 One",
-            ["# Chapter One\n\nSecret 🌙 emoji"],
+            [
+                ChapterLayout(
+                    title="Chapter One", content="# Chapter One\n\nSecret 🌙 emoji"
+                )
+            ],
             "Marissa 🌙 Bard",
         )
 
@@ -1217,7 +1225,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn("# Custom Title", book_md)
         self.assertIn("### By Custom Byline", book_md)
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_strips_duplicate_heading(self, run_mock: Mock) -> None:
@@ -1238,7 +1246,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertEqual(chapter_text[0], "# Chapter One")
         self.assertNotEqual(chapter_text[1].strip(), "# Chapter One")
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_strips_duplicate_bold_heading(self, run_mock: Mock) -> None:
@@ -1260,7 +1268,7 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(chapter_text[0], "# Chapter One")
         self.assertEqual(chapter_text[1].strip(), "")
         self.assertNotEqual(chapter_text[2].strip(), "Chapter One")
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     def test_build_expand_paragraph_prompt_includes_context(self) -> None:
         expand_prompt = (
@@ -1341,7 +1349,7 @@ class TestWriter(unittest.TestCase):
             self.assertIn("Expanded paragraph.", updated_content)
             self.assertEqual(expanded_files, [chapter_path])
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_runs_multiple_passes(self, run_mock: Mock) -> None:
@@ -1361,7 +1369,7 @@ class TestWriter(unittest.TestCase):
             self.assertIn("Expanded twice.", updated_content)
         self.assertEqual(expanded_files, [chapter_path])
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_limits_to_selected_chapters(
@@ -1391,7 +1399,7 @@ class TestWriter(unittest.TestCase):
             self.assertIn("Original paragraph.", updated_two)
             self.assertEqual(expanded_files, [chapter_one])
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_logs_verbose_steps(self, run_mock: Mock) -> None:
@@ -1414,7 +1422,7 @@ class TestWriter(unittest.TestCase):
         print_mock.assert_any_call(
             "[expand] Step 1/1: Expanding 001-chapter-one.md."
         )
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
@@ -1456,7 +1464,7 @@ class TestWriter(unittest.TestCase):
             verbose=False,
             raise_on_error=True,
         )
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
@@ -1482,7 +1490,7 @@ class TestWriter(unittest.TestCase):
         _, kwargs = synthesize_mock.call_args
         settings = kwargs["settings"]
         self.assertTrue(settings.enabled)
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_calls_pandoc(self, run_mock: Mock) -> None:
@@ -1516,18 +1524,32 @@ class TestWriter(unittest.TestCase):
             self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
 
-        run_mock.assert_called_once_with(
+        run_mock.assert_has_calls(
             [
-                "pandoc",
-                str(output_dir / "book.md"),
-                "--from",
-                "markdown-yaml_metadata_block",
-                "--pdf-engine=xelatex",
-                "-o",
-                str(output_dir / "book.pdf"),
-            ],
-            check=True,
-            cwd=output_dir,
+                call(
+                    [
+                        "pandoc",
+                        str(output_dir / "book.md"),
+                        "--from",
+                        "markdown-yaml_metadata_block",
+                        "--pdf-engine=xelatex",
+                        "-o",
+                        str(output_dir / "book.pdf"),
+                    ],
+                    check=True,
+                ),
+                call(
+                    [
+                        "pandoc",
+                        str(output_dir / "book.md"),
+                        "--from",
+                        "markdown-yaml_metadata_block",
+                        "-o",
+                        str(output_dir / "book.epub"),
+                    ],
+                    check=True,
+                ),
+            ]
         )
 
     @patch("book_writer.writer.subprocess.run")
@@ -1548,7 +1570,9 @@ class TestWriter(unittest.TestCase):
                     byline="Marissa Bard",
                 )
 
-        self.assertIn("pandoc is required to generate PDFs", str(context.exception))
+        self.assertIn(
+            "pandoc is required to generate PDFs and EPUBs", str(context.exception)
+        )
 
     def test_generate_without_timeout_omits_timeout_param(self) -> None:
         response = Mock()

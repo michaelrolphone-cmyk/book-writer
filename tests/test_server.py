@@ -318,6 +318,7 @@ class TestServerApi(unittest.TestCase):
             book_dir.mkdir(parents=True)
             (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
             (book_dir / "book.pdf").write_text("pdf", encoding="utf-8")
+            (book_dir / "book.epub").write_text("epub", encoding="utf-8")
             _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books({"books_dir": str(books_dir)})
@@ -325,7 +326,11 @@ class TestServerApi(unittest.TestCase):
         expected_url = (
             f"/media?book_dir={quote(str(book_dir))}&path={quote('book.pdf')}"
         )
+        expected_epub_url = (
+            f"/media?book_dir={quote(str(book_dir))}&path={quote('book.epub')}"
+        )
         self.assertEqual(result["books"][0]["book_pdf_url"], expected_url)
+        self.assertEqual(result["books"][0]["book_epub_url"], expected_epub_url)
 
     def test_list_chapters_returns_titles(self) -> None:
         with TemporaryDirectory() as tmpdir:

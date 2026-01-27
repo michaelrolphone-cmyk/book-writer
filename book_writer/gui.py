@@ -1374,7 +1374,7 @@ def get_gui_html() -> str:
               </div>
             </div>
             <button class="pill-button" id="expandBook">Expand</button>
-            <button class="pill-button" id="compileBook">Compile PDF</button>
+            <button class="pill-button" id="compileBook">Compile PDF + EPUB</button>
           </div>
 
           <div class="panel">
