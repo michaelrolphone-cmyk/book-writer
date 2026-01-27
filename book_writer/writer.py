@@ -804,11 +804,6 @@ def _render_title_page(title: str, byline: str) -> str:
     )
 
 
-def _render_outline(outline_text: str) -> str:
-    outline_body = _sanitize_markdown_for_latex(outline_text)
-    return f"# Outline\n\n{outline_body}\n\n"
-
-
 def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
     image_block = ""
@@ -853,7 +848,6 @@ def _render_back_cover(synopsis: str) -> str:
 
 def build_book_markdown(
     title: str,
-    outline_text: str,
     chapters: List[ChapterLayout],
     byline: str,
     *,
@@ -866,8 +860,6 @@ def build_book_markdown(
         sections.append(_render_cover_section(title, byline, cover_image))
         sections.append(_page_break())
     sections.append(_render_title_page(title, byline))
-    sections.append(_page_break())
-    sections.append(_render_outline(outline_text))
     sections.append(_page_break())
     for index, chapter in enumerate(chapters):
         sections.append(_render_chapter_title_page(chapter))
@@ -968,7 +960,6 @@ def _escape_latex_line_outside_math(line: str) -> str:
 def generate_book_pdf(
     output_dir: Path,
     title: str,
-    outline_text: str,
     chapter_files: List[Path],
     byline: str,
 ) -> Path:
@@ -1032,7 +1023,6 @@ def generate_book_pdf(
         )
     book_markdown = build_book_markdown(
         title,
-        outline_text,
         chapters,
         byline,
         cover_image=cover_image_path,
@@ -1073,11 +1063,9 @@ def compile_book(output_dir: Path) -> Path:
     if not chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
     book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
-    outline_text = book_metadata.content or _derive_outline_from_chapters(chapter_files)
     return generate_book_pdf(
         output_dir=output_dir,
         title=book_metadata.title,
-        outline_text=outline_text,
         chapter_files=chapter_files,
         byline=byline,
     )
@@ -1698,14 +1686,9 @@ def expand_book(
                     )
 
     book_metadata, byline = _read_book_metadata(output_dir, all_chapter_files)
-    outline_text = book_metadata.content
-    if not outline_text:
-        outline_text = _derive_outline_from_chapters(all_chapter_files)
-
     generate_book_pdf(
         output_dir=output_dir,
         title=book_metadata.title,
-        outline_text=outline_text,
         chapter_files=all_chapter_files,
         byline=byline,
     )
@@ -1949,7 +1932,6 @@ def write_book(
     generate_book_pdf(
         output_dir=output_dir,
         title=book_title,
-        outline_text=outline_text,
         chapter_files=written_files,
         byline=byline,
     )
