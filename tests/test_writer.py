@@ -1529,25 +1529,27 @@ class TestWriter(unittest.TestCase):
                 call(
                     [
                         "pandoc",
-                        str(output_dir / "book.md"),
+                        "book.md",
                         "--from",
                         "markdown-yaml_metadata_block",
                         "--pdf-engine=xelatex",
                         "-o",
-                        str(output_dir / "book.pdf"),
+                        "book.pdf",
                     ],
                     check=True,
+                    cwd=output_dir,
                 ),
                 call(
                     [
                         "pandoc",
-                        str(output_dir / "book.md"),
+                        "book.md",
                         "--from",
                         "markdown-yaml_metadata_block",
                         "-o",
-                        str(output_dir / "book.epub"),
+                        "book.epub",
                     ],
                     check=True,
+                    cwd=output_dir,
                 ),
             ]
         )
