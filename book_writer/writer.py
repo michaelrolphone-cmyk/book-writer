@@ -1046,15 +1046,7 @@ def generate_book_pdf(
     epub_css = _ensure_epub_css(output_dir)
     epub_args = ["--toc", "--css", epub_css.name]
     if cover_image_path is not None:
-        epub_cover = _build_epub_cover_svg(
-            output_dir, cover_image_file, title, byline
-        )
-        epub_cover_path = (
-            epub_cover.relative_to(output_dir)
-            if epub_cover is not None
-            else cover_image_path
-        )
-        epub_args.extend(["--epub-cover-image", epub_cover_path.as_posix()])
+        epub_args.extend(["--epub-cover-image", cover_image_path.as_posix()])
     try:
         run_pandoc(
             markdown_path=markdown_path,
