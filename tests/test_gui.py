@@ -88,6 +88,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"generateChapterCovers\"", html)
         self.assertIn("id=\"bookWorkspaceCover\"", html)
         self.assertIn("id=\"bookWorkspacePdf\"", html)
+        self.assertIn("id=\"bookWorkspaceEpub\"", html)
         self.assertIn("id=\"chapterGenerateCover\"", html)
         self.assertIn("id=\"chapterCoverDir\"", html)
         self.assertIn("id=\"coverProgress\"", html)
@@ -97,6 +98,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("Select a book before generating audio.", html)
         self.assertIn("Select a book before generating a cover.", html)
         self.assertIn("Select an outline before generating a book.", html)
+        self.assertIn("Compile a book before opening the EPUB.", html)
         self.assertIn(
             "loadWorkspaceChapterContent(bookSelect.value, chapterSelect.value);",
             html,
