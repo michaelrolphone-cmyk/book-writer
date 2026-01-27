@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import base64
 import json
+import mimetypes
 import re
 import struct
 import subprocess
 import textwrap
 import unicodedata
-from html import escape as html_escape
 from dataclasses import dataclass, replace
+from html import escape as html_escape
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
 from urllib import request
@@ -707,6 +708,17 @@ def _build_epub_cover_svg(
     dimensions = _read_png_dimensions(cover_image) or (2560, 1600)
     width, height = dimensions
     image_href = cover_image.name
+    try:
+        cover_bytes = cover_image.read_bytes()
+    except OSError:
+        cover_bytes = b""
+    if cover_bytes:
+        mime_type = "image/png"
+        guessed_type, _ = mimetypes.guess_type(cover_image.name)
+        if guessed_type:
+            mime_type = guessed_type
+        encoded_cover = base64.b64encode(cover_bytes).decode("ascii")
+        image_href = f"data:{mime_type};base64,{encoded_cover}"
     title_lines = _wrap_cover_text(title_text, max_width=28)
     byline_lines = _wrap_cover_text(f"By {byline_text}" if byline_text else "", max_width=32)
     title_font = _select_cover_font_size(len(title_lines), 110)
