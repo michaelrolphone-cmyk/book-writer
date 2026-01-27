@@ -138,12 +138,11 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing cover/title pages, outline, chapter title pages, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
-- `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is embedded in `cover-epub.svg` so reader apps can display the icon offline.
+- `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently.
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `meta.json`: LM-generated metadata (including `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
-- `cover-epub.svg`: EPUB cover asset with title/byline overlay rendered on top of `cover.png`.
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
@@ -159,7 +158,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - `outlines/`: Directory containing one or more outline markdown files.
 
 **Outputs**
-- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `book.epub`, `back-cover-synopsis.md`, `cover.png`, `cover-epub.svg`, and `chapter_covers/` when enabled.
+- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `book.epub`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
@@ -212,7 +211,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
 
 **PDF compilation**
-- `book.pdf` and `book.epub` use `cover.png` as the front cover, with EPUB compilation generating `cover-epub.svg` so the title/byline appear in the EPUB cover metadata. Chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) power full-bleed chapter title pages with overlaid titles, and `back-cover-synopsis.md` is used for the back cover when those assets are present.
+- `book.pdf` and `book.epub` use `cover.png` as the front cover, with EPUB compilation referencing the same image for cover metadata to satisfy common reader requirements. Chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) power full-bleed chapter title pages with overlaid titles, and `back-cover-synopsis.md` is used for the back cover when those assets are present.
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.

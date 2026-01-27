@@ -1594,7 +1594,6 @@ class TestWriter(unittest.TestCase):
             self.assertIn("# Back Cover", book_md)
             self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
-            self.assertTrue((output_dir / "cover-epub.svg").exists())
 
         run_mock.assert_has_calls(
             [
@@ -1622,7 +1621,7 @@ class TestWriter(unittest.TestCase):
                         "--css",
                         "epub.css",
                         "--epub-cover-image",
-                        "cover-epub.svg",
+                        "cover.png",
                         "-o",
                         "book.epub",
                     ],
