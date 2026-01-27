@@ -1527,6 +1527,7 @@ class TestWriter(unittest.TestCase):
                 str(output_dir / "book.pdf"),
             ],
             check=True,
+            cwd=output_dir,
         )
 
     @patch("book_writer.writer.subprocess.run")
