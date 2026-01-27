@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="320" viewBox="0 0 900 320">
+  <rect width="900" height="320" fill="#ffffff" />
+  <text x="450" y="30" text-anchor="middle" font-family="Arial" font-size="20" font-weight="bold">Book Generation Workflow</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto">
+      <path d="M0,0 L10,3 L0,6" fill="#8a4b08" />
+    </marker>
+  </defs>
+
+  <g font-family="Arial" font-size="14" fill="#1f2a44" stroke="#8a4b08" stroke-width="1">
+    <rect x="40" y="140" width="150" height="60" rx="10" fill="#fff4e5" />
+    <text x="115" y="175" text-anchor="middle">Select outline</text>
+
+    <rect x="210" y="140" width="150" height="60" rx="10" fill="#fff4e5" />
+    <text x="285" y="175" text-anchor="middle">Generate chapters</text>
+
+    <rect x="380" y="140" width="150" height="60" rx="10" fill="#fff4e5" />
+    <text x="455" y="175" text-anchor="middle">Compile book.md</text>
+
+    <rect x="550" y="140" width="150" height="60" rx="10" fill="#fff4e5" />
+    <text x="625" y="175" text-anchor="middle">Create PDF</text>
+
+    <rect x="720" y="140" width="150" height="60" rx="10" fill="#fff4e5" />
+    <text x="795" y="175" text-anchor="middle">Optional media</text>
+  </g>
+
+  <g stroke="#8a4b08" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="190" y1="170" x2="210" y2="170" />
+    <line x1="360" y1="170" x2="380" y2="170" />
+    <line x1="530" y1="170" x2="550" y2="170" />
+    <line x1="700" y1="170" x2="720" y2="170" />
+  </g>
+</svg>
