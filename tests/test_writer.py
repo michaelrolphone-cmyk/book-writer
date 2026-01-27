@@ -767,6 +767,38 @@ class TestWriter(unittest.TestCase):
 
         generate_pdf_mock.assert_called_once()
 
+    @patch("book_writer.writer.subprocess.run")
+    def test_compile_book_skips_invalid_outline(
+        self, run_mock: Mock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            output_dir.mkdir()
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
+            (output_dir / "book.md").write_text(
+                "---\n"
+                'title: "Draft Title"\n'
+                'author: "Marissa Bard"\n'
+                "---\n\n"
+                "# Outline\n\n"
+                "# Chapter One\n\n"
+                "Content\n",
+                encoding="utf-8",
+            )
+
+            compile_book(output_dir)
+
+            compiled = (output_dir / "book.md").read_text(encoding="utf-8")
+            outline_section = compiled.split("# Outline", 1)[1].split(
+                "\\pagebreak", 1
+            )[0]
+            self.assertIn("- Chapter One", outline_section)
+            self.assertNotIn("# Chapter One", outline_section)
+            self.assertNotIn("Content", outline_section)
+
+        self.assertEqual(run_mock.call_count, 2)
+
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
@@ -1582,7 +1614,8 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn(
-                "![Chapter cover](chapter_covers/001-chapter-one.JPG){.chapter-cover}",
+                "![Chapter cover](chapter_covers/001-chapter-one.JPG)"
+                "{.chapter-cover}",
                 book_md,
             )
 

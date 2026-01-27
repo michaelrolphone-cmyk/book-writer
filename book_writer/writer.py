@@ -998,6 +998,25 @@ def _derive_outline_from_chapters(chapter_files: List[Path]) -> str:
 def _read_book_metadata(
     output_dir: Path, chapter_files: List[Path]
 ) -> tuple[ChapterContext, str]:
+    def outline_from_book_md(content: str) -> str:
+        if "# Outline" in content:
+            outline_section = content.split("# Outline", 1)[1]
+            outline = outline_section.split("\\pagebreak", 1)[0].strip()
+        elif "## Outline" in content:
+            outline_section = content.split("## Outline", 1)[1]
+            outline = outline_section.split("\\newpage", 1)[0].strip()
+        else:
+            return ""
+        if not outline:
+            return ""
+        for line in outline.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                return ""
+            if stripped.startswith(":::"):
+                return ""
+        return outline
+
     book_md = output_dir / "book.md"
     if book_md.exists():
         content = book_md.read_text(encoding="utf-8")
@@ -1024,12 +1043,7 @@ def _read_book_metadata(
                 if line.startswith("### By "):
                     byline = line[len("### By ") :].strip()
                     break
-        if "# Outline" in content:
-            outline_section = content.split("# Outline", 1)[1]
-            outline = outline_section.split("\\pagebreak", 1)[0].strip()
-        elif "## Outline" in content:
-            outline_section = content.split("## Outline", 1)[1]
-            outline = outline_section.split("\\newpage", 1)[0].strip()
+        outline = outline_from_book_md(content)
         return ChapterContext(title=title, content=outline), byline
 
     outline = _derive_outline_from_chapters(chapter_files)
