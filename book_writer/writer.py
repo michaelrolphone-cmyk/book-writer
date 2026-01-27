@@ -558,7 +558,7 @@ def _render_cover_section(cover_image: Path) -> str:
     cover_path = cover_image.as_posix()
     return (
         "::: {.cover-page}\n"
-        f"![]({cover_path})\n"
+        f'<img src="{cover_path}" class="cover-image" />\n'
         ":::\n\n"
     )
 
@@ -583,7 +583,8 @@ def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
     image_block = ""
     if chapter.cover_image is not None:
-        image_block = f"\n![]({chapter.cover_image.as_posix()})\n"
+        image_path = chapter.cover_image.as_posix()
+        image_block = f'\n<img src="{image_path}" class="chapter-cover" />\n'
     return (
         "::: {.chapter-title-page}\n"
         f"# {title_text}\n"

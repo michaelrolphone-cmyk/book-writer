@@ -1518,8 +1518,12 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn("### By Marissa Bard", book_md)
-            self.assertIn("![](cover.png)", book_md)
-            self.assertIn("![](chapter_covers/001-chapter-one.png)", book_md)
+            self.assertIn('<img src="cover.png" class="cover-image" />', book_md)
+            self.assertIn(
+                '<img src="chapter_covers/001-chapter-one.png" '
+                'class="chapter-cover" />',
+                book_md,
+            )
             self.assertIn("# Back Cover", book_md)
             self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
@@ -1577,7 +1581,11 @@ class TestWriter(unittest.TestCase):
             )
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
-            self.assertIn("![](chapter_covers/001-chapter-one.JPG)", book_md)
+            self.assertIn(
+                '<img src="chapter_covers/001-chapter-one.JPG" '
+                'class="chapter-cover" />',
+                book_md,
+            )
 
         self.assertEqual(run_mock.call_count, 2)
 
