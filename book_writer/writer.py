@@ -558,7 +558,7 @@ def _render_cover_section(cover_image: Path) -> str:
     cover_path = cover_image.as_posix()
     return (
         "::: {.cover-page}\n"
-        f"![]({cover_path})\n"
+        f'<img src="{cover_path}" class="cover-image" />\n'
         ":::\n\n"
     )
 
@@ -583,7 +583,8 @@ def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
     image_block = ""
     if chapter.cover_image is not None:
-        image_block = f"\n![]({chapter.cover_image.as_posix()})\n"
+        image_path = chapter.cover_image.as_posix()
+        image_block = f'\n<img src="{image_path}" class="chapter-cover" />\n'
     return (
         "::: {.chapter-title-page}\n"
         f"# {title_text}\n"
@@ -722,6 +723,24 @@ def generate_book_pdf(
     chapter_files: List[Path],
     byline: str,
 ) -> Path:
+    def resolve_chapter_cover(
+        chapter_dir: Path, chapter_stem: str
+    ) -> Optional[Path]:
+        supported_suffixes = (".png", ".jpg", ".jpeg", ".webp")
+        for suffix in supported_suffixes:
+            candidate = chapter_dir / f"{chapter_stem}{suffix}"
+            if candidate.exists():
+                return candidate.relative_to(output_dir)
+        if chapter_dir.exists():
+            for candidate in sorted(chapter_dir.iterdir()):
+                if (
+                    candidate.is_file()
+                    and candidate.stem == chapter_stem
+                    and candidate.suffix.lower() in supported_suffixes
+                ):
+                    return candidate.relative_to(output_dir)
+        return None
+
     def run_pandoc(
         markdown_path: Path,
         output_path: Path,
@@ -751,12 +770,7 @@ def generate_book_pdf(
     for path in chapter_files:
         content = path.read_text(encoding="utf-8")
         chapter_title = _chapter_title_from_content(content, path.stem)
-        cover_path = chapter_cover_dir / f"{path.stem}.png"
-        cover_image = (
-            cover_path.relative_to(output_dir)
-            if cover_path.exists()
-            else None
-        )
+        cover_image = resolve_chapter_cover(chapter_cover_dir, path.stem)
         chapters.append(
             ChapterLayout(
                 title=chapter_title,
