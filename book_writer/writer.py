@@ -15,7 +15,11 @@ from book_writer.cover import (
     generate_book_cover,
     generate_chapter_cover,
 )
-from book_writer.metadata import generate_book_genres, write_book_meta
+from book_writer.metadata import (
+    generate_book_genres,
+    read_book_language,
+    write_book_meta,
+)
 from book_writer.outline import OutlineItem, outline_to_text, slugify
 from book_writer.tts import (
     TTSSynthesisError,
@@ -527,7 +531,7 @@ def _yaml_quote(value: str) -> str:
     return f'"{escaped}"'
 
 
-def _build_front_matter(title: str, byline: str) -> str:
+def _build_front_matter(title: str, byline: str, language: str) -> str:
     lines = ["---"]
     if title.strip():
         clean_title = _sanitize_markdown_for_latex(title.strip())
@@ -535,6 +539,8 @@ def _build_front_matter(title: str, byline: str) -> str:
     if byline.strip():
         clean_byline = _sanitize_markdown_for_latex(byline.strip())
         lines.append(f"author: {_yaml_quote(clean_byline)}")
+    if language.strip():
+        lines.append(f"lang: {_yaml_quote(language.strip())}")
     lines.append("---\n")
     return "\n".join(lines)
 
@@ -552,6 +558,28 @@ def _strip_leading_heading(content: str) -> str:
 
 def _page_break() -> str:
     return "\\pagebreak\n\n"
+
+
+def _ensure_epub_css(output_dir: Path) -> Path:
+    css_path = output_dir / "epub.css"
+    css_path.write_text(
+        "\n".join(
+            [
+                "body {",
+                "  font-family: serif;",
+                "  margin: 5%;",
+                "  line-height: 1.5;",
+                "}",
+                ".cover-image, .chapter-cover {",
+                "  max-width: 100%;",
+                "  height: auto;",
+                "}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return css_path
 
 
 def _render_cover_section(cover_image: Path) -> str:
@@ -611,8 +639,9 @@ def build_book_markdown(
     *,
     cover_image: Optional[Path] = None,
     synopsis: str = "",
+    language: str = "en",
 ) -> str:
-    sections: list[str] = [_build_front_matter(title, byline)]
+    sections: list[str] = [_build_front_matter(title, byline, language)]
     if cover_image is not None:
         sections.append(_render_cover_section(cover_image))
         sections.append(_page_break())
@@ -765,6 +794,7 @@ def generate_book_pdf(
         cover_image.relative_to(output_dir) if cover_image.exists() else None
     )
     synopsis = _read_cover_synopsis(output_dir)
+    language = read_book_language(output_dir)
     chapter_cover_dir = output_dir / "chapter_covers"
     chapters: list[ChapterLayout] = []
     for path in chapter_files:
@@ -785,11 +815,13 @@ def generate_book_pdf(
         byline,
         cover_image=cover_image_path,
         synopsis=synopsis,
+        language=language,
     )
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
     epub_path = output_dir / "book.epub"
+    epub_css = _ensure_epub_css(output_dir)
     try:
         run_pandoc(
             markdown_path=markdown_path,
@@ -799,6 +831,7 @@ def generate_book_pdf(
         run_pandoc(
             markdown_path=markdown_path,
             output_path=epub_path,
+            extra_args=("--toc", "--css", epub_css.name),
         )
     except FileNotFoundError as exc:
         message = (

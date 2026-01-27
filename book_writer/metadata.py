@@ -200,6 +200,14 @@ def read_book_primary_genre(book_dir: Path) -> str | None:
     return resolve_primary_genre(genres)
 
 
+def read_book_language(book_dir: Path, default: str = "en") -> str:
+    meta = read_book_meta(book_dir)
+    language = meta.get("language") or meta.get("lang")
+    if isinstance(language, str) and language.strip():
+        return language.strip()
+    return default
+
+
 def write_book_meta(
     book_dir: Path,
     genres: Iterable[str],
