@@ -12,6 +12,11 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).
 - [`python_coreml_stable_diffusion`](https://github.com/apple/ml-stable-diffusion) for generating book covers when `--cover` is enabled.
 
+## Documentation
+
+- Architecture and component responsibilities: [`documentation/architecture.md`](documentation/architecture.md)
+- Generation workflows and sequence diagrams: [`documentation/workflows.md`](documentation/workflows.md)
+
 ## Commands
 
 The CLI commands and GUI API endpoints are summarized in the quick reference below for fast lookup.

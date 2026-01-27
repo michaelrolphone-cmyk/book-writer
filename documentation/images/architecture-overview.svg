@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <rect width="900" height="420" fill="#ffffff" />
+  <text x="450" y="30" text-anchor="middle" font-family="Arial" font-size="20" font-weight="bold">Quilloquy Architecture Overview</text>
+
+  <g font-family="Arial" font-size="14" fill="#1f2a44" stroke="#2f4f4f" stroke-width="1">
+    <rect x="40" y="80" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="150" y="115" text-anchor="middle">Outline Markdown</text>
+
+    <rect x="330" y="80" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="440" y="115" text-anchor="middle">CLI / GUI</text>
+
+    <rect x="620" y="80" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="730" y="115" text-anchor="middle">Writer Engine</text>
+
+    <rect x="620" y="190" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="730" y="225" text-anchor="middle">Chapter Files</text>
+
+    <rect x="330" y="190" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="440" y="225" text-anchor="middle">Compilation</text>
+
+    <rect x="40" y="190" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="150" y="225" text-anchor="middle">Media Generation</text>
+
+    <rect x="330" y="300" width="220" height="60" rx="10" fill="#e8f0fe" />
+    <text x="440" y="335" text-anchor="middle">Book Outputs</text>
+  </g>
+
+  <g stroke="#2f4f4f" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto">
+        <path d="M0,0 L10,3 L0,6" fill="#2f4f4f" />
+      </marker>
+    </defs>
+    <line x1="260" y1="110" x2="330" y2="110" />
+    <line x1="550" y1="110" x2="620" y2="110" />
+    <line x1="730" y1="140" x2="730" y2="190" />
+    <line x1="620" y1="220" x2="550" y2="220" />
+    <line x1="330" y1="220" x2="260" y2="220" />
+    <line x1="150" y1="250" x2="330" y2="330" />
+    <line x1="440" y1="250" x2="440" y2="300" />
+  </g>
+</svg>
