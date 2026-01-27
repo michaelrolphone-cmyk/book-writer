@@ -311,6 +311,22 @@ class TestServerApi(unittest.TestCase):
         expected_base = f"/media?book_dir={quote(str(book_dir))}"
         self.assertTrue(result["books"][0]["book_audio_url"].startswith(expected_base))
 
+    def test_list_books_includes_book_pdf_url(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            (book_dir / "book.pdf").write_text("pdf", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        expected_url = (
+            f"/media?book_dir={quote(str(book_dir))}&path={quote('book.pdf')}"
+        )
+        self.assertEqual(result["books"][0]["book_pdf_url"], expected_url)
+
     def test_list_chapters_returns_titles(self) -> None:
         with TemporaryDirectory() as tmpdir:
             book_dir = Path(tmpdir) / "book"

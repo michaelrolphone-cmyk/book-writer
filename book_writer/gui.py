@@ -1628,6 +1628,7 @@ def get_gui_html() -> str:
                   <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
                   <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
                   <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
+                  <button class="pill-button is-hidden" id="bookWorkspacePdf">Open PDF</button>
                   <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
                   <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
                   <button class="pill-button" id="bookWorkspaceCover">Generate cover</button>
@@ -2215,6 +2216,7 @@ def get_gui_html() -> str:
       const bookWorkspaceReader = document.getElementById('bookWorkspaceReader');
       const bookWorkspaceExpand = document.getElementById('bookWorkspaceExpand');
       const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
+      const bookWorkspacePdf = document.getElementById('bookWorkspacePdf');
       const bookWorkspaceAudio = document.getElementById('bookWorkspaceAudio');
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
       const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
@@ -3430,6 +3432,7 @@ def get_gui_html() -> str:
           setBookAudioMetadata(bookAudio, entry.path, resolvedBookTitle, entry.cover_url || '');
           setHiddenImageSource(bookCoverImage, entry.cover_url);
           setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
+          toggleBookPdfButton(entry);
           const bookContent = await loadBookContent(entry.path);
           if (bookContent) {
             setSummaryText(detailSummary, bookContent.summary || entry.summary || '');
@@ -3551,6 +3554,20 @@ def get_gui_html() -> str:
         element.style.setProperty('--card-overlay', overlayBackground);
         element.style.setProperty('--card-text', '#f8f9fb');
         element.classList.toggle('has-image', Boolean(coverUrl));
+      };
+
+      const toggleBookPdfButton = (entry) => {
+        if (!bookWorkspacePdf) return;
+        const pdfUrl = entry?.book_pdf_url || '';
+        if (pdfUrl && entry?.has_compilation) {
+          bookWorkspacePdf.dataset.pdfUrl = pdfUrl;
+          bookWorkspacePdf.classList.remove('is-hidden');
+          bookWorkspacePdf.disabled = false;
+          return;
+        }
+        bookWorkspacePdf.dataset.pdfUrl = '';
+        bookWorkspacePdf.classList.add('is-hidden');
+        bookWorkspacePdf.disabled = true;
       };
 
       const parseOptionalNumber = (value) => {
@@ -4016,10 +4033,22 @@ def get_gui_html() -> str:
           };
           await postJson('/api/compile-book', payload);
           log('Compilation complete.');
+          await loadCatalog({ refreshMode: 'books' });
         } catch (error) {
           log(`Compile failed: ${error.message}`);
         }
       });
+
+      if (bookWorkspacePdf) {
+        bookWorkspacePdf.addEventListener('click', () => {
+          const pdfUrl = bookWorkspacePdf.dataset.pdfUrl || '';
+          if (!pdfUrl) {
+            log('Compile a book before opening the PDF.');
+            return;
+          }
+          window.open(pdfUrl, '_blank', 'noopener');
+        });
+      }
 
       document.getElementById('generateAudio').addEventListener('click', async () => {
         try {
