@@ -1518,10 +1518,10 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn("### By Marissa Bard", book_md)
-            self.assertIn('<img src="cover.png" class="cover-image" />', book_md)
+            self.assertIn("![Cover image](cover.png){.cover-image}", book_md)
             self.assertIn(
-                '<img src="chapter_covers/001-chapter-one.png" '
-                'class="chapter-cover" />',
+                "![Chapter cover](chapter_covers/001-chapter-one.png)"
+                "{.chapter-cover}",
                 book_md,
             )
             self.assertIn("# Back Cover", book_md)
@@ -1535,7 +1535,7 @@ class TestWriter(unittest.TestCase):
                         "pandoc",
                         "book.md",
                         "--from",
-                        "markdown+yaml_metadata_block+fenced_divs",
+                        "markdown+yaml_metadata_block+fenced_divs+link_attributes",
                         "--pdf-engine=xelatex",
                         "-o",
                         "book.pdf",
@@ -1548,7 +1548,7 @@ class TestWriter(unittest.TestCase):
                         "pandoc",
                         "book.md",
                         "--from",
-                        "markdown+yaml_metadata_block+fenced_divs",
+                        "markdown+yaml_metadata_block+fenced_divs+link_attributes",
                         "-o",
                         "book.epub",
                     ],
@@ -1582,8 +1582,7 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn(
-                '<img src="chapter_covers/001-chapter-one.JPG" '
-                'class="chapter-cover" />',
+                "![Chapter cover](chapter_covers/001-chapter-one.JPG){.chapter-cover}",
                 book_md,
             )
 

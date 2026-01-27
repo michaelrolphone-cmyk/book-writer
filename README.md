@@ -49,6 +49,10 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `POST /api/generate-outline`, `POST /api/save-outline`
 - `POST /api/git-pull-restart` (pull latest code and restart GUI server)
 - `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf`/`book.epub` files when requested by `path=book.pdf` or `path=book.epub`)
+
+**GUI API example commands**
+- Compile a book: `curl -X POST http://127.0.0.1:8080/api/compile-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
+- Generate chapter covers: `curl -X POST http://127.0.0.1:8080/api/generate-chapter-covers -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","chapter_cover_dir":"chapter_covers"}'`
 ### CLI quick reference
 
 - Launch GUI: `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080`

@@ -558,7 +558,7 @@ def _render_cover_section(cover_image: Path) -> str:
     cover_path = cover_image.as_posix()
     return (
         "::: {.cover-page}\n"
-        f'<img src="{cover_path}" class="cover-image" />\n'
+        f"![Cover image]({cover_path}){{.cover-image}}\n"
         ":::\n\n"
     )
 
@@ -584,7 +584,7 @@ def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     image_block = ""
     if chapter.cover_image is not None:
         image_path = chapter.cover_image.as_posix()
-        image_block = f'\n<img src="{image_path}" class="chapter-cover" />\n'
+        image_block = f"\n![Chapter cover]({image_path}){{.chapter-cover}}\n"
     return (
         "::: {.chapter-title-page}\n"
         f"# {title_text}\n"
@@ -751,7 +751,7 @@ def generate_book_pdf(
                 "pandoc",
                 markdown_path.name,
                 "--from",
-                "markdown+yaml_metadata_block+fenced_divs",
+                "markdown+yaml_metadata_block+fenced_divs+link_attributes",
                 *extra_args,
                 "-o",
                 output_path.name,
