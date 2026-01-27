@@ -56,6 +56,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - Batch-generate from outlines: `python -m book_writer --outlines-dir outlines --books-dir books`
 - Expand a completed book: `python -m book_writer --expand-book books/my-book --expand-passes 2`
 - Generate cover assets: `python -m book_writer --cover-book books/my-book --cover`
+- Compile an existing book: `python -m book_writer --prompt` (choose **Modify existing books** → **Generate compiled book.pdf and book.epub**)
 
 ### Launch the GUI server
 

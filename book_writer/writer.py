@@ -730,14 +730,15 @@ def generate_book_pdf(
         subprocess.run(
             [
                 "pandoc",
-                str(markdown_path),
+                markdown_path.name,
                 "--from",
                 "markdown-yaml_metadata_block",
                 *extra_args,
                 "-o",
-                str(output_path),
+                output_path.name,
             ],
             check=True,
+            cwd=output_dir,
         )
 
     cover_image = output_dir / "cover.png"
@@ -776,33 +777,15 @@ def generate_book_pdf(
     pdf_path = output_dir / "book.pdf"
     epub_path = output_dir / "book.epub"
     try:
-        subprocess.run(
-            [
-                "pandoc",
-                str(markdown_path),
-                "--from",
-                "markdown-yaml_metadata_block",
-                "--pdf-engine=xelatex",
-                "-o",
-                str(pdf_path),
-            ],
-            check=True,
-            cwd=output_dir,
+        run_pandoc(
+            markdown_path=markdown_path,
+            output_path=pdf_path,
+            extra_args=("--pdf-engine=xelatex",),
         )
-
-        subprocess.run(
-            [
-                "pandoc",
-                str(markdown_path),
-                "--from",
-                "markdown-yaml_metadata_block",
-                "-o",
-                str(epub_path),
-            ],
-            check=True,
-            cwd=output_dir,
+        run_pandoc(
+            markdown_path=markdown_path,
+            output_path=epub_path,
         )
-      
     except FileNotFoundError as exc:
         message = (
             "pandoc is required to generate PDFs and EPUBs but was not found on "
