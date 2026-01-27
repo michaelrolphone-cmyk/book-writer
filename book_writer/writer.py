@@ -6,7 +6,7 @@ import subprocess
 import unicodedata
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Sequence
 from urllib import request
 from urllib.error import HTTPError
 
@@ -530,9 +530,11 @@ def _yaml_quote(value: str) -> str:
 def _build_front_matter(title: str, byline: str) -> str:
     lines = ["---"]
     if title.strip():
-        lines.append(f"title: {_yaml_quote(title.strip())}")
+        clean_title = _sanitize_markdown_for_latex(title.strip())
+        lines.append(f"title: {_yaml_quote(clean_title)}")
     if byline.strip():
-        lines.append(f"author: {_yaml_quote(byline.strip())}")
+        clean_byline = _sanitize_markdown_for_latex(byline.strip())
+        lines.append(f"author: {_yaml_quote(clean_byline)}")
     lines.append("---\n")
     return "\n".join(lines)
 
@@ -720,6 +722,24 @@ def generate_book_pdf(
     chapter_files: List[Path],
     byline: str,
 ) -> Path:
+    def run_pandoc(
+        markdown_path: Path,
+        output_path: Path,
+        extra_args: Sequence[str] = (),
+    ) -> None:
+        subprocess.run(
+            [
+                "pandoc",
+                str(markdown_path),
+                "--from",
+                "markdown-yaml_metadata_block",
+                *extra_args,
+                "-o",
+                str(output_path),
+            ],
+            check=True,
+        )
+
     cover_image = output_dir / "cover.png"
     cover_image_path = (
         cover_image.relative_to(output_dir) if cover_image.exists() else None
@@ -754,24 +774,15 @@ def generate_book_pdf(
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
+    epub_path = output_dir / "book.epub"
     try:
-        subprocess.run(
-            [
-                "pandoc",
-                str(markdown_path),
-                "--from",
-                "markdown-yaml_metadata_block",
-                "--pdf-engine=xelatex",
-                "-o",
-                str(pdf_path),
-            ],
-            check=True,
-        )
+        run_pandoc(markdown_path, pdf_path, ["--pdf-engine=xelatex"])
+        run_pandoc(markdown_path, epub_path)
     except FileNotFoundError as exc:
         message = (
-            "pandoc is required to generate PDFs but was not found on your PATH. "
-            "Install pandoc (https://pandoc.org/installing.html) or ensure it is "
-            "available in your PATH."
+            "pandoc is required to generate PDFs and EPUBs but was not found on "
+            "your PATH. Install pandoc (https://pandoc.org/installing.html) or "
+            "ensure it is available in your PATH."
         )
         raise RuntimeError(message) from exc
     return pdf_path
@@ -1390,7 +1401,7 @@ def expand_book(
         byline=byline,
     )
     if verbose:
-        print("[expand] Generated book.pdf from expanded chapters.")
+        print("[expand] Generated book.pdf and book.epub from expanded chapters.")
     audiobook_text = build_audiobook_text(
         book_metadata.title,
         byline,
@@ -1634,7 +1645,7 @@ def write_book(
         byline=byline,
     )
     if verbose:
-        print("[write] Generated book.pdf from chapters.")
+        print("[write] Generated book.pdf and book.epub from chapters.")
     audiobook_text = build_audiobook_text(
         book_title,
         byline,

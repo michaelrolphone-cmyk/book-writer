@@ -698,6 +698,11 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     if (book.path / "book.pdf").exists()
                     else None
                 ),
+                "book_epub_url": (
+                    _build_media_url(book.path, Path("book.epub"))
+                    if (book.path / "book.epub").exists()
+                    else None
+                ),
                 "progress": progress,
                 "progress_total": progress["percent"],
             }

@@ -478,7 +478,9 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
             has_video = any(path.suffix == ".mp4" for path in video_dir_path.iterdir())
         except OSError:
             has_video = False
-    has_compilation = (book_dir / "book.pdf").exists()
+    has_compilation = (book_dir / "book.pdf").exists() or (
+        book_dir / "book.epub"
+    ).exists()
     has_cover = (book_dir / "cover.png").exists()
     return BookInfo(
         path=book_dir,
@@ -847,7 +849,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     default_module_path = CoverSettings().module_path
     task_choices = [
         questionary.Choice("Expand selected books", value="expand"),
-        questionary.Choice("Generate compiled book.pdf", value="compile"),
+        questionary.Choice("Generate compiled book.pdf and book.epub", value="compile"),
         questionary.Choice("Generate audio narration", value="audio"),
         questionary.Choice("Generate videos", value="video"),
         questionary.Choice("Generate book cover", value="cover"),

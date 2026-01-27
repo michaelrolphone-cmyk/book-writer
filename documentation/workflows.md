@@ -11,7 +11,7 @@ This document captures the primary workflows for turning outlines into full book
 1. **Select outline**: Choose the input Markdown outline file.
 2. **Generate chapters**: Expand headings into chapters/sections via LM Studio.
 3. **Compile book**: Stitch chapters into `book.md`.
-4. **Generate PDF**: Compile with Pandoc and LaTeX.
+4. **Generate PDF/EPUB**: Compile with Pandoc (and LaTeX for PDF).
 5. **Optional media**: Create audio, video, and cover assets.
 
 ## Sequence: chapter generation
@@ -31,7 +31,7 @@ This document captures the primary workflows for turning outlines into full book
 
 1. Load the existing book directory and chapter files.
 2. Expand each paragraph/section using previous and next context.
-3. Regenerate `book.md` and `book.pdf`.
+3. Regenerate `book.md`, `book.pdf`, and `book.epub`.
 4. Regenerate audio/video assets when enabled.
 
 ### Batch generation
