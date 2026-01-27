@@ -209,7 +209,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
 
 **PDF compilation**
-- `book.pdf` and `book.epub` use `cover.png` as the front cover, chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) for chapter title pages, and `back-cover-synopsis.md` for the back cover when those assets are present.
+- `book.pdf` and `book.epub` use `cover.png` as the front cover (also applied as the EPUB cover metadata), chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) for full-bleed chapter title pages with overlaid titles, and `back-cover-synopsis.md` for the back cover when those assets are present.
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.

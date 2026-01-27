@@ -541,6 +541,10 @@ def _build_front_matter(title: str, byline: str, language: str) -> str:
         lines.append(f"author: {_yaml_quote(clean_byline)}")
     if language.strip():
         lines.append(f"lang: {_yaml_quote(language.strip())}")
+    lines.append("header-includes:")
+    lines.append("  - \\usepackage{graphicx}")
+    lines.append("  - \\usepackage{background}")
+    lines.append("  - \\usepackage{xcolor}")
     lines.append("---\n")
     return "\n".join(lines)
 
@@ -570,9 +574,36 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "  margin: 5%;",
                 "  line-height: 1.5;",
                 "}",
-                ".cover-image, .chapter-cover {",
+                ".cover-image {",
                 "  max-width: 100%;",
                 "  height: auto;",
+                "}",
+                ".chapter-title-page {",
+                "  position: relative;",
+                "  height: 100vh;",
+                "  overflow: hidden;",
+                "  margin: 0;",
+                "  padding: 0;",
+                "  display: flex;",
+                "  align-items: center;",
+                "  justify-content: center;",
+                "  text-align: center;",
+                "}",
+                ".chapter-title-page .chapter-cover {",
+                "  position: absolute;",
+                "  top: 0;",
+                "  left: 0;",
+                "  width: 100%;",
+                "  height: 100%;",
+                "  object-fit: cover;",
+                "  z-index: 1;",
+                "}",
+                ".chapter-title-page h1 {",
+                "  position: relative;",
+                "  z-index: 2;",
+                "  color: #fff;",
+                "  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);",
+                "  padding: 0 10%;",
                 "}",
             ]
         )
@@ -610,11 +641,29 @@ def _render_outline(outline_text: str) -> str:
 def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
     image_block = ""
+    latex_background_block = ""
     if chapter.cover_image is not None:
         image_path = chapter.cover_image.as_posix()
-        image_block = f"\n![Chapter cover]({image_path}){{.chapter-cover}}\n"
+        latex_background_contents = (
+            "\\backgroundsetup{scale=1, angle=0, opacity=1,"
+            "contents={\\includegraphics[width=\\paperwidth,height=\\paperheight]"
+            "{\\detokenize{%s}}}}\n" % image_path
+        )
+        latex_background_block = (
+            "```{=latex}\n"
+            f"{latex_background_contents}"
+            "\\BgThispage\n"
+            "```\n"
+        )
+        image_block = (
+            "```{=html}\n"
+            f"<img src=\"{image_path}\" class=\"chapter-cover\" "
+            "alt=\"Chapter cover\" />\n"
+            "```\n"
+        )
     return (
         "::: {.chapter-title-page}\n"
+        f"{latex_background_block}"
         f"# {title_text}\n"
         f"{image_block}"
         ":::\n\n"
@@ -822,6 +871,9 @@ def generate_book_pdf(
     pdf_path = output_dir / "book.pdf"
     epub_path = output_dir / "book.epub"
     epub_css = _ensure_epub_css(output_dir)
+    epub_args = ["--toc", "--css", epub_css.name]
+    if cover_image_path is not None:
+        epub_args.extend(["--epub-cover-image", cover_image_path.as_posix()])
     try:
         run_pandoc(
             markdown_path=markdown_path,
@@ -831,7 +883,7 @@ def generate_book_pdf(
         run_pandoc(
             markdown_path=markdown_path,
             output_path=epub_path,
-            extra_args=("--toc", "--css", epub_css.name),
+            extra_args=tuple(epub_args),
         )
     except FileNotFoundError as exc:
         message = (
