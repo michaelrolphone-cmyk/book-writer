@@ -1490,6 +1490,15 @@ class TestWriter(unittest.TestCase):
             output_dir = Path(tmpdir)
             chapter_path = output_dir / "001-chapter-one.md"
             chapter_path.write_text("# Chapter One\n\nText", encoding="utf-8")
+            (output_dir / "cover.png").write_text("cover", encoding="utf-8")
+            chapter_cover_dir = output_dir / "chapter_covers"
+            chapter_cover_dir.mkdir(parents=True, exist_ok=True)
+            (chapter_cover_dir / "001-chapter-one.png").write_text(
+                "chapter cover", encoding="utf-8"
+            )
+            (output_dir / "back-cover-synopsis.md").write_text(
+                "A suspenseful synopsis.", encoding="utf-8"
+            )
 
             pdf_path = generate_book_pdf(
                 output_dir=output_dir,
@@ -1501,6 +1510,10 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn("### By Marissa Bard", book_md)
+            self.assertIn("![](cover.png)", book_md)
+            self.assertIn("![](chapter_covers/001-chapter-one.png)", book_md)
+            self.assertIn("# Back Cover", book_md)
+            self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
 
         run_mock.assert_called_once_with(

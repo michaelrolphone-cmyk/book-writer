@@ -515,24 +515,120 @@ def expand_chapter_content(
     return "\n\n".join(block.text for block in blocks)
 
 
+@dataclass(frozen=True)
+class ChapterLayout:
+    title: str
+    content: str
+    cover_image: Optional[Path] = None
+
+
+def _yaml_quote(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _build_front_matter(title: str, byline: str) -> str:
+    lines = ["---"]
+    if title.strip():
+        lines.append(f"title: {_yaml_quote(title.strip())}")
+    if byline.strip():
+        lines.append(f"author: {_yaml_quote(byline.strip())}")
+    lines.append("---\n")
+    return "\n".join(lines)
+
+
+def _strip_leading_heading(content: str) -> str:
+    lines = content.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith("#"):
+            remainder = lines[index + 1 :]
+            while remainder and not remainder[0].strip():
+                remainder = remainder[1:]
+            return "\n".join(remainder).strip()
+    return content.strip()
+
+
+def _page_break() -> str:
+    return "\\pagebreak\n\n"
+
+
+def _render_cover_section(cover_image: Path) -> str:
+    cover_path = cover_image.as_posix()
+    return (
+        "::: {.cover-page}\n"
+        f"![]({cover_path})\n"
+        ":::\n\n"
+    )
+
+
+def _render_title_page(title: str, byline: str) -> str:
+    title_text = _sanitize_markdown_for_latex(title)
+    byline_text = _sanitize_markdown_for_latex(byline)
+    return (
+        "::: {.title-page}\n"
+        f"# {title_text}\n\n"
+        f"### By {byline_text}\n"
+        ":::\n\n"
+    )
+
+
+def _render_outline(outline_text: str) -> str:
+    outline_body = _sanitize_markdown_for_latex(outline_text)
+    return f"# Outline\n\n{outline_body}\n\n"
+
+
+def _render_chapter_title_page(chapter: ChapterLayout) -> str:
+    title_text = _sanitize_markdown_for_latex(chapter.title)
+    image_block = ""
+    if chapter.cover_image is not None:
+        image_block = f"\n![]({chapter.cover_image.as_posix()})\n"
+    return (
+        "::: {.chapter-title-page}\n"
+        f"# {title_text}\n"
+        f"{image_block}"
+        ":::\n\n"
+    )
+
+
+def _render_chapter_content(chapter: ChapterLayout) -> str:
+    body = _strip_leading_heading(chapter.content)
+    return _sanitize_markdown_for_latex(body).strip()
+
+
+def _render_back_cover(synopsis: str) -> str:
+    synopsis_text = _sanitize_markdown_for_latex(synopsis.strip())
+    return f"# Back Cover\n\n{synopsis_text}\n\n"
+
+
 def build_book_markdown(
     title: str,
     outline_text: str,
-    chapters: List[str],
+    chapters: List[ChapterLayout],
     byline: str,
+    *,
+    cover_image: Optional[Path] = None,
+    synopsis: str = "",
 ) -> str:
-    chapters_text = "\n\n".join(
-        _sanitize_markdown_for_latex(chapter) for chapter in chapters
-    )
-    return (
-        f"# {_sanitize_markdown_for_latex(title)}\n\n"
-        f"### By {_sanitize_markdown_for_latex(byline)}\n\n"
-        "\\newpage\n\n"
-        "## Outline\n"
-        f"{_sanitize_markdown_for_latex(outline_text)}\n\n"
-        "\\newpage\n\n"
-        f"{chapters_text}\n"
-    )
+    sections: list[str] = [_build_front_matter(title, byline)]
+    if cover_image is not None:
+        sections.append(_render_cover_section(cover_image))
+        sections.append(_page_break())
+    sections.append(_render_title_page(title, byline))
+    sections.append(_page_break())
+    sections.append(_render_outline(outline_text))
+    sections.append(_page_break())
+    for index, chapter in enumerate(chapters):
+        sections.append(_render_chapter_title_page(chapter))
+        sections.append(_page_break())
+        chapter_body = _render_chapter_content(chapter)
+        if chapter_body:
+            sections.append(f"{chapter_body}\n\n")
+        if index < len(chapters) - 1:
+            sections.append(_page_break())
+    if synopsis.strip():
+        sections.append(_page_break())
+        sections.append(_render_back_cover(synopsis))
+    return "".join(sections).rstrip() + "\n"
 
 
 def build_audiobook_text(title: str, byline: str, chapters: List[str]) -> str:
@@ -624,8 +720,37 @@ def generate_book_pdf(
     chapter_files: List[Path],
     byline: str,
 ) -> Path:
-    chapters = [path.read_text(encoding="utf-8") for path in chapter_files]
-    book_markdown = build_book_markdown(title, outline_text, chapters, byline)
+    cover_image = output_dir / "cover.png"
+    cover_image_path = (
+        cover_image.relative_to(output_dir) if cover_image.exists() else None
+    )
+    synopsis = _read_cover_synopsis(output_dir)
+    chapter_cover_dir = output_dir / "chapter_covers"
+    chapters: list[ChapterLayout] = []
+    for path in chapter_files:
+        content = path.read_text(encoding="utf-8")
+        chapter_title = _chapter_title_from_content(content, path.stem)
+        cover_path = chapter_cover_dir / f"{path.stem}.png"
+        cover_image = (
+            cover_path.relative_to(output_dir)
+            if cover_path.exists()
+            else None
+        )
+        chapters.append(
+            ChapterLayout(
+                title=chapter_title,
+                content=content,
+                cover_image=cover_image,
+            )
+        )
+    book_markdown = build_book_markdown(
+        title,
+        outline_text,
+        chapters,
+        byline,
+        cover_image=cover_image_path,
+        synopsis=synopsis,
+    )
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
@@ -846,15 +971,30 @@ def _read_book_metadata(
         title = "Untitled"
         byline = "Marissa Bard"
         outline = ""
-        for line in content.splitlines():
-            if line.startswith("# "):
-                title = line[2:].strip()
-                break
-        for line in content.splitlines():
-            if line.startswith("### By "):
-                byline = line[len("### By ") :].strip()
-                break
-        if "## Outline" in content:
+        lines = content.splitlines()
+        if lines and lines[0].strip() == "---":
+            front_matter: dict[str, str] = {}
+            for line in lines[1:]:
+                if line.strip() == "---":
+                    break
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    front_matter[key.strip()] = value.strip().strip('"')
+            title = front_matter.get("title", title)
+            byline = front_matter.get("author", byline)
+        else:
+            for line in lines:
+                if line.startswith("# "):
+                    title = line[2:].strip()
+                    break
+            for line in lines:
+                if line.startswith("### By "):
+                    byline = line[len("### By ") :].strip()
+                    break
+        if "# Outline" in content:
+            outline_section = content.split("# Outline", 1)[1]
+            outline = outline_section.split("\\pagebreak", 1)[0].strip()
+        elif "## Outline" in content:
             outline_section = content.split("## Outline", 1)[1]
             outline = outline_section.split("\\newpage", 1)[0].strip()
         return ChapterContext(title=title, content=outline), byline

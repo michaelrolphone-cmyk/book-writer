@@ -127,11 +127,12 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
-- `book.md`: Compiled markdown containing the title, outline, and chapters.
-- `book.pdf`: Generated from `book.md` via pandoc.
+- `book.md`: Compiled markdown containing cover/title pages, outline, chapter title pages, and chapters.
+- `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and back-cover synopsis when available.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `meta.json`: LM-generated metadata (including `genres` and `primary_genre` for the GUI catalog).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
+- `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 - `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
@@ -146,7 +147,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - `outlines/`: Directory containing one or more outline markdown files.
 
 **Outputs**
-- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `back-cover-synopsis.md`, and `cover.png` when enabled.
+- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
@@ -180,7 +181,7 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 - Updated `book.md` and regenerated `book.pdf`.
 - Regenerated `audio/*.mp3` files when `--tts` is enabled.
 - Regenerated `video/*.mp4` files when `--video` is enabled.
-- Updated `cover.png` when `--cover` is enabled.
+- Updated `cover.png` and `chapter_covers/` when cover generation is enabled.
 
 ### Generate cover assets for an existing book
 
@@ -197,6 +198,9 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - `--chapter-covers-book`: Path to a completed book directory to generate per-chapter covers.
 - `--chapter-cover-dir`: Directory name for chapter cover output (default `chapter_covers`).
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
+
+**PDF compilation**
+- `book.pdf` uses `cover.png` as the front cover, chapter cover images from `chapter_covers/` for chapter title pages, and `back-cover-synopsis.md` for the back cover when those assets are present.
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
