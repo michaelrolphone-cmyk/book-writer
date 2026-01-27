@@ -1190,6 +1190,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
         self.assertIn("# Outline", markdown)
+        self.assertIn('class="page-break"', markdown)
         self.assertIn("# Chapter One", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
@@ -1665,6 +1666,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn(".chapter-title-page", css_text)
         self.assertIn(".chapter-title-page .chapter-cover", css_text)
+        self.assertIn(".page-break", css_text)
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_handles_missing_pandoc(self, run_mock: Mock) -> None:
