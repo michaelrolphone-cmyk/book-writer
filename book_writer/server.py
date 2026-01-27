@@ -693,6 +693,11 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     if (book.path / audio_dir / "book.mp3").exists()
                     else None
                 ),
+                "book_pdf_url": (
+                    _build_media_url(book.path, Path("book.pdf"))
+                    if (book.path / "book.pdf").exists()
+                    else None
+                ),
                 "progress": progress,
                 "progress_total": progress["percent"],
             }

@@ -87,6 +87,7 @@ class TestGui(unittest.TestCase):
         self.assertIn("id=\"generateBookCover\"", html)
         self.assertIn("id=\"generateChapterCovers\"", html)
         self.assertIn("id=\"bookWorkspaceCover\"", html)
+        self.assertIn("id=\"bookWorkspacePdf\"", html)
         self.assertIn("id=\"chapterGenerateCover\"", html)
         self.assertIn("id=\"chapterCoverDir\"", html)
         self.assertIn("id=\"coverProgress\"", html)

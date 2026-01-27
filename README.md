@@ -35,7 +35,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, and overall `progress` completion totals for book cards)
+- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url` when a compiled `book.pdf` exists)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters?book_dir=books/my-book` (chapter list for a book)
@@ -48,7 +48,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `POST /api/generate-cover`, `POST /api/generate-chapter-covers`
 - `POST /api/generate-outline`, `POST /api/save-outline`
 - `POST /api/git-pull-restart` (pull latest code and restart GUI server)
-- `GET /media` (chapter audio/video/cover assets)
+- `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf` files when requested by `path=book.pdf`)
 ### CLI quick reference
 
 - Launch GUI: `python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080`
