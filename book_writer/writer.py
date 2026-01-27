@@ -568,7 +568,14 @@ def _strip_leading_heading(content: str) -> str:
 
 
 def _page_break() -> str:
-    return "\\pagebreak\n\n"
+    return (
+        "```{=latex}\n"
+        "\\pagebreak\n"
+        "```\n"
+        "```{=html}\n"
+        "<div class=\"page-break\"></div>\n"
+        "```\n\n"
+    )
 
 
 def _ensure_epub_css(output_dir: Path) -> Path:
@@ -615,14 +622,20 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "}",
                 ".chapter-title-page {",
                 "  position: relative;",
+                "  width: 100vw;",
+                "  min-height: 100vh;",
                 "  height: 100vh;",
                 "  overflow: hidden;",
-                "  margin: 0;",
+                "  margin: -5%;",
                 "  padding: 0;",
                 "  display: flex;",
                 "  align-items: center;",
                 "  justify-content: center;",
                 "  text-align: center;",
+                "  page-break-before: always;",
+                "  page-break-after: always;",
+                "  break-before: page;",
+                "  break-after: page;",
                 "}",
                 ".chapter-title-page .chapter-cover {",
                 "  position: absolute;",
@@ -632,6 +645,7 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "  height: 100%;",
                 "  object-fit: cover;",
                 "  z-index: 1;",
+                "  display: block;",
                 "}",
                 ".chapter-title-page h1 {",
                 "  position: relative;",
@@ -639,6 +653,11 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "  color: #fff;",
                 "  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);",
                 "  padding: 0 10%;",
+                "  margin: 0;",
+                "}",
+                ".page-break {",
+                "  page-break-after: always;",
+                "  break-after: page;",
                 "}",
             ]
         )
@@ -1231,12 +1250,27 @@ def _read_book_metadata(
     output_dir: Path, chapter_files: List[Path]
 ) -> tuple[ChapterContext, str]:
     def outline_from_book_md(content: str) -> str:
+        def split_outline_section(outline_section: str) -> str:
+            markers = ("\\pagebreak", "\\newpage", "class=\"page-break\"")
+            earliest_index = None
+            for marker in markers:
+                found = outline_section.find(marker)
+                if found != -1:
+                    earliest_index = (
+                        found
+                        if earliest_index is None
+                        else min(earliest_index, found)
+                    )
+            if earliest_index is not None:
+                return outline_section[:earliest_index].strip()
+            return outline_section.strip()
+
         if "# Outline" in content:
             outline_section = content.split("# Outline", 1)[1]
-            outline = outline_section.split("\\pagebreak", 1)[0].strip()
+            outline = split_outline_section(outline_section)
         elif "## Outline" in content:
             outline_section = content.split("## Outline", 1)[1]
-            outline = outline_section.split("\\newpage", 1)[0].strip()
+            outline = split_outline_section(outline_section)
         else:
             return ""
         if not outline:
