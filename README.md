@@ -137,7 +137,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing cover/title pages, outline, chapter title pages, and chapters.
-- `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and back-cover synopsis when available.
+- `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
 - `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins).
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.
 - `back-cover-synopsis.md`: LM-generated synopsis.

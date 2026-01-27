@@ -622,12 +622,13 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "}",
                 ".chapter-title-page {",
                 "  position: relative;",
-                "  width: 100vw;",
+                "  width: 100%;",
                 "  min-height: 100vh;",
                 "  height: 100vh;",
                 "  overflow: hidden;",
-                "  margin: -5%;",
+                "  margin: 0;",
                 "  padding: 0;",
+                "  box-sizing: border-box;",
                 "  display: flex;",
                 "  align-items: center;",
                 "  justify-content: center;",
@@ -745,9 +746,11 @@ def _build_epub_cover_svg(
     svg = "\n".join(
         [
             '<?xml version="1.0" encoding="UTF-8"?>',
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            'xmlns:xlink="http://www.w3.org/1999/xlink" '
+            f'width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid slice">',
-            f'  <image href="{image_href}" '
+            f'  <image href="{image_href}" xlink:href="{image_href}" '
             f'x="0" y="0" width="{width}" height="{height}" '
             'preserveAspectRatio="xMidYMid slice" />',
             f'  <rect x="0" y="{overlay_y}" width="{width}" height="{overlay_height}" '
@@ -1044,7 +1047,7 @@ def generate_book_pdf(
         run_pandoc(
             markdown_path=markdown_path,
             output_path=pdf_path,
-            extra_args=("--pdf-engine=xelatex",),
+            extra_args=("--toc", "--pdf-engine=xelatex"),
         )
         run_pandoc(
             markdown_path=markdown_path,

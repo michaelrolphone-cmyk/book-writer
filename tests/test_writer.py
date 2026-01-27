@@ -1604,6 +1604,7 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
+                        "--toc",
                         "--pdf-engine=xelatex",
                         "-o",
                         "book.pdf",
@@ -1665,6 +1666,8 @@ class TestWriter(unittest.TestCase):
             self.assertIn("Cover Title", svg_text)
             self.assertIn("Ada Lovelace", svg_text)
             self.assertIn('href="cover.png"', svg_text)
+            self.assertIn('xlink:href="cover.png"', svg_text)
+            self.assertIn('xmlns:xlink="http://www.w3.org/1999/xlink"', svg_text)
             self.assertIn('viewBox="0 0 1600 1000"', svg_text)
 
     @patch("book_writer.writer.subprocess.run")
@@ -1708,6 +1711,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn(".cover-page", css_text)
         self.assertIn(".cover-text", css_text)
         self.assertIn(".chapter-title-page", css_text)
+        self.assertIn("  width: 100%;", css_text)
         self.assertIn(".chapter-title-page .chapter-cover", css_text)
         self.assertIn(".page-break", css_text)
 
