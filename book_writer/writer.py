@@ -722,6 +722,24 @@ def generate_book_pdf(
     chapter_files: List[Path],
     byline: str,
 ) -> Path:
+    def resolve_chapter_cover(
+        chapter_dir: Path, chapter_stem: str
+    ) -> Optional[Path]:
+        supported_suffixes = (".png", ".jpg", ".jpeg", ".webp")
+        for suffix in supported_suffixes:
+            candidate = chapter_dir / f"{chapter_stem}{suffix}"
+            if candidate.exists():
+                return candidate.relative_to(output_dir)
+        if chapter_dir.exists():
+            for candidate in sorted(chapter_dir.iterdir()):
+                if (
+                    candidate.is_file()
+                    and candidate.stem == chapter_stem
+                    and candidate.suffix.lower() in supported_suffixes
+                ):
+                    return candidate.relative_to(output_dir)
+        return None
+
     def run_pandoc(
         markdown_path: Path,
         output_path: Path,
@@ -751,12 +769,7 @@ def generate_book_pdf(
     for path in chapter_files:
         content = path.read_text(encoding="utf-8")
         chapter_title = _chapter_title_from_content(content, path.stem)
-        cover_path = chapter_cover_dir / f"{path.stem}.png"
-        cover_image = (
-            cover_path.relative_to(output_dir)
-            if cover_path.exists()
-            else None
-        )
+        cover_image = resolve_chapter_cover(chapter_cover_dir, path.stem)
         chapters.append(
             ChapterLayout(
                 title=chapter_title,
