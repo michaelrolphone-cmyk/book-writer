@@ -543,8 +543,11 @@ def _build_front_matter(title: str, byline: str, language: str) -> str:
         lines.append(f"lang: {_yaml_quote(language.strip())}")
     lines.append("header-includes:")
     lines.append("  - \\usepackage{graphicx}")
-    lines.append("  - \\usepackage{background}")
     lines.append("  - \\usepackage{xcolor}")
+    lines.append(
+        "  - \\IfFileExists{background.sty}{\\usepackage{background}}"
+        "{\\newcommand{\\backgroundsetup}[1]{}\\newcommand{\\BgThispage}{}}"
+    )
     lines.append("---\n")
     return "\n".join(lines)
 
