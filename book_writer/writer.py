@@ -577,9 +577,37 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 "  margin: 5%;",
                 "  line-height: 1.5;",
                 "}",
+                ".cover-page {",
+                "  position: relative;",
+                "  height: 100vh;",
+                "  margin: 0;",
+                "  padding: 0;",
+                "  display: flex;",
+                "  align-items: center;",
+                "  justify-content: center;",
+                "  text-align: center;",
+                "  overflow: hidden;",
+                "}",
                 ".cover-image {",
-                "  max-width: 100%;",
-                "  height: auto;",
+                "  position: absolute;",
+                "  inset: 0;",
+                "  width: 100%;",
+                "  height: 100%;",
+                "  object-fit: cover;",
+                "  z-index: 1;",
+                "}",
+                ".cover-text {",
+                "  position: relative;",
+                "  z-index: 2;",
+                "  color: #fff;",
+                "  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);",
+                "  padding: 0 10%;",
+                "}",
+                ".cover-text h1 {",
+                "  margin: 0 0 0.5rem;",
+                "}",
+                ".cover-text h2 {",
+                "  margin: 0;",
                 "}",
                 ".chapter-title-page {",
                 "  position: relative;",
@@ -616,11 +644,18 @@ def _ensure_epub_css(output_dir: Path) -> Path:
     return css_path
 
 
-def _render_cover_section(cover_image: Path) -> str:
+def _render_cover_section(title: str, byline: str, cover_image: Path) -> str:
+    title_text = _sanitize_markdown_for_latex(title)
+    byline_text = _sanitize_markdown_for_latex(byline)
+    byline_block = f"## By {byline_text}\n" if byline_text else ""
     cover_path = cover_image.as_posix()
     return (
         "::: {.cover-page}\n"
         f"![Cover image]({cover_path}){{.cover-image}}\n"
+        "::: {.cover-text}\n"
+        f"# {title_text}\n\n"
+        f"{byline_block}"
+        ":::\n"
         ":::\n\n"
     )
 
@@ -695,7 +730,7 @@ def build_book_markdown(
 ) -> str:
     sections: list[str] = [_build_front_matter(title, byline, language)]
     if cover_image is not None:
-        sections.append(_render_cover_section(cover_image))
+        sections.append(_render_cover_section(title, byline, cover_image))
         sections.append(_page_break())
     sections.append(_render_title_page(title, byline))
     sections.append(_page_break())

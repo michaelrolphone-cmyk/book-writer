@@ -1581,6 +1581,9 @@ class TestWriter(unittest.TestCase):
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn("### By Marissa Bard", book_md)
             self.assertIn("![Cover image](cover.png){.cover-image}", book_md)
+            self.assertIn("::: {.cover-text}", book_md)
+            self.assertIn("# Chapter One", book_md)
+            self.assertIn("## By Marissa Bard", book_md)
             self.assertIn(
                 '<img src="chapter_covers/001-chapter-one.png" class="chapter-cover"',
                 book_md,
@@ -1663,6 +1666,8 @@ class TestWriter(unittest.TestCase):
 
             css_text = css_path.read_text(encoding="utf-8")
 
+        self.assertIn(".cover-page", css_text)
+        self.assertIn(".cover-text", css_text)
         self.assertIn(".chapter-title-page", css_text)
         self.assertIn(".chapter-title-page .chapter-cover", css_text)
 
