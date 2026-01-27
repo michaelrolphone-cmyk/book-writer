@@ -732,7 +732,7 @@ def generate_book_pdf(
                 "pandoc",
                 markdown_path.name,
                 "--from",
-                "markdown-yaml_metadata_block",
+                "markdown+yaml_metadata_block+fenced_divs",
                 *extra_args,
                 "-o",
                 output_path.name,
