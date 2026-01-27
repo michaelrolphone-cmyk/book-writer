@@ -1183,6 +1183,7 @@ class TestWriter(unittest.TestCase):
             "Marissa Bard",
         )
 
+        self.assertIn('lang: "en"', markdown)
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
         self.assertIn("# Outline", markdown)
@@ -1212,10 +1213,22 @@ class TestWriter(unittest.TestCase):
             "Marissa 🌙 Bard",
         )
 
+        self.assertIn('lang: "en"', markdown)
         self.assertNotIn("🌙", markdown)
         self.assertIn("Book  Title", markdown)
         self.assertIn("- Chapter  One", markdown)
         self.assertIn("Secret  emoji", markdown)
+
+    def test_build_book_markdown_respects_language(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            "- Chapter One",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+            language="fr",
+        )
+
+        self.assertIn('lang: "fr"', markdown)
 
     def test_build_book_title_prompt_mentions_outline_and_first_chapter(self) -> None:
         prompt = build_book_title_prompt("- Chapter One", "Chapter One")
@@ -1581,6 +1594,9 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
+                        "--toc",
+                        "--css",
+                        "epub.css",
                         "-o",
                         "book.epub",
                     ],

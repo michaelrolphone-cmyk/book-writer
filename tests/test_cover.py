@@ -52,6 +52,61 @@ class TestCover(unittest.TestCase):
         self.assertIn("cinematic scene", prompt.lower())
         self.assertIn("No text", prompt)
 
+    def test_generate_book_cover_requires_minimum_dimensions(self) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            width=2000,
+            height=1600,
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            with self.assertRaises(ValueError):
+                generate_book_cover(
+                    output_dir=output_dir,
+                    title="My Book",
+                    synopsis="Synopsis text",
+                    settings=settings,
+                )
+
+    def test_generate_book_cover_requires_aspect_ratio(self) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            width=2560,
+            height=1500,
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            with self.assertRaises(ValueError):
+                generate_book_cover(
+                    output_dir=output_dir,
+                    title="My Book",
+                    synopsis="Synopsis text",
+                    settings=settings,
+                )
+
+    def test_generate_chapter_cover_requires_dimensions(self) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            width=2560,
+            height=1500,
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            with self.assertRaises(ValueError):
+                generate_chapter_cover(
+                    output_dir=output_dir,
+                    book_title="My Book",
+                    chapter_title="Chapter One",
+                    chapter_content="Scene.",
+                    settings=settings,
+                )
+
     @patch("book_writer.cover.subprocess.run")
     def test_generate_book_cover_runs_command(self, run_mock: Mock) -> None:
         settings = CoverSettings(

@@ -122,8 +122,8 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--cover-steps`: Inference steps for cover generation (default `30`).
 - `--cover-guidance-scale`: Guidance scale (CFG) for cover generation (default `7.5`).
 - `--cover-seed`: Random seed for cover generation.
-- `--cover-width`: Output width for the cover image (default `768`).
-- `--cover-height`: Output height for the cover image (default `1024`).
+- `--cover-width`: Output width for the cover image (default `2560`).
+- `--cover-height`: Output height for the cover image (default `1600`).
 - `--cover-output-name`: Output filename for the cover image (default `cover.png`).
 - `--cover-overwrite`: Overwrite any existing cover image.
 - `--cover-command`: Custom command template for cover generation (uses placeholders like `{prompt}` and `{output_path}`).
@@ -136,9 +136,10 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing cover/title pages, outline, chapter title pages, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and back-cover synopsis when available.
-- `book.epub`: Generated from `book.md` via pandoc for ebook readers.
+- `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins).
+- `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers.
 - `back-cover-synopsis.md`: LM-generated synopsis.
-- `meta.json`: LM-generated metadata (including `genres` and `primary_genre` for the GUI catalog).
+- `meta.json`: LM-generated metadata (including `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
@@ -212,6 +213,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
+- Cover images are generated at 2560×1600 (1.6:1) by default to satisfy minimum 300 PPI EPUB cover standards; override dimensions only if you maintain the same aspect ratio and minimum size.
 
 ### CLI option reference
 

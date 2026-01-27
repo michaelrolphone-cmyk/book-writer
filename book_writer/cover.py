@@ -4,6 +4,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass, field, replace
+from math import isclose
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -23,8 +24,8 @@ class CoverSettings:
     steps: int = 30
     guidance_scale: float = 7.5
     seed: Optional[int] = None
-    width: int = 768
-    height: int = 1024
+    width: int = 2560
+    height: int = 1600
     output_name: str = "cover.png"
     overwrite: bool = False
     command: Optional[list[str]] = None
@@ -52,6 +53,23 @@ DEFAULT_COVER_GUIDANCE = (
     "Cinematic scene illustration. "
     "No text, no typography, no letters, no watermark, no logo."
 )
+REQUIRED_COVER_ASPECT_RATIO = 1.6
+MIN_COVER_WIDTH = 2560
+MIN_COVER_HEIGHT = 1600
+_COVER_ASPECT_TOLERANCE = 0.01
+
+
+def _validate_cover_dimensions(width: int, height: int) -> None:
+    if width < MIN_COVER_WIDTH or height < MIN_COVER_HEIGHT:
+        raise ValueError(
+            "Cover images must be at least 2560x1600 pixels to satisfy "
+            "the 300 PPI minimum for EPUB cover art."
+        )
+    ratio = width / height
+    if not isclose(ratio, REQUIRED_COVER_ASPECT_RATIO, abs_tol=_COVER_ASPECT_TOLERANCE):
+        raise ValueError(
+            "Cover images must use a 1.6:1 aspect ratio (e.g., 2560x1600)."
+        )
 
 
 def build_cover_prompt(title: str, synopsis: str) -> str:
@@ -186,6 +204,7 @@ def generate_book_cover(
 ) -> Optional[Path]:
     if not settings.enabled:
         return None
+    _validate_cover_dimensions(settings.width, settings.height)
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / settings.output_name
@@ -250,6 +269,7 @@ def generate_chapter_cover(
 ) -> Optional[Path]:
     if not settings.enabled:
         return None
+    _validate_cover_dimensions(settings.width, settings.height)
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / settings.output_name

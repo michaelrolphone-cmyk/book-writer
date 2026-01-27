@@ -1376,13 +1376,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cover-width",
         type=int,
-        default=768,
+        default=2560,
         help="Output width for the cover image.",
     )
     parser.add_argument(
         "--cover-height",
         type=int,
-        default=1024,
+        default=1600,
         help="Output height for the cover image.",
     )
     parser.add_argument(
