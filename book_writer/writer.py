@@ -766,6 +766,7 @@ def generate_book_pdf(
                 str(pdf_path),
             ],
             check=True,
+            cwd=output_dir,
         )
     except FileNotFoundError as exc:
         message = (
