@@ -24,6 +24,7 @@ from book_writer.writer import (
     build_prompt,
     build_synopsis_prompt,
     _base_prompt,
+    _ensure_epub_css,
     _expand_prompt_text,
     _sanitize_markdown_for_latex,
     compile_book,
@@ -232,6 +233,8 @@ class TestWriter(unittest.TestCase):
         self.assertIn("## Section A", second_content)
         self.assertIn("Section content", second_content)
         self.assertEqual(run_mock.call_count, 2)
+        epub_call = run_mock.call_args_list[1]
+        self.assertNotIn("--epub-cover-image", epub_call.args[0])
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_clears_existing_chapters(
@@ -1565,10 +1568,10 @@ class TestWriter(unittest.TestCase):
             self.assertIn("### By Marissa Bard", book_md)
             self.assertIn("![Cover image](cover.png){.cover-image}", book_md)
             self.assertIn(
-                "![Chapter cover](chapter_covers/001-chapter-one.png)"
-                "{.chapter-cover}",
+                '<img src="chapter_covers/001-chapter-one.png" class="chapter-cover"',
                 book_md,
             )
+            self.assertIn("\\BgThispage", book_md)
             self.assertIn("# Back Cover", book_md)
             self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
@@ -1597,6 +1600,8 @@ class TestWriter(unittest.TestCase):
                         "--toc",
                         "--css",
                         "epub.css",
+                        "--epub-cover-image",
+                        "cover.png",
                         "-o",
                         "book.epub",
                     ],
@@ -1630,12 +1635,22 @@ class TestWriter(unittest.TestCase):
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             self.assertIn(
-                "![Chapter cover](chapter_covers/001-chapter-one.JPG)"
-                "{.chapter-cover}",
+                '<img src="chapter_covers/001-chapter-one.JPG" class="chapter-cover"',
                 book_md,
             )
 
         self.assertEqual(run_mock.call_count, 2)
+        epub_call = run_mock.call_args_list[1]
+        self.assertNotIn("--epub-cover-image", epub_call.args[0])
+
+    def test_ensure_epub_css_styles_chapter_title_page(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            css_path = _ensure_epub_css(Path(tmpdir))
+
+            css_text = css_path.read_text(encoding="utf-8")
+
+        self.assertIn(".chapter-title-page", css_text)
+        self.assertIn(".chapter-title-page .chapter-cover", css_text)
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_handles_missing_pandoc(self, run_mock: Mock) -> None:
