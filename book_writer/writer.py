@@ -705,7 +705,7 @@ def _build_epub_cover_svg(
         return None
     dimensions = _read_png_dimensions(cover_image) or (2560, 1600)
     width, height = dimensions
-    encoded = base64.b64encode(cover_image.read_bytes()).decode("ascii")
+    image_href = cover_image.name
     title_lines = _wrap_cover_text(title_text, max_width=28)
     byline_lines = _wrap_cover_text(f"By {byline_text}" if byline_text else "", max_width=32)
     title_font = _select_cover_font_size(len(title_lines), 110)
@@ -747,7 +747,7 @@ def _build_epub_cover_svg(
             '<?xml version="1.0" encoding="UTF-8"?>',
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid slice">',
-            f'  <image href="data:image/png;base64,{encoded}" '
+            f'  <image href="{image_href}" '
             f'x="0" y="0" width="{width}" height="{height}" '
             'preserveAspectRatio="xMidYMid slice" />',
             f'  <rect x="0" y="{overlay_y}" width="{width}" height="{overlay_height}" '

@@ -1664,7 +1664,7 @@ class TestWriter(unittest.TestCase):
             svg_text = svg_path.read_text(encoding="utf-8")
             self.assertIn("Cover Title", svg_text)
             self.assertIn("Ada Lovelace", svg_text)
-            self.assertIn("data:image/png;base64", svg_text)
+            self.assertIn('href="cover.png"', svg_text)
             self.assertIn('viewBox="0 0 1600 1000"', svg_text)
 
     @patch("book_writer.writer.subprocess.run")
