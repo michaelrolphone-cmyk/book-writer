@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import struct
 import subprocess
+import textwrap
 import unicodedata
+from html import escape as html_escape
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence
@@ -644,6 +647,101 @@ def _ensure_epub_css(output_dir: Path) -> Path:
     return css_path
 
 
+def _read_png_dimensions(path: Path) -> Optional[tuple[int, int]]:
+    try:
+        with path.open("rb") as handle:
+            header = handle.read(24)
+    except OSError:
+        return None
+    if len(header) < 24 or header[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    width, height = struct.unpack(">II", header[16:24])
+    return width, height
+
+
+def _wrap_cover_text(text: str, max_width: int) -> list[str]:
+    if not text.strip():
+        return []
+    return textwrap.wrap(text.strip(), width=max_width)
+
+
+def _select_cover_font_size(line_count: int, base: int) -> int:
+    if line_count <= 1:
+        return base
+    if line_count == 2:
+        return int(base * 0.82)
+    return int(base * 0.68)
+
+
+def _build_epub_cover_svg(
+    output_dir: Path,
+    cover_image: Path,
+    title: str,
+    byline: str,
+) -> Optional[Path]:
+    title_text = title.strip()
+    byline_text = byline.strip()
+    if not title_text and not byline_text:
+        return None
+    dimensions = _read_png_dimensions(cover_image) or (2560, 1600)
+    width, height = dimensions
+    image_href = cover_image.name
+    title_lines = _wrap_cover_text(title_text, max_width=28)
+    byline_lines = _wrap_cover_text(f"By {byline_text}" if byline_text else "", max_width=32)
+    title_font = _select_cover_font_size(len(title_lines), 110)
+    byline_font = _select_cover_font_size(len(byline_lines), 64)
+    line_gap = int(title_font * 0.2)
+    title_block_height = len(title_lines) * (title_font + line_gap)
+    byline_gap = int(title_font * 0.4) if byline_lines else 0
+    byline_block_height = len(byline_lines) * (byline_font + line_gap)
+    total_height = title_block_height + byline_gap + byline_block_height
+    start_y = (height - total_height) / 2 + title_font
+
+    def build_text_block(
+        lines: list[str], font_size: int, start: float
+    ) -> tuple[str, float]:
+        y = start
+        chunks: list[str] = []
+        stroke_width = max(2, int(font_size * 0.08))
+        for line in lines:
+            escaped = html_escape(line)
+            chunks.append(
+                "  "
+                f'<text x="50%" y="{y:.1f}" text-anchor="middle" '
+                f'font-family="serif" font-size="{font_size}" '
+                'fill="#ffffff" stroke="#000000" '
+                f'stroke-width="{stroke_width}" paint-order="stroke">'
+                f"{escaped}</text>"
+            )
+            y += font_size + line_gap
+        return "\n".join(chunks), y
+
+    title_block, next_y = build_text_block(title_lines, title_font, start_y)
+    byline_start = next_y + byline_gap if byline_lines else next_y
+    byline_block, _ = build_text_block(byline_lines, byline_font, byline_start)
+
+    overlay_height = int(height * 0.5)
+    overlay_y = int((height - overlay_height) / 2)
+    svg = "\n".join(
+        [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid slice">',
+            f'  <image href="{image_href}" '
+            f'x="0" y="0" width="{width}" height="{height}" '
+            'preserveAspectRatio="xMidYMid slice" />',
+            f'  <rect x="0" y="{overlay_y}" width="{width}" height="{overlay_height}" '
+            'fill="#000000" fill-opacity="0.35" />',
+            title_block,
+            byline_block,
+            "</svg>",
+        ]
+    ).strip()
+    svg_path = output_dir / "cover-epub.svg"
+    svg_path.write_text(svg + "\n", encoding="utf-8")
+    return svg_path
+
+
 def _render_cover_section(title: str, byline: str, cover_image: Path) -> str:
     title_text = _sanitize_markdown_for_latex(title)
     byline_text = _sanitize_markdown_for_latex(byline)
@@ -876,9 +974,11 @@ def generate_book_pdf(
             cwd=output_dir,
         )
 
-    cover_image = output_dir / "cover.png"
+    cover_image_file = output_dir / "cover.png"
     cover_image_path = (
-        cover_image.relative_to(output_dir) if cover_image.exists() else None
+        cover_image_file.relative_to(output_dir)
+        if cover_image_file.exists()
+        else None
     )
     synopsis = _read_cover_synopsis(output_dir)
     language = read_book_language(output_dir)
@@ -911,7 +1011,15 @@ def generate_book_pdf(
     epub_css = _ensure_epub_css(output_dir)
     epub_args = ["--toc", "--css", epub_css.name]
     if cover_image_path is not None:
-        epub_args.extend(["--epub-cover-image", cover_image_path.as_posix()])
+        epub_cover = _build_epub_cover_svg(
+            output_dir, cover_image_file, title, byline
+        )
+        epub_cover_path = (
+            epub_cover.relative_to(output_dir)
+            if epub_cover is not None
+            else cover_image_path
+        )
+        epub_args.extend(["--epub-cover-image", epub_cover_path.as_posix()])
     try:
         run_pandoc(
             markdown_path=markdown_path,

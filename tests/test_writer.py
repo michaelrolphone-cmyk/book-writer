@@ -14,6 +14,7 @@ from book_writer.writer import (
     ChapterContext,
     ChapterLayout,
     LMStudioClient,
+    _build_epub_cover_svg,
     build_audiobook_text,
     build_book_markdown,
     build_book_title_prompt,
@@ -1592,6 +1593,7 @@ class TestWriter(unittest.TestCase):
             self.assertIn("# Back Cover", book_md)
             self.assertIn("A suspenseful synopsis.", book_md)
             self.assertEqual(pdf_path.name, "book.pdf")
+            self.assertTrue((output_dir / "cover-epub.svg").exists())
 
         run_mock.assert_has_calls(
             [
@@ -1618,7 +1620,7 @@ class TestWriter(unittest.TestCase):
                         "--css",
                         "epub.css",
                         "--epub-cover-image",
-                        "cover.png",
+                        "cover-epub.svg",
                         "-o",
                         "book.epub",
                     ],
@@ -1627,6 +1629,42 @@ class TestWriter(unittest.TestCase):
                 ),
             ]
         )
+
+    def test_build_epub_cover_svg_includes_title_and_byline(self) -> None:
+        def write_png(path: Path, width: int, height: int) -> None:
+            import struct
+            import zlib
+
+            signature = b"\x89PNG\r\n\x1a\n"
+            ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+            ihdr = (
+                struct.pack(">I", len(ihdr_data))
+                + b"IHDR"
+                + ihdr_data
+                + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF)
+            )
+            iend = (
+                struct.pack(">I", 0)
+                + b"IEND"
+                + struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF)
+            )
+            path.write_bytes(signature + ihdr + iend)
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            cover_path = output_dir / "cover.png"
+            write_png(cover_path, 1600, 1000)
+
+            svg_path = _build_epub_cover_svg(
+                output_dir, cover_path, "Cover Title", "Ada Lovelace"
+            )
+
+            self.assertIsNotNone(svg_path)
+            svg_text = svg_path.read_text(encoding="utf-8")
+            self.assertIn("Cover Title", svg_text)
+            self.assertIn("Ada Lovelace", svg_text)
+            self.assertIn('href="cover.png"', svg_text)
+            self.assertIn('viewBox="0 0 1600 1000"', svg_text)
 
     @patch("book_writer.writer.subprocess.run")
     def test_generate_book_pdf_uses_non_png_chapter_cover(
