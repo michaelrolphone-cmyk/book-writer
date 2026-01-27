@@ -35,7 +35,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 - `GET /` (GUI HTML)
-- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url`/`book_epub_url` when compiled assets exist)
+- `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url`/`book_epub_url` for the GUI Open PDF/EPUB actions)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)
 - `GET /api/authors`, `GET /api/tones` (author and tone options)
 - `GET /api/chapters?book_dir=books/my-book` (chapter list for a book)

@@ -1629,6 +1629,7 @@ def get_gui_html() -> str:
                   <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
                   <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
                   <button class="pill-button is-hidden" id="bookWorkspacePdf">Open PDF</button>
+                  <button class="pill-button is-hidden" id="bookWorkspaceEpub">Open EPUB</button>
                   <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
                   <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
                   <button class="pill-button" id="bookWorkspaceCover">Generate cover</button>
@@ -2217,6 +2218,7 @@ def get_gui_html() -> str:
       const bookWorkspaceExpand = document.getElementById('bookWorkspaceExpand');
       const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
       const bookWorkspacePdf = document.getElementById('bookWorkspacePdf');
+      const bookWorkspaceEpub = document.getElementById('bookWorkspaceEpub');
       const bookWorkspaceAudio = document.getElementById('bookWorkspaceAudio');
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
       const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
@@ -3433,6 +3435,7 @@ def get_gui_html() -> str:
           setHiddenImageSource(bookCoverImage, entry.cover_url);
           setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
           toggleBookPdfButton(entry);
+          toggleBookEpubButton(entry);
           const bookContent = await loadBookContent(entry.path);
           if (bookContent) {
             setSummaryText(detailSummary, bookContent.summary || entry.summary || '');
@@ -3568,6 +3571,20 @@ def get_gui_html() -> str:
         bookWorkspacePdf.dataset.pdfUrl = '';
         bookWorkspacePdf.classList.add('is-hidden');
         bookWorkspacePdf.disabled = true;
+      };
+
+      const toggleBookEpubButton = (entry) => {
+        if (!bookWorkspaceEpub) return;
+        const epubUrl = entry?.book_epub_url || '';
+        if (epubUrl && entry?.has_compilation) {
+          bookWorkspaceEpub.dataset.epubUrl = epubUrl;
+          bookWorkspaceEpub.classList.remove('is-hidden');
+          bookWorkspaceEpub.disabled = false;
+          return;
+        }
+        bookWorkspaceEpub.dataset.epubUrl = '';
+        bookWorkspaceEpub.classList.add('is-hidden');
+        bookWorkspaceEpub.disabled = true;
       };
 
       const parseOptionalNumber = (value) => {
@@ -4047,6 +4064,17 @@ def get_gui_html() -> str:
             return;
           }
           window.open(pdfUrl, '_blank', 'noopener');
+        });
+      }
+
+      if (bookWorkspaceEpub) {
+        bookWorkspaceEpub.addEventListener('click', () => {
+          const epubUrl = bookWorkspaceEpub.dataset.epubUrl || '';
+          if (!epubUrl) {
+            log('Compile a book before opening the EPUB.');
+            return;
+          }
+          window.open(epubUrl, '_blank', 'noopener');
         });
       }
 
