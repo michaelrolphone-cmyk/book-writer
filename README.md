@@ -148,8 +148,8 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--cover-steps`: Inference steps for cover generation (default `30`).
 - `--cover-guidance-scale`: Guidance scale (CFG) for cover generation (default `7.5`).
 - `--cover-seed`: Random seed for cover generation.
-- `--cover-width`: Output width for the cover image (default `2560`).
-- `--cover-height`: Output height for the cover image (default `1600`).
+- `--cover-width`: Output width for the cover image (must be `2560`).
+- `--cover-height`: Output height for the cover image (must be `1600`).
 - `--cover-output-name`: Output filename for the cover image (default `cover.png`).
 - `--cover-overwrite`: Overwrite any existing cover image.
 - `--cover-command`: Custom command template for cover generation (uses placeholders like `{prompt}` and `{output_path}`).
@@ -243,7 +243,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
-- Cover images are generated at 2560×1600 (1.6:1) by default to satisfy minimum 300 PPI EPUB cover standards; override dimensions only if you maintain the same aspect ratio and minimum size.
+- Book and chapter cover images are generated at 2560×1600 (1.6:1) to satisfy minimum 300 PPI EPUB cover standards.
 
 ### CLI option reference
 
@@ -320,7 +320,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
   - `enabled`, `background_video`, `video_dirname`
   - `paragraph_images` object: `enabled`, `image_dirname`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `overwrite`, `command`
 - `cover_settings` object:
-  - `enabled`, `prompt`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `output_name`, `overwrite`, `command`
+  - `enabled`, `prompt`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `output_name`, `overwrite`, `command` (use `width=2560` and `height=1600` for 1.6:1 book/chapter covers)
 
 ### API endpoints
 

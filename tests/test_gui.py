@@ -156,6 +156,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("const loadBookProgress = async (bookDir) => {", html)
         self.assertIn("const renderBookProgress = (progress) => {", html)
         self.assertIn("const renderChapterProgress = (chapter) => {", html)
+        self.assertIn('id="coverWidth" placeholder="2560"', html)
+        self.assertIn('id="coverHeight" placeholder="1600"', html)
         self.assertIn(".book-card.cover-filled::before {", html)
         self.assertIn(".book-card.book-card-book {", html)
         self.assertIn(".book-card.book-card-book .card-description {", html)

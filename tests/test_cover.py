@@ -88,6 +88,24 @@ class TestCover(unittest.TestCase):
                     settings=settings,
                 )
 
+    def test_generate_book_cover_requires_exact_dimensions(self) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            width=3200,
+            height=2000,
+        )
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            with self.assertRaises(ValueError):
+                generate_book_cover(
+                    output_dir=output_dir,
+                    title="My Book",
+                    synopsis="Synopsis text",
+                    settings=settings,
+                )
+
     def test_generate_chapter_cover_requires_dimensions(self) -> None:
         settings = CoverSettings(
             enabled=True,

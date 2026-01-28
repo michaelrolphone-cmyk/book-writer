@@ -1430,11 +1430,11 @@ def get_gui_html() -> str:
             <div class="row">
               <div>
                 <label>Image width</label>
-                <input id="coverWidth" placeholder="768" />
+                <input id="coverWidth" placeholder="2560" />
               </div>
               <div>
                 <label>Image height</label>
-                <input id="coverHeight" placeholder="1024" />
+                <input id="coverHeight" placeholder="1600" />
               </div>
             </div>
             <label>Cover command template</label>
