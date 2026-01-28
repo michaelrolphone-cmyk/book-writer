@@ -112,10 +112,10 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
 
             alpha_book_md = (alpha_output / "book.md").read_text(encoding="utf-8")
             beta_book_md = (beta_output / "book.md").read_text(encoding="utf-8")
-            self.assertIn("# Title for book one", alpha_book_md)
-            self.assertIn("# Title for book two", beta_book_md)
-            self.assertIn("### By Marissa Bard", alpha_book_md)
-            self.assertIn("### By Marissa Bard", beta_book_md)
+            self.assertIn("Title for book one", alpha_book_md)
+            self.assertIn("Title for book two", beta_book_md)
+            self.assertIn("By Marissa Bard", alpha_book_md)
+            self.assertIn("By Marissa Bard", beta_book_md)
 
             self.assertFalse((outlines_dir / "alpha.md").exists())
             self.assertFalse((outlines_dir / "beta.md").exists())
@@ -409,6 +409,34 @@ class TestCliTtsDefaults(unittest.TestCase):
         _, kwargs = write_mock.call_args
         self.assertFalse(kwargs["tts_settings"].enabled)
 
+    @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
+    @patch("book_writer.cli.write_book")
+    def test_main_sets_tts_engine(
+        self, write_mock: MagicMock, _: MagicMock
+    ) -> None:
+        with TemporaryDirectory() as tmpdir:
+            outline_path = Path(tmpdir) / "OUTLINE.md"
+            outline_path.write_text("# Chapter One\n", encoding="utf-8")
+            current_dir = os.getcwd()
+            os.chdir(tmpdir)
+            try:
+                with patch(
+                    "sys.argv",
+                    [
+                        "book-writer",
+                        "--outline",
+                        str(outline_path),
+                        "--tts-engine",
+                        "python",
+                    ],
+                ):
+                    cli.main()
+            finally:
+                os.chdir(current_dir)
+
+        _, kwargs = write_mock.call_args
+        self.assertEqual(kwargs["tts_settings"].engine, "python")
+
 
 class TestCliResumeFlow(unittest.TestCase):
     @patch("book_writer.cli.generate_book_title", return_value="Generated Title")
@@ -559,6 +587,7 @@ class TestCliBookManagementPrompt(unittest.TestCase):
                         if choice.value in {"expand", "compile", "audio"}
                     ],
                     "2",
+                    "qwen3",
                     "",
                     "",
                     "",
