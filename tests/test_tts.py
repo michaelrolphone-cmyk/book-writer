@@ -15,6 +15,7 @@ from book_writer.tts import (
     _synthesize_with_qwen3_tts,
     _split_text_for_recovery,
     _write_mp3_from_waveform,
+    merge_chapter_audio,
     sanitize_markdown_for_tts,
     split_text_for_tts,
     split_text_for_tts_tokens,
@@ -481,6 +482,45 @@ class TestTTS(unittest.TestCase):
 
         release_mock.assert_called_once()
         run_ffmpeg_mock.assert_called_once()
+
+    @patch("book_writer.tts.subprocess.run")
+    def test_merge_chapter_audio_builds_ffmpeg_concat(self, run_mock: Mock) -> None:
+        run_mock.return_value = Mock(returncode=0, stderr="")
+
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            chapter_one = tmp_path / "001-chapter-one.mp3"
+            chapter_two = tmp_path / "002-chapter-two.mp3"
+            chapter_one.write_bytes(b"one")
+            chapter_two.write_bytes(b"two")
+            output_path = tmp_path / "book.mp3"
+
+            merged = merge_chapter_audio(
+                [chapter_one, chapter_two], output_path, gap_seconds=1.6
+            )
+
+        self.assertEqual(merged, output_path)
+        run_mock.assert_called_once()
+        command = run_mock.call_args.args[0]
+        self.assertEqual(command[0], "ffmpeg")
+        self.assertIn(str(chapter_one), command)
+        self.assertIn(str(chapter_two), command)
+        self.assertIn("anullsrc=channel_layout=mono:sample_rate=44100", command)
+        filter_index = command.index("-filter_complex")
+        self.assertIn("concat=n=3", command[filter_index + 1])
+
+    def test_merge_chapter_audio_requires_files(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            existing = tmp_path / "001-chapter-one.mp3"
+            existing.write_bytes(b"one")
+            missing = tmp_path / "002-chapter-two.mp3"
+            output_path = tmp_path / "book.mp3"
+
+            with self.assertRaises(TTSSynthesisError) as context:
+                merge_chapter_audio([existing, missing], output_path)
+
+        self.assertIn("Missing chapter audio files", str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()

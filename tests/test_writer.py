@@ -362,6 +362,7 @@ class TestWriter(unittest.TestCase):
         )
         self.assertEqual(run_mock.call_count, 2)
 
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
@@ -372,6 +373,7 @@ class TestWriter(unittest.TestCase):
         synthesize_chapter_mock: Mock,
         synthesize_video_mock: Mock,
         synthesize_text_mock: Mock,
+        merge_mock: Mock,
     ) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
         client = MagicMock()
@@ -389,11 +391,6 @@ class TestWriter(unittest.TestCase):
             files = write_book(
                 items, output_dir, client, tts_settings=tts_settings
             )
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [files[0].read_text(encoding="utf-8")],
-            )
 
         synthesize_chapter_mock.assert_called_once_with(
             chapter_path=files[0],
@@ -401,41 +398,33 @@ class TestWriter(unittest.TestCase):
             settings=tts_settings,
             verbose=False,
         )
-        synthesize_text_mock.assert_has_calls(
-            [
-                call(
-                    text=audiobook_text,
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "book.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                    raise_on_error=True,
-                ),
-                call(
-                    text="Synopsis text",
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                ),
-            ]
+        merge_mock.assert_called_once_with(
+            [output_dir / tts_settings.audio_dirname / f"{files[0].stem}.mp3"],
+            output_dir / tts_settings.audio_dirname / "book.mp3",
+            gap_seconds=1.6,
+        )
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis text",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / "back-cover-synopsis.mp3",
+            settings=tts_settings,
+            verbose=False,
         )
 
     @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     def test_generate_book_audio_creates_missing_audio(
         self,
         synthesize_chapter_mock: Mock,
+        merge_mock: Mock,
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
-        synthesize_text_mock.side_effect = [
-            Path("book.mp3"),
-            Path("back-cover-synopsis.mp3"),
-        ]
+        merge_mock.return_value = Path("book.mp3")
+        synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
             output_dir.mkdir()
@@ -443,11 +432,6 @@ class TestWriter(unittest.TestCase):
             chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
             synopsis_path = output_dir / "back-cover-synopsis.md"
             synopsis_path.write_text("Synopsis", encoding="utf-8")
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [chapter_path.read_text(encoding="utf-8")],
-            )
 
             generate_book_audio(output_dir, tts_settings)
 
@@ -457,26 +441,18 @@ class TestWriter(unittest.TestCase):
             settings=tts_settings,
             verbose=False,
         )
-        synthesize_text_mock.assert_has_calls(
-            [
-                call(
-                    text=audiobook_text,
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "book.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                    raise_on_error=True,
-                ),
-                call(
-                    text="Synopsis",
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                ),
-            ]
+        merge_mock.assert_called_once_with(
+            [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
+            output_dir / tts_settings.audio_dirname / "book.mp3",
+            gap_seconds=1.6,
+        )
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / "back-cover-synopsis.mp3",
+            settings=tts_settings,
+            verbose=False,
         )
 
     @patch("book_writer.writer.generate_chapter_cover")
@@ -562,18 +538,18 @@ class TestWriter(unittest.TestCase):
         client.generate.assert_called_once()
 
     @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     def test_generate_book_audio_overwrites_existing_audio(
         self,
         synthesize_chapter_mock: Mock,
+        merge_mock: Mock,
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True, overwrite_audio=True)
         synthesize_chapter_mock.return_value = Path("chapter.mp3")
-        synthesize_text_mock.side_effect = [
-            Path("book.mp3"),
-            Path("back-cover-synopsis.mp3"),
-        ]
+        merge_mock.return_value = Path("book.mp3")
+        synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
             output_dir.mkdir()
@@ -590,11 +566,6 @@ class TestWriter(unittest.TestCase):
             (audio_dir / "back-cover-synopsis.mp3").write_text(
                 "existing", encoding="utf-8"
             )
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [chapter_path.read_text(encoding="utf-8")],
-            )
 
             generate_book_audio(output_dir, tts_settings)
 
@@ -604,33 +575,30 @@ class TestWriter(unittest.TestCase):
             settings=tts_settings,
             verbose=False,
         )
-        synthesize_text_mock.assert_has_calls(
-            [
-                call(
-                    text=audiobook_text,
-                    output_path=audio_dir / "book.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                    raise_on_error=True,
-                ),
-                call(
-                    text="Synopsis",
-                    output_path=audio_dir / "back-cover-synopsis.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                ),
-            ]
+        merge_mock.assert_called_once_with(
+            [audio_dir / "001-chapter-one.mp3"],
+            audio_dir / "book.mp3",
+            gap_seconds=1.6,
+        )
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis",
+            output_path=audio_dir / "back-cover-synopsis.mp3",
+            settings=tts_settings,
+            verbose=False,
         )
 
     @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     def test_generate_book_audio_book_only_skips_chapters_and_synopsis(
         self,
         synthesize_chapter_mock: Mock,
+        merge_mock: Mock,
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True, book_only=True)
-        synthesize_text_mock.return_value = Path("book.mp3")
+        merge_mock.return_value = Path("book.mp3")
+        synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -639,33 +607,27 @@ class TestWriter(unittest.TestCase):
             chapter_path.write_text("# Chapter One\n\nContent\n", encoding="utf-8")
             synopsis_path = output_dir / "back-cover-synopsis.md"
             synopsis_path.write_text("Synopsis", encoding="utf-8")
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [chapter_path.read_text(encoding="utf-8")],
-            )
 
             generate_book_audio(output_dir, tts_settings)
 
         synthesize_chapter_mock.assert_not_called()
-        synthesize_text_mock.assert_called_once_with(
-            text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-            settings=tts_settings,
-            verbose=False,
-            raise_on_error=True,
+        merge_mock.assert_called_once_with(
+            [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
+            output_dir / tts_settings.audio_dirname / "book.mp3",
+            gap_seconds=1.6,
         )
+        synthesize_text_mock.assert_not_called()
 
-    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     def test_generate_book_audio_raises_when_book_audio_fails(
         self,
         synthesize_chapter_mock: Mock,
-        synthesize_text_mock: Mock,
+        merge_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = Path("audio/001-chapter-one.mp3")
-        synthesize_text_mock.side_effect = TTSSynthesisError("no audio")
+        merge_mock.side_effect = TTSSynthesisError("no audio")
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -807,6 +769,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertEqual(run_mock.call_count, 2)
 
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
@@ -817,6 +780,7 @@ class TestWriter(unittest.TestCase):
         synthesize_chapter_mock: Mock,
         synthesize_video_mock: Mock,
         synthesize_text_mock: Mock,
+        merge_mock: Mock,
     ) -> None:
         items = [
             OutlineItem(title="Chapter One", level=1),
@@ -838,11 +802,6 @@ class TestWriter(unittest.TestCase):
             files = write_book(
                 items, output_dir, client, tts_settings=tts_settings
             )
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [path.read_text(encoding="utf-8") for path in files],
-            )
 
         synthesize_chapter_mock.assert_has_calls(
             [
@@ -861,31 +820,26 @@ class TestWriter(unittest.TestCase):
             ]
         )
         self.assertEqual(synthesize_chapter_mock.call_count, 2)
-        synthesize_text_mock.assert_has_calls(
+        merge_mock.assert_called_once_with(
             [
-                call(
-                    text=audiobook_text,
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "book.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                    raise_on_error=True,
-                ),
-                call(
-                    text="Synopsis text",
-                    output_path=output_dir
-                    / tts_settings.audio_dirname
-                    / "back-cover-synopsis.mp3",
-                    settings=tts_settings,
-                    verbose=False,
-                ),
-            ]
+                output_dir / tts_settings.audio_dirname / f"{files[0].stem}.mp3",
+                output_dir / tts_settings.audio_dirname / f"{files[1].stem}.mp3",
+            ],
+            output_dir / tts_settings.audio_dirname / "book.mp3",
+            gap_seconds=1.6,
         )
-        self.assertEqual(synthesize_text_mock.call_count, 2)
+        synthesize_text_mock.assert_called_once_with(
+            text="Synopsis text",
+            output_path=output_dir
+            / tts_settings.audio_dirname
+            / "back-cover-synopsis.mp3",
+            settings=tts_settings,
+            verbose=False,
+        )
         synthesize_video_mock.assert_not_called()
         self.assertEqual(run_mock.call_count, 2)
 
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_text_audio")
     @patch("book_writer.writer.synthesize_chapter_video")
     @patch("book_writer.writer.synthesize_chapter_audio")
@@ -896,6 +850,7 @@ class TestWriter(unittest.TestCase):
         synthesize_chapter_mock: Mock,
         synthesize_video_mock: Mock,
         synthesize_text_mock: Mock,
+        merge_mock: Mock,
     ) -> None:
         items = [OutlineItem(title="Chapter One", level=1)]
         client = MagicMock()
@@ -933,6 +888,11 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(video_kwargs["audio_path"].name, "001-chapter-one.mp3")
         self.assertEqual(
             video_kwargs["output_dir"], written_files[0].parent / "video"
+        )
+        merge_mock.assert_called_once_with(
+            [output_dir / "audio" / "001-chapter-one.mp3"],
+            output_dir / "audio" / "book.mp3",
+            gap_seconds=1.6,
         )
         self.assertEqual(run_mock.call_count, 2)
 
@@ -1698,14 +1658,14 @@ class TestWriter(unittest.TestCase):
         )
         self.assertEqual(run_mock.call_count, 2)
 
-    @patch("book_writer.writer.synthesize_text_audio")
+    @patch("book_writer.writer.merge_chapter_audio")
     @patch("book_writer.writer.synthesize_chapter_audio")
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_generates_chapter_audio(
         self,
         run_mock: Mock,
         synthesize_chapter_mock: Mock,
-        synthesize_text_mock: Mock,
+        merge_mock: Mock,
     ) -> None:
         client = MagicMock()
         client.generate.return_value = "Expanded paragraph."
@@ -1719,11 +1679,6 @@ class TestWriter(unittest.TestCase):
             )
 
             expand_book(output_dir, client, tts_settings=tts_settings)
-            audiobook_text = build_audiobook_text(
-                "Chapter One",
-                "Marissa Bard",
-                [chapter_path.read_text(encoding="utf-8")],
-            )
 
         synthesize_chapter_mock.assert_called_once_with(
             chapter_path=chapter_path,
@@ -1731,12 +1686,10 @@ class TestWriter(unittest.TestCase):
             settings=tts_settings,
             verbose=False,
         )
-        synthesize_text_mock.assert_called_once_with(
-            text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-            settings=tts_settings,
-            verbose=False,
-            raise_on_error=True,
+        merge_mock.assert_called_once_with(
+            [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
+            output_dir / tts_settings.audio_dirname / "book.mp3",
+            gap_seconds=1.6,
         )
         self.assertEqual(run_mock.call_count, 2)
 
