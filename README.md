@@ -138,6 +138,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
 - `book.md`: Compiled markdown containing cover/title pages (when no cover image is present), a copyright page, table of contents, chapter title pages, and chapters. Front matter uses raw HTML/LaTeX blocks for cover/title/copyright sections so EPUB readers don't display stray fenced div delimiters, while still emitting the correct HTML/CSS and LaTeX layout for pandoc. The front matter uses `title-meta`/`author-meta` for metadata while keeping `title`/`author` empty so pandoc does not inject an extra title page during PDF/EPUB compilation.
+- Chapter YAML metadata blocks at the start of chapter files are stripped during compilation so pandoc YAML parsing is limited to the book-level front matter (avoiding invalid alias errors like `*Style`).
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
 - `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently.
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.

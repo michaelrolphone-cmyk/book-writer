@@ -900,8 +900,29 @@ def _render_chapter_title_page(chapter: ChapterLayout, chapter_id: str) -> str:
 
 
 def _render_chapter_content(chapter: ChapterLayout) -> str:
-    body = _strip_leading_heading(chapter.content)
+    body = _strip_yaml_metadata_block(chapter.content)
+    body = _strip_leading_heading(body)
     return _sanitize_markdown_for_latex(body).strip()
+
+
+def _strip_yaml_metadata_block(content: str) -> str:
+    lines = content.splitlines()
+    start = 0
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    if start >= len(lines) or lines[start].strip() != "---":
+        return content
+    end = None
+    for index in range(start + 1, len(lines)):
+        if lines[index].strip() in {"---", "..."}:
+            end = index
+            break
+    if end is None:
+        return content
+    remainder = lines[end + 1 :]
+    while remainder and not remainder[0].strip():
+        remainder = remainder[1:]
+    return "\n".join(remainder)
 
 
 def _render_back_cover(synopsis: str) -> str:
