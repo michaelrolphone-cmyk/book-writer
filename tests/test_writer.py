@@ -1248,6 +1248,23 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Book  Title", markdown)
         self.assertIn("Secret  emoji", markdown)
 
+    def test_build_book_markdown_strips_yaml_metadata_from_chapters(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            [
+                ChapterLayout(
+                    title="Chapter One",
+                    content=(
+                        "---\nlayout: *Style\n---\n# Chapter One\n\nStyled text."
+                    ),
+                )
+            ],
+            "Marissa Bard",
+        )
+
+        self.assertIn("Styled text.", markdown)
+        self.assertNotIn("layout: *Style", markdown)
+
     def test_build_book_markdown_includes_copyright_page(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
