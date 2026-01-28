@@ -300,6 +300,64 @@ class TestTTS(unittest.TestCase):
     @patch("book_writer.tts._run_ffmpeg")
     @patch("book_writer.tts._write_wav_streaming")
     @patch("book_writer.tts._load_qwen3_model")
+    def test_synthesize_with_qwen3_tts_handles_multiple_chunks(
+        self,
+        load_mock: Mock,
+        write_wav_mock: Mock,
+        run_ffmpeg_mock: Mock,
+    ) -> None:
+        fake_model = Mock()
+        fake_model.generate_custom_voice.return_value = ([[0.1, 0.2]], 24000)
+        load_mock.return_value = fake_model
+        settings = TTSSettings(
+            enabled=True,
+            model_path="models",
+            voice="Ryan",
+            language="English",
+            instruct=None,
+            device_map="cpu",
+            dtype="float32",
+            attn_implementation="sdpa",
+            max_text_tokens=2,
+            max_new_tokens=1024,
+            do_sample=False,
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "chapter.mp3"
+            with patch("book_writer.tts._resolve_model_path", return_value=Path("models")):
+                def consume_chunks(chunk_iter, wav_path):
+                    chunks = list(chunk_iter)
+                    self.assertEqual(len(chunks), 2)
+                    return 24000
+
+                write_wav_mock.side_effect = consume_chunks
+                fake_torch = Mock()
+                fake_torch.inference_mode.return_value = nullcontext()
+                fake_torch.cuda.is_available.return_value = False
+                fake_tokenizer = Mock()
+                fake_tokenizer.encode.side_effect = (
+                    lambda value, add_special_tokens=False: value.split()
+                )
+                with (
+                    patch.dict("sys.modules", {"torch": fake_torch}),
+                    patch(
+                        "book_writer.tts._load_qwen_tokenizer",
+                        return_value=fake_tokenizer,
+                    ),
+                ):
+                    _synthesize_with_qwen3_tts(
+                        text="Hello world again.",
+                        output_path=output_path,
+                        settings=settings,
+                    )
+
+        self.assertEqual(fake_model.generate_custom_voice.call_count, 2)
+        run_ffmpeg_mock.assert_called_once()
+
+    @patch("book_writer.tts._run_ffmpeg")
+    @patch("book_writer.tts._write_wav_streaming")
+    @patch("book_writer.tts._load_qwen3_model")
     def test_synthesize_with_qwen3_tts_releases_model_when_unloaded(
         self,
         load_mock: Mock,

@@ -376,13 +376,6 @@ def _synthesize_with_qwen3_tts(
             str(model_path),
             settings.max_text_tokens,
         )
-        for i in range(len(chunks) - 1):
-            a, b = chunks[i].rstrip(), chunks[i + 1].lstrip()
-            if a and b and a[-1].isalnum() and b[0].isalnum():
-                raise TTSSynthesisError(
-                    f"Chunk boundary splits a word between chunk {i} and {i+1}: "
-                    f"...{a[-20:]} | {b[:20]}..."
-                )
         if not chunks:
             return
 
