@@ -1190,6 +1190,30 @@ class TestWriter(unittest.TestCase):
         self.assertIn('class="page-break"', markdown)
         self.assertIn("# Chapter One {#chapter-1}", markdown)
 
+    def test_build_book_markdown_normalizes_title_markdown(self) -> None:
+        markdown = build_book_markdown(
+            "# Title: **Shards of Ink**",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+        )
+
+        self.assertIn('title: "Shards of Ink"', markdown)
+        self.assertIn("# Shards of Ink", markdown)
+        self.assertNotIn("Title:", markdown)
+        self.assertNotIn("# #", markdown)
+
+    def test_build_book_markdown_nests_cover_divs(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+            cover_image=Path("cover.png"),
+        )
+
+        self.assertIn(":::: {.cover-page}", markdown)
+        self.assertIn("::: {.cover-text}", markdown)
+        self.assertNotIn("::: {.cover-page}", markdown.splitlines())
+
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
         audiobook_text = build_audiobook_text(
             "Book Title",
