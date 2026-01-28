@@ -8,8 +8,10 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
 - [`pandoc`](https://pandoc.org/) for compiling PDFs/EPUBs (required for `book.pdf` and `book.epub` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
 - Optional LaTeX `background.sty` (from the `background` package) to render chapter cover backgrounds; if unavailable, PDF compilation skips background artwork.
-- [`ffmpeg`](https://ffmpeg.org/) for converting Qwen3 TTS audio to MP3 and for generating chapter MP4 videos when `--video` is enabled.
+- [`ffmpeg`](https://ffmpeg.org/) for converting TTS audio to MP3 and for generating chapter MP4 videos when `--video` is enabled.
 - [`qwen_tts`](https://github.com/QwenLM/Qwen3-TTS) with compatible model weights, plus `torch` and `soundfile`, for local Qwen3 narration.
+- [`pyttsx3`](https://pypi.org/project/pyttsx3/) for the Python TTS engine option.
+- [CosyVoice3](https://github.com/FunAudioLLM/CosyVoice) with compatible model weights for local CosyVoice3 narration.
 - [`questionary`](https://github.com/tmbo/questionary) for the interactive `--prompt` experience (install with `pip install questionary`).
 - [`python_coreml_stable_diffusion`](https://github.com/apple/ml-stable-diffusion) for generating book covers when `--cover` is enabled.
 
@@ -111,15 +113,16 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--model`: LM Studio model name (default `local-model`).
 - `--timeout`: Optional request timeout in seconds.
 - `--no-tts`: Disable MP3 narration (TTS is enabled by default).
-- `--tts-voice`: Qwen3 speaker name for narration (default `Ryan`).
-- `--tts-language`: Qwen3 language label (default `English`).
-- `--tts-instruct`: Optional Qwen3 instruction prompt (for example: `Very happy.`).
-- `--tts-model-path`: Path to the Qwen3 TTS model directory (default `../audio/models/Qwen3-TTS-12Hz-1.7B-CustomVoice`).
-- `--tts-device-map`: Qwen3 device map (e.g., `auto`, `mps`, `cuda`).
+- `--tts-engine`: TTS engine for MP3 narration (`qwen3`, `python`, `cosyvoice3`).
+- `--tts-voice`: Speaker name or voice ID (default `Ryan`; used by Qwen3/CosyVoice3/Python TTS).
+- `--tts-language`: Language label for Qwen3/CosyVoice3 narration (default `English`).
+- `--tts-instruct`: Optional instruction prompt for Qwen3 narration (for example: `Very happy.`).
+- `--tts-model-path`: Path to the Qwen3/CosyVoice3 TTS model directory (default `../audio/models/Qwen3-TTS-12Hz-1.7B-CustomVoice`).
+- `--tts-device-map`: Device map for Qwen3 (e.g., `auto`, `mps`, `cuda`).
 - `--tts-dtype`: Torch dtype for Qwen3 (default `float16`; e.g., `float32`, `float16`).
 - `--tts-attn-implementation`: Attention implementation for Qwen3 (default `sdpa`).
-- `--tts-rate`: Rate adjustment for legacy TTS (unused by Qwen3).
-- `--tts-pitch`: Pitch adjustment for legacy TTS (unused by Qwen3).
+- `--tts-rate`: Rate adjustment for Python TTS (unused by Qwen3).
+- `--tts-pitch`: Pitch adjustment for Python TTS (unused by Qwen3).
 - `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
 - `--tts-max-text-tokens`: Maximum text tokens per Qwen3 TTS chunk (default `384`).
 - `--tts-max-new-tokens`: Maximum generated tokens per Qwen3 TTS chunk (default `2048`).
@@ -259,7 +262,7 @@ These options are available across the CLI flows:
 - Expansion: `--expand-book`, `--expand-passes`, `--expand-only`
 - LM Studio: `--base-url`, `--model`, `--timeout`, `--author`
 - Tone and byline: `--tone`, `--byline`
-- TTS: `--no-tts`, `--tts-voice`, `--tts-language`, `--tts-instruct`, `--tts-model-path`, `--tts-device-map`, `--tts-dtype`, `--tts-attn-implementation`, `--tts-rate`, `--tts-pitch`, `--tts-audio-dir`, `--tts-max-text-tokens`, `--tts-max-new-tokens`, `--tts-do-sample`, `--tts-overwrite`, `--tts-book-only`, `--tts-unload-model`
+- TTS: `--no-tts`, `--tts-engine`, `--tts-voice`, `--tts-language`, `--tts-instruct`, `--tts-model-path`, `--tts-device-map`, `--tts-dtype`, `--tts-attn-implementation`, `--tts-rate`, `--tts-pitch`, `--tts-audio-dir`, `--tts-max-text-tokens`, `--tts-max-new-tokens`, `--tts-do-sample`, `--tts-overwrite`, `--tts-book-only`, `--tts-unload-model`
 - Video: `--video`, `--background-video`, `--video-dir`, `--video-paragraph-images`, `--video-image-dir`, `--video-image-negative-prompt`, `--video-image-model-path`, `--video-image-module-path`, `--video-image-steps`, `--video-image-guidance-scale`, `--video-image-seed`, `--video-image-width`, `--video-image-height`, `--video-image-overwrite`, `--video-image-command`
 - Cover: `--cover`, `--cover-prompt`, `--cover-negative-prompt`, `--cover-model-path`, `--cover-module-path`, `--cover-steps`, `--cover-guidance-scale`, `--cover-seed`, `--cover-width`, `--cover-height`, `--cover-output-name`, `--cover-overwrite`, `--cover-command`, `--cover-book`, `--chapter-covers-book`, `--chapter-cover-dir`
 - Interactive and GUI: `--prompt`, `--gui`, `--gui-host`, `--gui-port`
@@ -282,6 +285,7 @@ Headings starting with “Chapter” or “Section” at any heading level are a
 - Author personas live in `authors/` as markdown files (for example, `authors/curious-storyteller.md`). Provide the filename stem with `--author` to select a persona.
 - `pandoc` and `pdflatex` must be available on your PATH for PDF generation. EPUB output only needs pandoc. On macOS, you can install both with Homebrew: `brew install pandoc mactex`.
 - Install the Qwen3 dependencies (`qwen_tts`, `torch`, and `soundfile`) and download the Qwen3 model weights to enable local MP3 narration.
+- Install `pyttsx3` to use the Python TTS engine, or install CosyVoice3 and its model weights to use the `cosyvoice3` engine.
 - The expansion flow reuses existing chapter files; no new files are created beyond updated output artifacts.
 
 ## GUI API
@@ -321,7 +325,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `base_url`, `model`, `timeout`, `author`: LM Studio configuration (same defaults as the CLI).
 - `tone`, `byline`, `resume`, `verbose`: Generation controls.
 - `tts_settings` object:
-  - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `max_text_tokens`, `max_new_tokens`, `do_sample`, `overwrite_audio`, `book_only`, `keep_model_loaded`
+  - `enabled`, `engine`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `max_text_tokens`, `max_new_tokens`, `do_sample`, `overwrite_audio`, `book_only`, `keep_model_loaded`
   - Full-book MP3 output is produced by concatenating chapter MP3s with a 1.6-second pause between chapters.
 - `video_settings` object:
   - `enabled`, `background_video`, `video_dirname`

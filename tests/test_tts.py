@@ -13,6 +13,7 @@ from book_writer.tts import (
     _load_qwen_tokenizer,
     _sanitize_waveform,
     _synthesize_with_qwen3_tts,
+    normalize_tts_engine,
     _split_text_for_recovery,
     _write_mp3_from_waveform,
     merge_chapter_audio,
@@ -179,6 +180,13 @@ class TestTTS(unittest.TestCase):
             fix_mistral_regex=True,
         )
 
+    def test_normalize_tts_engine_accepts_aliases(self) -> None:
+        self.assertEqual(normalize_tts_engine("qwen"), "qwen3")
+        self.assertEqual(normalize_tts_engine("python"), "python")
+        self.assertEqual(normalize_tts_engine("cosyvoice"), "cosyvoice3")
+        with self.assertRaises(TTSSynthesisError):
+            normalize_tts_engine("unknown-engine")
+
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_writes_mp3(
         self, synthesize_mock: Mock
@@ -208,6 +216,54 @@ class TestTTS(unittest.TestCase):
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_text_audio_writes_mp3(self, synthesize_mock: Mock) -> None:
         settings = TTSSettings(enabled=True, audio_dirname="audio")
+        text = "# Synopsis\n\nThis is a **synopsis**."
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "audio" / "back-cover-synopsis.mp3"
+
+            audio_path = synthesize_text_audio(
+                text=text,
+                output_path=output_path,
+                settings=settings,
+            )
+
+            self.assertEqual(audio_path, output_path)
+            self.assertTrue(output_path.parent.exists())
+
+        synthesize_mock.assert_called_once()
+        called_text = synthesize_mock.call_args[0][0]
+        self.assertIn("Synopsis", called_text)
+        self.assertIn("This is a synopsis.", called_text)
+
+    @patch("book_writer.tts._synthesize_with_python_tts")
+    def test_synthesize_text_audio_uses_python_engine(
+        self, synthesize_mock: Mock
+    ) -> None:
+        settings = TTSSettings(enabled=True, engine="python", audio_dirname="audio")
+        text = "# Synopsis\n\nThis is a **synopsis**."
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "audio" / "back-cover-synopsis.mp3"
+
+            audio_path = synthesize_text_audio(
+                text=text,
+                output_path=output_path,
+                settings=settings,
+            )
+
+            self.assertEqual(audio_path, output_path)
+            self.assertTrue(output_path.parent.exists())
+
+        synthesize_mock.assert_called_once()
+        called_text = synthesize_mock.call_args[0][0]
+        self.assertIn("Synopsis", called_text)
+        self.assertIn("This is a synopsis.", called_text)
+
+    @patch("book_writer.tts._synthesize_with_cosyvoice3")
+    def test_synthesize_text_audio_uses_cosyvoice3_engine(
+        self, synthesize_mock: Mock
+    ) -> None:
+        settings = TTSSettings(enabled=True, engine="cosyvoice3", audio_dirname="audio")
         text = "# Synopsis\n\nThis is a **synopsis**."
 
         with TemporaryDirectory() as tmpdir:

@@ -21,11 +21,16 @@ DEFAULT_QWEN3_MODEL_PATH = (
     / "models"
     / "Qwen3-TTS-12Hz-1.7B-CustomVoice"
 )
+TTS_ENGINE_QWEN3 = "qwen3"
+TTS_ENGINE_PYTHON = "python"
+TTS_ENGINE_COSYVOICE3 = "cosyvoice3"
+SUPPORTED_TTS_ENGINES = (TTS_ENGINE_QWEN3, TTS_ENGINE_PYTHON, TTS_ENGINE_COSYVOICE3)
 
 
 @dataclass(frozen=True)
 class TTSSettings:
     enabled: bool = False
+    engine: str = TTS_ENGINE_QWEN3
     voice: str = "Ryan"
     language: str = "English"
     instruct: str | None = None
@@ -70,6 +75,22 @@ SILENCE_RMS_THRESHOLD = 1e-4
 RECOVERY_MIN_CHARS = 200
 RECOVERY_MAX_CHARS = 800
 MAX_RECOVERY_DEPTH = 1
+
+
+def normalize_tts_engine(engine: str | None) -> str:
+    if not engine:
+        return TTS_ENGINE_QWEN3
+    normalized = engine.strip().lower()
+    if normalized in {"qwen", TTS_ENGINE_QWEN3}:
+        return TTS_ENGINE_QWEN3
+    if normalized in {"pyttsx3", "pyttsx", TTS_ENGINE_PYTHON}:
+        return TTS_ENGINE_PYTHON
+    if normalized in {"cosyvoice", TTS_ENGINE_COSYVOICE3}:
+        return TTS_ENGINE_COSYVOICE3
+    raise TTSSynthesisError(
+        f"Unsupported TTS engine '{engine}'. "
+        f"Choose one of: {', '.join(SUPPORTED_TTS_ENGINES)}."
+    )
 
 
 def _wrap_on_words(text: str, width: int) -> list[str]:
@@ -306,6 +327,88 @@ def _run_ffmpeg(wav_path: Path, output_path: Path) -> None:
             f"stderr: {result.stderr.strip()}"
         )
 
+
+def _adjust_rate_setting(rate_setting: str | None, base_rate: int) -> int | None:
+    if not rate_setting:
+        return None
+    value = rate_setting.strip()
+    if not value:
+        return None
+    try:
+        if value.endswith("%"):
+            delta = float(value.rstrip("%"))
+            return int(base_rate * (1 + delta / 100.0))
+        return int(float(value))
+    except ValueError:
+        return None
+
+
+def _parse_pitch_setting(pitch_setting: str | None) -> int | None:
+    if not pitch_setting:
+        return None
+    value = pitch_setting.strip().lower()
+    if not value:
+        return None
+    if value.endswith("hz"):
+        value = value[:-2]
+    try:
+        return int(float(value))
+    except ValueError:
+        return None
+
+
+def _synthesize_with_python_tts(
+    text: str,
+    output_path: Path,
+    settings: TTSSettings,
+) -> None:
+    try:
+        import pyttsx3
+    except ImportError as error:
+        raise TTSSynthesisError(
+            "Python TTS requires the pyttsx3 package. Install it with "
+            "`pip install pyttsx3` and try again."
+        ) from error
+
+    engine = pyttsx3.init()
+    try:
+        if settings.voice:
+            try:
+                engine.setProperty("voice", settings.voice)
+            except Exception:
+                pass
+        try:
+            base_rate = engine.getProperty("rate")
+        except Exception:
+            base_rate = None
+        if isinstance(base_rate, (int, float)):
+            adjusted_rate = _adjust_rate_setting(settings.rate, int(base_rate))
+            if adjusted_rate is not None:
+                try:
+                    engine.setProperty("rate", adjusted_rate)
+                except Exception:
+                    pass
+        pitch_value = _parse_pitch_setting(settings.pitch)
+        if pitch_value is not None:
+            try:
+                engine.setProperty("pitch", pitch_value)
+            except Exception:
+                pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wav_path = Path(tmpdir) / "python-tts.wav"
+            engine.save_to_file(text, str(wav_path))
+            engine.runAndWait()
+            if not wav_path.exists():
+                raise TTSSynthesisError("Python TTS did not produce audio.")
+            _run_ffmpeg(wav_path, output_path)
+    finally:
+        try:
+            engine.stop()
+        except Exception:
+            pass
+
+
 def _write_wav_streaming(
     chunk_iter,
     wav_path: Path,
@@ -359,6 +462,78 @@ def _write_mp3_from_waveform(
         wav_path = Path(tmpdir) / "qwen3-tts.wav"
         sf.write(str(wav_path), waveform, sample_rate)
         _run_ffmpeg(wav_path, output_path)
+
+
+def _resolve_cosyvoice_model_path(settings: TTSSettings) -> Path:
+    model_path = Path(settings.model_path or "").expanduser()
+    if not model_path.exists():
+        raise TTSSynthesisError(
+            "CosyVoice3 model path not found. Update tts_settings.model_path "
+            f"or --tts-model-path (missing: {model_path})."
+        )
+    return model_path
+
+
+@functools.lru_cache(maxsize=2)
+def _load_cosyvoice3_model(model_path: str):
+    try:
+        from cosyvoice.cli.cosyvoice import CosyVoice
+    except ImportError as error:
+        raise TTSSynthesisError(
+            "CosyVoice3 requires the cosyvoice package. Install it and try again."
+        ) from error
+    return CosyVoice(model_path)
+
+
+def _write_cosyvoice_result(result, output_path: Path) -> None:
+    if isinstance(result, (str, Path)):
+        wav_path = Path(result)
+        if not wav_path.exists():
+            raise TTSSynthesisError("CosyVoice3 did not return a valid WAV path.")
+        _run_ffmpeg(wav_path, output_path)
+        return
+    if isinstance(result, (tuple, list)) and len(result) == 2:
+        waveform, sample_rate = result
+        _write_mp3_from_waveform(waveform, sample_rate, output_path)
+        return
+    if isinstance(result, dict):
+        wav_path = result.get("wav_path") or result.get("path")
+        if wav_path:
+            wav_path = Path(wav_path)
+            if not wav_path.exists():
+                raise TTSSynthesisError("CosyVoice3 returned a missing WAV path.")
+            _run_ffmpeg(wav_path, output_path)
+            return
+        waveform = result.get("waveform") or result.get("audio")
+        sample_rate = result.get("sample_rate") or result.get("sr")
+        if waveform is not None and sample_rate is not None:
+            _write_mp3_from_waveform(waveform, int(sample_rate), output_path)
+            return
+    raise TTSSynthesisError("CosyVoice3 returned an unsupported audio payload.")
+
+
+def _synthesize_with_cosyvoice3(
+    text: str,
+    output_path: Path,
+    settings: TTSSettings,
+) -> None:
+    model_path = _resolve_cosyvoice_model_path(settings)
+    cosyvoice = _load_cosyvoice3_model(str(model_path))
+    if hasattr(cosyvoice, "inference"):
+        try:
+            result = cosyvoice.inference(text)
+        except TypeError:
+            result = cosyvoice.inference(text=text)
+    elif hasattr(cosyvoice, "tts"):
+        try:
+            result = cosyvoice.tts(text)
+        except TypeError:
+            result = cosyvoice.tts(text=text)
+    else:
+        raise TTSSynthesisError(
+            "CosyVoice3 model does not expose an inference/tts method."
+        )
+    _write_cosyvoice_result(result, output_path)
 
 
 def _sanitize_waveform(waveform: Sequence[float]):
@@ -587,6 +762,27 @@ def _generate_chunk_audio(
         return
     yield waveform, sr
 
+
+def _synthesize_with_engine(
+    text: str,
+    output_path: Path,
+    settings: TTSSettings,
+) -> None:
+    engine = normalize_tts_engine(settings.engine)
+    if engine == TTS_ENGINE_QWEN3:
+        _synthesize_with_qwen3_tts(text, output_path, settings)
+        return
+    if engine == TTS_ENGINE_PYTHON:
+        _synthesize_with_python_tts(text, output_path, settings)
+        return
+    if engine == TTS_ENGINE_COSYVOICE3:
+        _synthesize_with_cosyvoice3(text, output_path, settings)
+        return
+    raise TTSSynthesisError(
+        f"Unsupported TTS engine '{settings.engine}'. "
+        f"Choose one of: {', '.join(SUPPORTED_TTS_ENGINES)}."
+    )
+
 def synthesize_chapter_audio(
     chapter_path: Path,
     output_dir: Path,
@@ -603,7 +799,7 @@ def synthesize_chapter_audio(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{chapter_path.stem}.mp3"
     try:
-        _synthesize_with_qwen3_tts(text, output_path, settings)
+        _synthesize_with_engine(text, output_path, settings)
     except TTSSynthesisError as error:
         if output_path.exists():
             output_path.unlink()
@@ -631,7 +827,7 @@ def synthesize_text_audio(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _synthesize_with_qwen3_tts(cleaned, output_path, settings)
+        _synthesize_with_engine(cleaned, output_path, settings)
     except TTSSynthesisError as error:
         if output_path.exists():
             output_path.unlink()

@@ -381,6 +381,7 @@ def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
     do_sample = bool(do_sample_raw)
     return TTSSettings(
         enabled=bool(tts_payload.get("enabled", payload.get("tts", True))),
+        engine=tts_payload.get("engine", defaults.engine),
         voice=tts_payload.get("voice", defaults.voice),
         language=tts_payload.get("language", defaults.language),
         instruct=tts_payload.get("instruct", defaults.instruct),

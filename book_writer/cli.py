@@ -190,6 +190,7 @@ def _prompt_for_task_settings(
     audio_enabled = "audio" in selected
     tts_settings = TTSSettings(
         enabled=audio_enabled,
+        engine=args.tts_engine,
         voice=args.tts_voice,
         language=args.tts_language,
         instruct=args.tts_instruct,
@@ -208,6 +209,11 @@ def _prompt_for_task_settings(
         keep_model_loaded=not args.tts_unload_model,
     )
     if audio_enabled:
+        engine = questionary.select(
+            "TTS engine:",
+            choices=["qwen3", "python", "cosyvoice3"],
+            default=args.tts_engine,
+        ).ask()
         voice = questionary.text(
             "TTS speaker:",
             default=args.tts_voice,
@@ -220,10 +226,12 @@ def _prompt_for_task_settings(
             "TTS instruct (optional):",
             default="Read in a clear, professional, and confident adult narrator's voice. Speak at a natural, conversational pace - not too fast, not too slow. Maintain a mature, authoritative tone suitable for adult literature. Use subtle emphasis and natural pauses only where appropriate for clarity, avoiding any condescending or overly dramatic delivery.",
         ).ask()
-        model_path = questionary.text(
-            "Qwen3 model path:",
-            default=args.tts_model_path,
-        ).ask()
+        model_path = None
+        if engine != "python":
+            model_path = questionary.text(
+                "TTS model path:",
+                default=args.tts_model_path,
+            ).ask()
         audio_dir = questionary.text(
             "Audio output directory:",
             default=args.tts_audio_dir,
@@ -233,11 +241,12 @@ def _prompt_for_task_settings(
             args.tts_overwrite,
         )
         unload_model = _prompt_yes_no(
-            "Unload the Qwen3 model between chapters to reduce memory usage?",
+            "Unload the model between chapters to reduce memory usage (Qwen3 only)?",
             args.tts_unload_model,
         )
         tts_settings = TTSSettings(
             enabled=True,
+            engine=engine or args.tts_engine,
             voice=voice or args.tts_voice,
             language=language or args.tts_language,
             instruct=instruct or None,
@@ -551,6 +560,11 @@ def _prompt_for_book_selection(book_info: list[BookInfo]) -> list[BookInfo]:
 
 def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
     questionary = _questionary()
+    engine = questionary.select(
+        "TTS engine:",
+        choices=["qwen3", "python", "cosyvoice3"],
+        default=args.tts_engine,
+    ).ask()
     voice = questionary.text(
         "TTS speaker:",
         default=args.tts_voice,
@@ -563,10 +577,12 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         "TTS instruct (optional):",
         default=args.tts_instruct or "Read in a clear, professional, and confident adult narrator's voice. Speak at a natural, conversational pace - not too fast, not too slow. Maintain a mature, authoritative tone suitable for adult literature. Use subtle emphasis and natural pauses only where appropriate for clarity, avoiding any condescending or overly dramatic delivery.",
     ).ask()
-    model_path = questionary.text(
-        "Qwen3 model path:",
-        default=args.tts_model_path,
-    ).ask()
+    model_path = None
+    if engine != "python":
+        model_path = questionary.text(
+            "TTS model path:",
+            default=args.tts_model_path,
+        ).ask()
     audio_dir = questionary.text(
         "Audio output directory:",
         default=args.tts_audio_dir,
@@ -585,6 +601,7 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
     )
     return TTSSettings(
         enabled=True,
+        engine=engine or args.tts_engine,
         voice=voice or args.tts_voice,
         language=language or args.tts_language,
         instruct=instruct or None,
@@ -890,6 +907,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     generate_audio = "audio" in selected_tasks
     tts_settings = TTSSettings(
         enabled=False,
+        engine=args.tts_engine,
         voice=args.tts_voice,
         language=args.tts_language,
         instruct=args.tts_instruct,
@@ -1184,6 +1202,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         dest="tts",
         help="Disable MP3 narration for chapters and the synopsis.",
+    )
+    parser.add_argument(
+        "--tts-engine",
+        default="qwen3",
+        choices=["qwen3", "python", "cosyvoice3"],
+        help="TTS engine to use for MP3 narration (qwen3, python, cosyvoice3).",
     )
     parser.add_argument(
         "--tts-voice",
@@ -1537,6 +1561,7 @@ def main() -> int:
     )
     tts_settings = TTSSettings(
         enabled=args.tts,
+        engine=args.tts_engine,
         voice=args.tts_voice,
         language=args.tts_language,
         instruct=args.tts_instruct,

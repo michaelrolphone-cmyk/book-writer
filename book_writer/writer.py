@@ -1962,6 +1962,7 @@ def expand_book(
             if auto_tts and not tts_settings.enabled and audio_path.exists():
                 effective_tts_settings = TTSSettings(
                     enabled=True,
+                    engine=tts_settings.engine,
                     voice=tts_settings.voice,
                     rate=tts_settings.rate,
                     pitch=tts_settings.pitch,
