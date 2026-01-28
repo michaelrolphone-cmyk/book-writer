@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 from book_writer.tts import (
     TTSSynthesisError,
     TTSSettings,
+    _load_qwen_tokenizer,
     _synthesize_with_qwen3_tts,
     _write_mp3_from_waveform,
     sanitize_markdown_for_tts,
@@ -102,6 +103,30 @@ class TestTTS(unittest.TestCase):
             chunks = split_text_for_tts_tokens(text, model_path="models", max_text_tokens=3)
 
         self.assertEqual(chunks, ["One two three", "four five six"])
+
+    def test_load_qwen_tokenizer_enables_mistral_regex_fix(self) -> None:
+        fake_module = ModuleType("transformers")
+        from_pretrained_mock = Mock(return_value=Mock())
+
+        class FakeAutoTokenizer:
+            @staticmethod
+            def from_pretrained(model_path, trust_remote_code=True, fix_mistral_regex=False):
+                return from_pretrained_mock(
+                    model_path,
+                    trust_remote_code=trust_remote_code,
+                    fix_mistral_regex=fix_mistral_regex,
+                )
+
+        fake_module.AutoTokenizer = FakeAutoTokenizer
+
+        with patch.dict(sys.modules, {"transformers": fake_module}):
+            _load_qwen_tokenizer("model-path")
+
+        from_pretrained_mock.assert_called_once_with(
+            "model-path",
+            trust_remote_code=True,
+            fix_mistral_regex=True,
+        )
 
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_writes_mp3(

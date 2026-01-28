@@ -262,9 +262,13 @@ def _load_qwen3_model(
 
 @functools.lru_cache(maxsize=2)
 def _load_qwen_tokenizer(model_path: str):
+    import inspect
     from transformers import AutoTokenizer
 
-    return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    kwargs = {"trust_remote_code": True}
+    if "fix_mistral_regex" in inspect.signature(AutoTokenizer.from_pretrained).parameters:
+        kwargs["fix_mistral_regex"] = True
+    return AutoTokenizer.from_pretrained(model_path, **kwargs)
 
 
 def release_qwen3_model_cache() -> None:
