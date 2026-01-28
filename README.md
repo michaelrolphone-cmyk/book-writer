@@ -29,6 +29,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `python -m book_writer --outline OUTLINE.md --output-dir output` (generate a single book)
 - `python -m book_writer --outlines-dir outlines --books-dir books --completed-outlines-dir completed_outlines` (batch generate)
 - `python -m book_writer --expand-book books/my-book --expand-passes 2 --expand-only 1,3-4` (expand a finished book)
+- `python -m book_writer --compile-book books/my-book` (compile PDF/EPUB from an existing book)
 - `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
 - `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
 - `python -m book_writer --prompt` (interactive outline and book workflow, including **Modify existing books → Generate compiled book.pdf and book.epub**)
@@ -55,6 +56,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 **GUI API example commands**
 - Compile a book: `curl -X POST http://127.0.0.1:8080/api/compile-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
   - The compiler builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
+- Download compiled PDF/EPUB assets: `curl -L "http://127.0.0.1:8080/media?path=book.pdf" -o book.pdf` (swap `book.epub` for the EPUB file)
 - Expand a book: `curl -X POST http://127.0.0.1:8080/api/expand-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","expand_passes":1}'`
 - Generate a book cover: `curl -X POST http://127.0.0.1:8080/api/generate-cover -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
 - Generate chapter covers: `curl -X POST http://127.0.0.1:8080/api/generate-chapter-covers -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","chapter_cover_dir":"chapter_covers"}'`
