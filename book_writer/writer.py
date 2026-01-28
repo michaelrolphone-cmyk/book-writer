@@ -1075,6 +1075,16 @@ def _escape_latex_commands_outside_math(text: str) -> str:
 
 
 def _escape_latex_line_outside_math(line: str) -> str:
+    special_chars = {
+        "&": "\\&",
+        "%": "\\%",
+        "#": "\\#",
+        "_": "\\_",
+        "{": "\\{",
+        "}": "\\}",
+        "~": "\\textasciitilde{}",
+        "^": "\\textasciicircum{}",
+    }
     result: list[str] = []
     index = 0
     while index < len(line):
@@ -1114,6 +1124,10 @@ def _escape_latex_line_outside_math(line: str) -> str:
                 result.append(line[index : closing + 2])
                 index = closing + 2
                 continue
+        if line[index] in special_chars:
+            result.append(special_chars[line[index]])
+            index += 1
+            continue
         if line[index] == "\\":
             result.append("\\textbackslash{}")
             index += 1
