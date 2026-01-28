@@ -99,6 +99,9 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-rate`: Rate adjustment for legacy TTS (unused by Qwen3).
 - `--tts-pitch`: Pitch adjustment for legacy TTS (unused by Qwen3).
 - `--tts-audio-dir`: Directory name for storing chapter audio files (default `audio`).
+- `--tts-max-text-tokens`: Maximum text tokens per Qwen3 TTS chunk (default `384`).
+- `--tts-max-new-tokens`: Maximum generated tokens per Qwen3 TTS chunk (default `2048`).
+- `--tts-do-sample`: Enable sampling for Qwen3 TTS generation (default deterministic).
 - `--tts-overwrite`: Overwrite existing audio files.
 - `--tts-book-only`: Only generate a full-book MP3 (`book.mp3`).
 - `--tts-unload-model`: Unload the Qwen3 model between chapters to reduce memory usage.
@@ -231,7 +234,7 @@ These options are available across the CLI flows:
 - Expansion: `--expand-book`, `--expand-passes`, `--expand-only`
 - LM Studio: `--base-url`, `--model`, `--timeout`, `--author`
 - Tone and byline: `--tone`, `--byline`
-- TTS: `--no-tts`, `--tts-voice`, `--tts-language`, `--tts-instruct`, `--tts-model-path`, `--tts-device-map`, `--tts-dtype`, `--tts-attn-implementation`, `--tts-rate`, `--tts-pitch`, `--tts-audio-dir`, `--tts-overwrite`, `--tts-book-only`, `--tts-unload-model`
+- TTS: `--no-tts`, `--tts-voice`, `--tts-language`, `--tts-instruct`, `--tts-model-path`, `--tts-device-map`, `--tts-dtype`, `--tts-attn-implementation`, `--tts-rate`, `--tts-pitch`, `--tts-audio-dir`, `--tts-max-text-tokens`, `--tts-max-new-tokens`, `--tts-do-sample`, `--tts-overwrite`, `--tts-book-only`, `--tts-unload-model`
 - Video: `--video`, `--background-video`, `--video-dir`, `--video-paragraph-images`, `--video-image-dir`, `--video-image-negative-prompt`, `--video-image-model-path`, `--video-image-module-path`, `--video-image-steps`, `--video-image-guidance-scale`, `--video-image-seed`, `--video-image-width`, `--video-image-height`, `--video-image-overwrite`, `--video-image-command`
 - Cover: `--cover`, `--cover-prompt`, `--cover-negative-prompt`, `--cover-model-path`, `--cover-module-path`, `--cover-steps`, `--cover-guidance-scale`, `--cover-seed`, `--cover-width`, `--cover-height`, `--cover-output-name`, `--cover-overwrite`, `--cover-command`, `--cover-book`, `--chapter-covers-book`, `--chapter-cover-dir`
 - Interactive and GUI: `--prompt`, `--gui`, `--gui-host`, `--gui-port`
@@ -293,7 +296,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `base_url`, `model`, `timeout`, `author`: LM Studio configuration (same defaults as the CLI).
 - `tone`, `byline`, `resume`, `verbose`: Generation controls.
 - `tts_settings` object:
-  - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `overwrite_audio`, `book_only`, `max_tts_chars`, `keep_model_loaded`
+  - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `max_text_tokens`, `max_new_tokens`, `do_sample`, `overwrite_audio`, `book_only`, `keep_model_loaded`
 - `video_settings` object:
   - `enabled`, `background_video`, `video_dirname`
   - `paragraph_images` object: `enabled`, `image_dirname`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `overwrite`, `command`

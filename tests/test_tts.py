@@ -13,6 +13,7 @@ from book_writer.tts import (
     _write_mp3_from_waveform,
     sanitize_markdown_for_tts,
     split_text_for_tts,
+    split_text_for_tts_tokens,
     synthesize_chapter_audio,
     synthesize_text_audio,
 )
@@ -88,6 +89,19 @@ class TestTTS(unittest.TestCase):
                 "line. Still the same paragraph."
             ],
         )
+
+    def test_split_text_for_tts_tokens_chunks_on_token_limit(self) -> None:
+        text = "One two three four five six"
+
+        fake_tokenizer = Mock()
+        fake_tokenizer.encode.side_effect = lambda value, add_special_tokens=False: (
+            value.split()
+        )
+
+        with patch("book_writer.tts._load_qwen_tokenizer", return_value=fake_tokenizer):
+            chunks = split_text_for_tts_tokens(text, model_path="models", max_text_tokens=3)
+
+        self.assertEqual(chunks, ["One two three", "four five six"])
 
     @patch("book_writer.tts._synthesize_with_qwen3_tts")
     def test_synthesize_chapter_audio_writes_mp3(
@@ -232,6 +246,9 @@ class TestTTS(unittest.TestCase):
             device_map="cpu",
             dtype="float32",
             attn_implementation="sdpa",
+            max_text_tokens=256,
+            max_new_tokens=1024,
+            do_sample=False,
         )
 
         with TemporaryDirectory() as tmpdir:
@@ -249,7 +266,17 @@ class TestTTS(unittest.TestCase):
                 fake_torch = Mock()
                 fake_torch.inference_mode.return_value = nullcontext()
                 fake_torch.cuda.is_available.return_value = False
-                with patch.dict("sys.modules", {"torch": fake_torch}):
+                fake_tokenizer = Mock()
+                fake_tokenizer.encode.side_effect = (
+                    lambda value, add_special_tokens=False: value.split()
+                )
+                with (
+                    patch.dict("sys.modules", {"torch": fake_torch}),
+                    patch(
+                        "book_writer.tts._load_qwen_tokenizer",
+                        return_value=fake_tokenizer,
+                    ),
+                ):
                     _synthesize_with_qwen3_tts(
                         text="Hello world.",
                         output_path=output_path,
@@ -262,6 +289,8 @@ class TestTTS(unittest.TestCase):
             language="English",
             speaker="Ryan",
             instruct="Very happy.",
+            max_new_tokens=1024,
+            do_sample=False,
         )
         write_wav_mock.assert_called_once()
         run_ffmpeg_mock.assert_called_once()
@@ -299,8 +328,16 @@ class TestTTS(unittest.TestCase):
                 fake_torch = Mock()
                 fake_torch.inference_mode.return_value = nullcontext()
                 fake_torch.cuda.is_available.return_value = False
+                fake_tokenizer = Mock()
+                fake_tokenizer.encode.side_effect = (
+                    lambda value, add_special_tokens=False: value.split()
+                )
                 with (
                     patch.dict("sys.modules", {"torch": fake_torch}),
+                    patch(
+                        "book_writer.tts._load_qwen_tokenizer",
+                        return_value=fake_tokenizer,
+                    ),
                     patch("book_writer.tts.release_qwen3_model_cache") as release_mock,
                 ):
                     _synthesize_with_qwen3_tts(

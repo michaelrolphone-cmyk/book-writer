@@ -38,7 +38,9 @@ class TTSSettings:
     audio_dirname: str = "audio"
     overwrite_audio: bool = False
     book_only: bool = False
-    max_tts_chars: int = 900
+    max_text_tokens: int = 384
+    max_new_tokens: int = 2048
+    do_sample: bool = False
     keep_model_loaded: bool = True
 
 
@@ -197,6 +199,35 @@ def split_text_for_tts(text: str, max_chars: int = MAX_TTS_CHARS) -> list[str]:
     return [chunk for chunk in chunks if chunk]
 
 
+def split_text_for_tts_tokens(
+    text: str, model_path: str, max_text_tokens: int = 384
+) -> list[str]:
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    tokenizer = _load_qwen_tokenizer(model_path)
+    words = cleaned.split()
+    if not words:
+        return []
+    max_text_tokens = max(1, max_text_tokens)
+    chunks: list[str] = []
+    buffer: list[str] = []
+
+    def token_len(value: str) -> int:
+        return len(tokenizer.encode(value, add_special_tokens=False))
+
+    for word in words:
+        candidate = f"{' '.join(buffer)} {word}".strip() if buffer else word
+        if token_len(candidate) > max_text_tokens and buffer:
+            chunks.append(" ".join(buffer))
+            buffer = [word]
+        else:
+            buffer.append(word)
+    if buffer:
+        chunks.append(" ".join(buffer))
+    return chunks
+
+
 def _resolve_model_path(settings: TTSSettings) -> Path:
     model_path = Path(settings.model_path or DEFAULT_QWEN3_MODEL_PATH)
     model_path = model_path.expanduser()
@@ -227,6 +258,13 @@ def _load_qwen3_model(
         attn_implementation=attn_implementation,
         device_map=device_map,
     )
+
+
+@functools.lru_cache(maxsize=2)
+def _load_qwen_tokenizer(model_path: str):
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 
 def release_qwen3_model_cache() -> None:
@@ -333,7 +371,11 @@ def _synthesize_with_qwen3_tts(
             settings.device_map,
         )
 
-        chunks = split_text_for_tts(text, settings.max_tts_chars)
+        chunks = split_text_for_tts_tokens(
+            text,
+            str(model_path),
+            settings.max_text_tokens,
+        )
         for i in range(len(chunks) - 1):
             a, b = chunks[i].rstrip(), chunks[i + 1].lstrip()
             if a and b and a[-1].isalnum() and b[0].isalnum():
@@ -353,6 +395,8 @@ def _synthesize_with_qwen3_tts(
                         language=settings.language,
                         speaker=settings.voice,
                         instruct=settings.instruct,
+                        max_new_tokens=settings.max_new_tokens,
+                        do_sample=settings.do_sample,
                     )
                     if not wavs:
                         raise TTSSynthesisError("Qwen3 returned no audio data.")
@@ -395,7 +439,11 @@ def _bak_synthesize_with_qwen3_tts(
         settings.device_map,
     )
 
-    chunks = split_text_for_tts(text, MAX_TTS_CHARS)
+    chunks = split_text_for_tts_tokens(
+        text,
+        str(model_path),
+        settings.max_text_tokens,
+    )
     if not chunks:
         return
 
@@ -407,6 +455,8 @@ def _bak_synthesize_with_qwen3_tts(
             language=settings.language,
             speaker=settings.voice,
             instruct=settings.instruct,
+            max_new_tokens=settings.max_new_tokens,
+            do_sample=settings.do_sample,
         )
         if not wavs:
             raise TTSSynthesisError("Qwen3 returned no audio data.")

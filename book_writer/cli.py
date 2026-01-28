@@ -200,6 +200,9 @@ def _prompt_for_task_settings(
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        max_text_tokens=args.tts_max_text_tokens,
+        max_new_tokens=args.tts_max_new_tokens,
+        do_sample=args.tts_do_sample,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
         keep_model_loaded=not args.tts_unload_model,
@@ -245,6 +248,9 @@ def _prompt_for_task_settings(
             rate=args.tts_rate,
             pitch=args.tts_pitch,
             audio_dirname=audio_dir or args.tts_audio_dir,
+            max_text_tokens=args.tts_max_text_tokens,
+            max_new_tokens=args.tts_max_new_tokens,
+            do_sample=args.tts_do_sample,
             overwrite_audio=overwrite_audio,
             book_only=args.tts_book_only,
             keep_model_loaded=not unload_model,
@@ -589,6 +595,9 @@ def _prompt_for_audio_settings(args: argparse.Namespace) -> TTSSettings:
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=audio_dir or args.tts_audio_dir,
+        max_text_tokens=args.tts_max_text_tokens,
+        max_new_tokens=args.tts_max_new_tokens,
+        do_sample=args.tts_do_sample,
         overwrite_audio=overwrite_audio,
         book_only=book_only,
         keep_model_loaded=not unload_model,
@@ -891,6 +900,9 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        max_text_tokens=args.tts_max_text_tokens,
+        max_new_tokens=args.tts_max_new_tokens,
+        do_sample=args.tts_do_sample,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
         keep_model_loaded=not args.tts_unload_model,
@@ -1224,6 +1236,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory name for storing chapter audio files.",
     )
     parser.add_argument(
+        "--tts-max-text-tokens",
+        type=int,
+        default=384,
+        help="Maximum text tokens per Qwen3 TTS chunk (default: 384).",
+    )
+    parser.add_argument(
+        "--tts-max-new-tokens",
+        type=int,
+        default=2048,
+        help="Maximum generated tokens per Qwen3 TTS chunk (default: 2048).",
+    )
+    parser.add_argument(
+        "--tts-do-sample",
+        action="store_true",
+        help="Enable sampling for Qwen3 TTS generation (default: deterministic).",
+    )
+    parser.add_argument(
         "--tts-overwrite",
         action="store_true",
         help="Overwrite existing audio files when generating narration.",
@@ -1515,6 +1544,9 @@ def main() -> int:
         rate=args.tts_rate,
         pitch=args.tts_pitch,
         audio_dirname=args.tts_audio_dir,
+        max_text_tokens=args.tts_max_text_tokens,
+        max_new_tokens=args.tts_max_new_tokens,
+        do_sample=args.tts_do_sample,
         overwrite_audio=args.tts_overwrite,
         book_only=args.tts_book_only,
         keep_model_loaded=not args.tts_unload_model,
