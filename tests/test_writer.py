@@ -1,3 +1,4 @@
+import datetime
 import json
 import unittest
 from pathlib import Path
@@ -772,7 +773,7 @@ class TestWriter(unittest.TestCase):
         generate_pdf_mock.assert_called_once()
 
     @patch("book_writer.writer.subprocess.run")
-    def test_compile_book_skips_invalid_outline(
+    def test_compile_book_ignores_outline_in_book_md(
         self, run_mock: Mock
     ) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -794,12 +795,7 @@ class TestWriter(unittest.TestCase):
             compile_book(output_dir)
 
             compiled = (output_dir / "book.md").read_text(encoding="utf-8")
-            outline_section = compiled.split("# Outline", 1)[1].split(
-                "\\pagebreak", 1
-            )[0]
-            self.assertIn("- Chapter One", outline_section)
-            self.assertNotIn("# Chapter One", outline_section)
-            self.assertNotIn("Content", outline_section)
+            self.assertNotIn("# Outline", compiled)
 
         self.assertEqual(run_mock.call_count, 2)
 
@@ -1179,10 +1175,9 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Outline:", prompt)
         self.assertIn("Book content:", prompt)
 
-    def test_build_book_markdown_includes_title_outline_and_chapters(self) -> None:
+    def test_build_book_markdown_includes_front_matter_and_chapters(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
-            "- Chapter One",
             [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
             "Marissa Bard",
         )
@@ -1190,9 +1185,10 @@ class TestWriter(unittest.TestCase):
         self.assertIn('lang: "en"', markdown)
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
-        self.assertIn("# Outline", markdown)
+        self.assertIn("Copyright", markdown)
+        self.assertIn("# Table of Contents", markdown)
         self.assertIn('class="page-break"', markdown)
-        self.assertIn("# Chapter One", markdown)
+        self.assertIn("# Chapter One {#chapter-1}", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
         audiobook_text = build_audiobook_text(
@@ -1209,7 +1205,6 @@ class TestWriter(unittest.TestCase):
     def test_build_book_markdown_strips_emoji_for_latex(self) -> None:
         markdown = build_book_markdown(
             "Book 🌙 Title",
-            "- Chapter 🌙 One",
             [
                 ChapterLayout(
                     title="Chapter One", content="# Chapter One\n\nSecret 🌙 emoji"
@@ -1221,13 +1216,24 @@ class TestWriter(unittest.TestCase):
         self.assertIn('lang: "en"', markdown)
         self.assertNotIn("🌙", markdown)
         self.assertIn("Book  Title", markdown)
-        self.assertIn("- Chapter  One", markdown)
         self.assertIn("Secret  emoji", markdown)
+
+    def test_build_book_markdown_includes_copyright_page(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+        )
+
+        current_year = datetime.date.today().year
+        self.assertIn(f"Copyright © {current_year}", markdown)
+        self.assertIn("Marissa Bard", markdown)
+        self.assertIn("# Table of Contents", markdown)
+        self.assertIn("- [Chapter One](#chapter-1)", markdown)
 
     def test_build_book_markdown_respects_language(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
-            "- Chapter One",
             [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
             "Marissa Bard",
             language="fr",
@@ -1238,7 +1244,6 @@ class TestWriter(unittest.TestCase):
     def test_build_book_markdown_adds_background_fallback(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
-            "- Chapter One",
             [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
             "Marissa Bard",
         )
@@ -1575,7 +1580,6 @@ class TestWriter(unittest.TestCase):
             pdf_path = generate_book_pdf(
                 output_dir=output_dir,
                 title="Chapter One",
-                outline_text="- Chapter One",
                 chapter_files=[chapter_path],
                 byline="Marissa Bard",
             )
@@ -1586,6 +1590,7 @@ class TestWriter(unittest.TestCase):
             self.assertIn("::: {.cover-text}", book_md)
             self.assertIn("# Chapter One", book_md)
             self.assertIn("## By Marissa Bard", book_md)
+            self.assertNotIn("# Outline", book_md)
             self.assertIn(
                 '<img src="chapter_covers/001-chapter-one.png" class="chapter-cover"',
                 book_md,
@@ -1603,7 +1608,6 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
-                        "--toc",
                         "--pdf-engine=xelatex",
                         "-o",
                         "book.pdf",
@@ -1617,7 +1621,6 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
-                        "--toc",
                         "--css",
                         "epub.css",
                         "--epub-cover-image",
@@ -1687,7 +1690,6 @@ class TestWriter(unittest.TestCase):
             generate_book_pdf(
                 output_dir=output_dir,
                 title="Chapter One",
-                outline_text="- Chapter One",
                 chapter_files=[chapter_path],
                 byline="Marissa Bard",
             )
@@ -1710,6 +1712,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn(".cover-page", css_text)
         self.assertIn(".cover-text", css_text)
+        self.assertIn(".copyright-page", css_text)
         self.assertIn(".chapter-title-page", css_text)
         self.assertIn("  width: 100%;", css_text)
         self.assertIn(".chapter-title-page .chapter-cover", css_text)
@@ -1728,7 +1731,6 @@ class TestWriter(unittest.TestCase):
                 generate_book_pdf(
                     output_dir=output_dir,
                     title="Chapter One",
-                    outline_text="- Chapter One",
                     chapter_files=[chapter_path],
                     byline="Marissa Bard",
                 )
