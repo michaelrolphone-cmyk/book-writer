@@ -643,3 +643,71 @@ def synthesize_text_audio(
     if verbose:
         print(f"[tts] Wrote {output_path.name}.")
     return output_path
+
+
+def merge_chapter_audio(
+    chapter_audio_paths: Sequence[Path],
+    output_path: Path,
+    gap_seconds: float = 1.6,
+) -> Path:
+    if not chapter_audio_paths:
+        raise TTSSynthesisError("No chapter audio files available to merge.")
+    missing = [path for path in chapter_audio_paths if not path.exists()]
+    if missing:
+        missing_list = ", ".join(path.name for path in missing)
+        raise TTSSynthesisError(
+            "Missing chapter audio files required to build the audiobook: "
+            f"{missing_list}"
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    inputs: list[str] = []
+    input_count = 0
+    for index, audio_path in enumerate(chapter_audio_paths):
+        inputs.extend(["-i", str(audio_path)])
+        input_count += 1
+        if index < len(chapter_audio_paths) - 1:
+            inputs.extend(
+                [
+                    "-f",
+                    "lavfi",
+                    "-t",
+                    str(gap_seconds),
+                    "-i",
+                    "anullsrc=channel_layout=mono:sample_rate=44100",
+                ]
+            )
+            input_count += 1
+
+    filter_inputs = "".join(f"[{idx}:a]" for idx in range(input_count))
+    filter_complex = f"{filter_inputs}concat=n={input_count}:v=0:a=1[outa]"
+    command = [
+        "ffmpeg",
+        "-y",
+        *inputs,
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[outa]",
+        "-codec:a",
+        "libmp3lame",
+        str(output_path),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise TTSSynthesisError(
+            "ffmpeg is required to merge chapter audio into a single MP3. "
+            "Install ffmpeg and try again."
+        ) from error
+    if result.returncode != 0:
+        raise TTSSynthesisError(
+            "ffmpeg failed to merge chapter audio. "
+            f"stderr: {result.stderr.strip()}"
+        )
+    return output_path

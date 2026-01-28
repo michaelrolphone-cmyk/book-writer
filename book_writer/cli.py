@@ -1260,7 +1260,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tts-book-only",
         action="store_true",
-        help="Generate only the full book MP3 when producing audio narration.",
+        help=(
+            "Generate only the full book MP3 by concatenating chapter audio "
+            "(requires existing chapter MP3s)."
+        ),
     )
     parser.add_argument(
         "--tts-unload-model",

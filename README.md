@@ -125,7 +125,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-max-new-tokens`: Maximum generated tokens per Qwen3 TTS chunk (default `2048`).
 - `--tts-do-sample`: Enable sampling for Qwen3 TTS generation (default deterministic).
 - `--tts-overwrite`: Overwrite existing audio files.
-- `--tts-book-only`: Only generate a full-book MP3 (`book.mp3`).
+- `--tts-book-only`: Only generate a full-book MP3 (`book.mp3`) by concatenating chapter MP3s (1.6s pause between chapters); requires existing chapter MP3s.
 - `--tts-unload-model`: Unload the Qwen3 model between chapters to reduce memory usage.
 - Narration input is sanitized to remove Markdown/HTML formatting (code blocks, tables, images, etc.) before Qwen3 TTS to reduce malformed audio.
 - Qwen3 tokenizer loading enables the Mistral regex fix when supported to prevent incorrect tokenization.
@@ -177,6 +177,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
+- `audio/book.mp3`: Full-book narration merged from chapter MP3s with a 1.6-second pause between chapters.
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 - `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
 - When `meta.json` chapter titles are edited, chapter markdown and related assets (audio/video/cover/summary/video_images) are renamed on the next metadata read using chapter numbers as the stable identifier.
@@ -321,6 +322,7 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
 - `tone`, `byline`, `resume`, `verbose`: Generation controls.
 - `tts_settings` object:
   - `enabled`, `voice`, `language`, `instruct`, `model_path`, `device_map`, `dtype`, `attn_implementation`, `rate`, `pitch`, `audio_dirname`, `max_text_tokens`, `max_new_tokens`, `do_sample`, `overwrite_audio`, `book_only`, `keep_model_loaded`
+  - Full-book MP3 output is produced by concatenating chapter MP3s with a 1.6-second pause between chapters.
 - `video_settings` object:
   - `enabled`, `background_video`, `video_dirname`
   - `paragraph_images` object: `enabled`, `image_dirname`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `overwrite`, `command`

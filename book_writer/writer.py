@@ -34,6 +34,7 @@ from book_writer.tts import (
     TTSSynthesisError,
     TTSSettings,
     sanitize_markdown_for_tts,
+    merge_chapter_audio,
     synthesize_chapter_audio,
     synthesize_text_audio,
 )
@@ -1277,21 +1278,14 @@ def generate_book_audio(
             if generated:
                 created.append(generated)
 
-    book_metadata, byline = _read_book_metadata(output_dir, chapter_files)
-    audiobook_text = build_audiobook_text(
-        book_metadata.title,
-        byline,
-        [path.read_text(encoding="utf-8") for path in chapter_files],
-    )
+    chapter_audio_paths = [
+        audio_dir / f"{chapter_file.stem}.mp3" for chapter_file in chapter_files
+    ]
     book_audio_path = audio_dir / "book.mp3"
     if tts_settings.overwrite_audio or not book_audio_path.exists():
         try:
-            generated = synthesize_text_audio(
-                text=audiobook_text,
-                output_path=book_audio_path,
-                settings=tts_settings,
-                verbose=verbose,
-                raise_on_error=True,
+            generated = merge_chapter_audio(
+                chapter_audio_paths, book_audio_path, gap_seconds=1.6
             )
         except TTSSynthesisError as error:
             raise TTSSynthesisError(
@@ -2022,25 +2016,23 @@ def expand_book(
     )
     if verbose:
         print("[expand] Generated book.pdf and book.epub from expanded chapters.")
-    audiobook_text = build_audiobook_text(
-        book_metadata.title,
-        byline,
-        [path.read_text(encoding="utf-8") for path in all_chapter_files],
-    )
-    try:
-        synthesize_text_audio(
-            text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-            settings=tts_settings,
-            verbose=verbose,
-            raise_on_error=True,
-        )
-    except TTSSynthesisError as error:
-        raise TTSSynthesisError(
-            f"Failed to generate full audiobook audio: {error}"
-        ) from error
-    if verbose:
-        print("[expand] Wrote book.mp3 for full audiobook.")
+    if tts_settings.enabled:
+        chapter_audio_paths = [
+            output_dir / tts_settings.audio_dirname / f"{path.stem}.mp3"
+            for path in all_chapter_files
+        ]
+        try:
+            merge_chapter_audio(
+                chapter_audio_paths,
+                output_dir / tts_settings.audio_dirname / "book.mp3",
+                gap_seconds=1.6,
+            )
+        except TTSSynthesisError as error:
+            raise TTSSynthesisError(
+                f"Failed to generate full audiobook audio: {error}"
+            ) from error
+        if verbose:
+            print("[expand] Wrote book.mp3 for full audiobook.")
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
@@ -2267,25 +2259,23 @@ def write_book(
     )
     if verbose:
         print("[write] Generated book.pdf and book.epub from chapters.")
-    audiobook_text = build_audiobook_text(
-        book_title,
-        byline,
-        [path.read_text(encoding="utf-8") for path in written_files],
-    )
-    try:
-        synthesize_text_audio(
-            text=audiobook_text,
-            output_path=output_dir / tts_settings.audio_dirname / "book.mp3",
-            settings=tts_settings,
-            verbose=verbose,
-            raise_on_error=True,
-        )
-    except TTSSynthesisError as error:
-        raise TTSSynthesisError(
-            f"Failed to generate full audiobook audio: {error}"
-        ) from error
-    if verbose:
-        print("[write] Wrote book.mp3 for full audiobook.")
+    if tts_settings.enabled:
+        chapter_audio_paths = [
+            output_dir / tts_settings.audio_dirname / f"{path.stem}.mp3"
+            for path in written_files
+        ]
+        try:
+            merge_chapter_audio(
+                chapter_audio_paths,
+                output_dir / tts_settings.audio_dirname / "book.mp3",
+                gap_seconds=1.6,
+            )
+        except TTSSynthesisError as error:
+            raise TTSSynthesisError(
+                f"Failed to generate full audiobook audio: {error}"
+            ) from error
+        if verbose:
+            print("[write] Wrote book.mp3 for full audiobook.")
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
