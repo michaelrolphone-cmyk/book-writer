@@ -806,63 +806,97 @@ def _build_epub_cover_svg(
     return svg_path
 
 
+def _render_html_block(lines: Iterable[str]) -> str:
+    return "```{=html}\n" + "\n".join(lines) + "\n```\n"
+
+
+def _render_latex_block(lines: Iterable[str]) -> str:
+    return "```{=latex}\n" + "\n".join(lines) + "\n```\n"
+
+
 def _render_cover_section(title: str, byline: str, cover_image: Path) -> str:
     title_text = _sanitize_markdown_for_latex(title)
     byline_text = _sanitize_markdown_for_latex(byline)
-    byline_block = f"## By {byline_text}\n" if byline_text else ""
+    html_title = html_escape(title_text)
+    html_byline = html_escape(byline_text)
     cover_path = cover_image.as_posix()
-    return (
-        "::: {.cover-page}\n"
-        f"![Cover image]({cover_path}){{.cover-image}}\n"
-        "::: {.cover-text}\n"
-        f"# {title_text}\n\n"
-        f"{byline_block}"
-        ":::\n"
-        ":::\n\n"
+    html_lines = [
+        '<div class="cover-page">',
+        f'  <img src="{cover_path}" class="cover-image" alt="Cover image" />',
+        '  <div class="cover-text">',
+        f"    <h1>{html_title}</h1>",
+    ]
+    if html_byline:
+        html_lines.append(f"    <h2>By {html_byline}</h2>")
+    html_lines.extend(
+        [
+            "  </div>",
+            "</div>",
+        ]
     )
+    latex_lines = [
+        "\\begin{titlepage}",
+        "\\centering",
+        "\\includegraphics[width=\\paperwidth,height=0.75\\textheight,"
+        f"keepaspectratio]{{\\detokenize{{{cover_path}}}}}",
+        "\\vfill",
+        f"{{\\Huge {title_text}}}\\\\",
+    ]
+    if byline_text:
+        latex_lines.append(f"{{\\Large By {byline_text}}}\\\\")
+    latex_lines.append("\\end{titlepage}")
+    return _render_html_block(html_lines) + _render_latex_block(latex_lines) + "\n"
 
 
 def _render_title_page(title: str, byline: str) -> str:
     title_text = _sanitize_markdown_for_latex(title)
     byline_text = _sanitize_markdown_for_latex(byline)
-    return (
-        "::: {.title-page}\n"
-        f"# {title_text}\n\n"
-        f"### By {byline_text}\n"
-        ":::\n\n"
-    )
+    html_title = html_escape(title_text)
+    html_byline = html_escape(byline_text)
+    html_lines = [
+        '<div class="title-page">',
+        f"  <h1>{html_title}</h1>",
+    ]
+    if html_byline:
+        html_lines.append(f"  <h3>By {html_byline}</h3>")
+    html_lines.append("</div>")
+    latex_lines = [
+        "\\begin{titlepage}",
+        "\\centering",
+        f"{{\\Huge {title_text}}}\\\\",
+    ]
+    if byline_text:
+        latex_lines.append(f"{{\\Large By {byline_text}}}\\\\")
+    latex_lines.append("\\end{titlepage}")
+    return _render_html_block(html_lines) + _render_latex_block(latex_lines) + "\n"
 
 
 def _render_chapter_title_page(chapter: ChapterLayout, chapter_id: str) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
-    image_block = ""
-    latex_background_block = ""
+    html_title = html_escape(title_text)
+    html_lines = [
+        '<div class="chapter-title-page">',
+        f'  <h1 id="{chapter_id}">{html_title}</h1>',
+    ]
+    latex_lines = [
+        f"\\hypertarget{{{chapter_id}}}{{}}",
+        f"\\section*{{{title_text}}}",
+    ]
     if chapter.cover_image is not None:
         image_path = chapter.cover_image.as_posix()
+        html_lines.append(
+            f'  <img src="{image_path}" class="chapter-cover" '
+            'alt="Chapter cover" />'
+        )
         latex_background_contents = (
             "\\backgroundsetup{scale=1, angle=0, opacity=1,"
             "contents={\\includegraphics[width=\\paperwidth,height=\\paperheight]"
             "{\\detokenize{%s}}}}\n" % image_path
         )
-        latex_background_block = (
-            "```{=latex}\n"
-            f"{latex_background_contents}"
-            "\\BgThispage\n"
-            "```\n"
-        )
-        image_block = (
-            "```{=html}\n"
-            f"<img src=\"{image_path}\" class=\"chapter-cover\" "
-            "alt=\"Chapter cover\" />\n"
-            "```\n"
-        )
-    return (
-        "::: {.chapter-title-page}\n"
-        f"{latex_background_block}"
-        f"# {title_text} {{#{chapter_id}}}\n"
-        f"{image_block}"
-        ":::\n\n"
-    )
+        latex_lines.insert(0, latex_background_contents.rstrip())
+        latex_lines.insert(1, "\\BgThispage")
+    html_lines.append("</div>")
+    return _render_html_block(html_lines) + _render_latex_block(latex_lines) + "\n"
 
 
 def _render_chapter_content(chapter: ChapterLayout) -> str:
@@ -878,18 +912,42 @@ def _render_back_cover(synopsis: str) -> str:
 def _render_copyright_page(title: str, byline: str) -> str:
     year = datetime.date.today().year
     holder = _sanitize_markdown_for_latex(byline or title)
-    holder_line = f"{holder}\n" if holder else ""
-    return (
-        "::: {.copyright-page}\n"
-        f"Copyright © {year}\n"
-        f"{holder_line}"
-        "All rights reserved.\n\n"
-        "No part of this book may be reproduced or transmitted in any form or "
-        "by any means, electronic or mechanical, including photocopying, "
-        "recording, or any information storage and retrieval system, without "
-        "permission in writing from the publisher.\n"
-        ":::\n\n"
+    html_holder = html_escape(holder)
+    html_lines = [
+        '<div class="copyright-page">',
+        f"  <p>Copyright © {year}</p>",
+    ]
+    if html_holder:
+        html_lines.append(f"  <p>{html_holder}</p>")
+    html_lines.extend(
+        [
+            "  <p>All rights reserved.</p>",
+            "  <p>No part of this book may be reproduced or transmitted in any "
+            "form or by any means, electronic or mechanical, including "
+            "photocopying, recording, or any information storage and retrieval "
+            "system, without permission in writing from the publisher.</p>",
+            "</div>",
+        ]
     )
+    latex_lines = [
+        "\\begin{titlepage}",
+        "\\centering",
+        f"Copyright © {year}\\\\",
+    ]
+    if holder:
+        latex_lines.append(f"{holder}\\\\")
+    latex_lines.extend(
+        [
+            "All rights reserved.\\\\",
+            "\\vspace{1em}",
+            "No part of this book may be reproduced or transmitted in any form "
+            "or by any means, electronic or mechanical, including photocopying, "
+            "recording, or any information storage and retrieval system, without "
+            "permission in writing from the publisher.",
+            "\\end{titlepage}",
+        ]
+    )
+    return _render_html_block(html_lines) + _render_latex_block(latex_lines) + "\n"
 
 
 def _render_table_of_contents(chapters: list[ChapterLayout]) -> str:
