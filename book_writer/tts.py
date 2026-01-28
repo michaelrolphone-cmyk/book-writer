@@ -66,6 +66,10 @@ TABLE_DIVIDER_PATTERN = re.compile(r"^\s*\|?\s*(:?-{3,}:?\s*\|)+\s*$")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n+")
 MAX_TTS_CHARS = 3000
+SILENCE_RMS_THRESHOLD = 1e-4
+RECOVERY_MIN_CHARS = 200
+RECOVERY_MAX_CHARS = 800
+MAX_RECOVERY_DEPTH = 1
 
 
 def _wrap_on_words(text: str, width: int) -> list[str]:
@@ -357,6 +361,84 @@ def _write_mp3_from_waveform(
         _run_ffmpeg(wav_path, output_path)
 
 
+def _sanitize_waveform(waveform: Sequence[float]):
+    import importlib.util
+    import math
+
+    if waveform is None:
+        return []
+
+    if importlib.util.find_spec("numpy") is None:
+        cleaned: list[float] = []
+        for value in waveform:
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                numeric = 0.0
+            if numeric > 1.0:
+                numeric = 1.0
+            elif numeric < -1.0:
+                numeric = -1.0
+            cleaned.append(numeric)
+        return cleaned
+
+    import numpy as np
+
+    arr = np.asarray(waveform, dtype=np.float32).reshape(-1)
+    if arr.size == 0:
+        return arr
+    if not np.isfinite(arr).all():
+        arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+    max_abs = float(np.max(np.abs(arr)))
+    if max_abs > 1.0:
+        arr = np.clip(arr, -1.0, 1.0)
+    return arr
+
+
+def _is_waveform_silent(waveform, threshold: float = SILENCE_RMS_THRESHOLD) -> bool:
+    if waveform is None:
+        return True
+    if hasattr(waveform, "size") and waveform.size == 0:
+        return True
+    import importlib.util
+    import math
+
+    if importlib.util.find_spec("numpy") is None:
+        values = [float(value) for value in waveform]
+        if not values:
+            return True
+        mean_square = sum(value * value for value in values) / len(values)
+        rms = math.sqrt(mean_square)
+        return rms < threshold
+
+    import numpy as np
+
+    values = np.asarray(waveform, dtype=np.float32).reshape(-1)
+    if values.size == 0:
+        return True
+    rms = float(np.sqrt(np.mean(np.square(values))))
+    return rms < threshold
+
+
+def _split_text_for_recovery(
+    text: str,
+    model_path: str,
+    max_text_tokens: int,
+) -> list[str]:
+    max_chars = min(
+        RECOVERY_MAX_CHARS,
+        max(RECOVERY_MIN_CHARS, len(text) // 2),
+    )
+    chunks = split_text_for_tts(text, max_chars=max_chars)
+    if len(chunks) > 1:
+        return chunks
+    reduced_tokens = max(1, max_text_tokens // 2)
+    if reduced_tokens < max_text_tokens:
+        token_chunks = split_text_for_tts_tokens(text, model_path, reduced_tokens)
+        if len(token_chunks) > 1:
+            return token_chunks
+    return [text]
+
+
 def _synthesize_with_qwen3_tts(
     text: str,
     output_path: Path,
@@ -387,20 +469,7 @@ def _synthesize_with_qwen3_tts(
             # inference_mode reduces autograd overhead + can lower memory
             with torch.inference_mode():
                 for chunk in chunks:
-                    wavs, sr = tts.generate_custom_voice(
-                        text=chunk,
-                        language=settings.language,
-                        speaker=settings.voice,
-                        instruct=settings.instruct,
-                        max_new_tokens=settings.max_new_tokens,
-                        do_sample=settings.do_sample,
-                    )
-                    if not wavs:
-                        raise TTSSynthesisError("Qwen3 returned no audio data.")
-                    yield _normalize_waveform(wavs[0]), sr
-
-                    # Encourage prompt release of large tensors between chunks
-                    del wavs
+                    yield from _generate_chunk_audio(chunk, tts, settings, str(model_path), 0)
                     gc.collect()
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
@@ -481,6 +550,42 @@ def _normalize_waveform(waveform: Sequence[float]):
     if hasattr(waveform, "numpy"):
         return waveform.numpy()
     return waveform  # soundfile/numpy can usually coerce this
+
+
+def _generate_chunk_audio(
+    text: str,
+    tts,
+    settings: TTSSettings,
+    model_path: str,
+    depth: int,
+):
+    wavs, sr = tts.generate_custom_voice(
+        text=text,
+        language=settings.language,
+        speaker=settings.voice,
+        instruct=settings.instruct,
+        max_new_tokens=settings.max_new_tokens,
+        do_sample=settings.do_sample,
+    )
+    if not wavs:
+        raise TTSSynthesisError("Qwen3 returned no audio data.")
+    waveform = _sanitize_waveform(_normalize_waveform(wavs[0]))
+    if _is_waveform_silent(waveform):
+        if depth >= MAX_RECOVERY_DEPTH:
+            raise TTSSynthesisError("Qwen3 returned near-silent audio.")
+        recovery_chunks = _split_text_for_recovery(text, model_path, settings.max_text_tokens)
+        if len(recovery_chunks) <= 1:
+            raise TTSSynthesisError("Qwen3 returned near-silent audio.")
+        for recovery_text in recovery_chunks:
+            yield from _generate_chunk_audio(
+                recovery_text,
+                tts,
+                settings,
+                model_path,
+                depth + 1,
+            )
+        return
+    yield waveform, sr
 
 def synthesize_chapter_audio(
     chapter_path: Path,
