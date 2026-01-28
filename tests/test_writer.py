@@ -1265,6 +1265,21 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Styled text.", markdown)
         self.assertNotIn("layout: *Style", markdown)
 
+    def test_build_book_markdown_rewrites_thematic_breaks(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            [
+                ChapterLayout(
+                    title="Chapter One",
+                    content="# Chapter One\n\n---\n\nScene break text.",
+                )
+            ],
+            "Marissa Bard",
+        )
+
+        self.assertIn("\n* * *\n\nScene break text.", markdown)
+        self.assertNotIn("\n---\n\nScene break text.", markdown)
+
     def test_build_book_markdown_includes_copyright_page(self) -> None:
         markdown = build_book_markdown(
             "Book Title",

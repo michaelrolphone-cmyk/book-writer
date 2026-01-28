@@ -902,7 +902,25 @@ def _render_chapter_title_page(chapter: ChapterLayout, chapter_id: str) -> str:
 def _render_chapter_content(chapter: ChapterLayout) -> str:
     body = _strip_yaml_metadata_block(chapter.content)
     body = _strip_leading_heading(body)
+    body = _neutralize_yaml_metadata_markers(body)
     return _sanitize_markdown_for_latex(body).strip()
+
+
+def _neutralize_yaml_metadata_markers(content: str) -> str:
+    lines: list[str] = []
+    in_code_block = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            lines.append(line)
+            continue
+        if not in_code_block and stripped == "---":
+            indent = line[: len(line) - len(line.lstrip())]
+            lines.append(f"{indent}* * *")
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def _strip_yaml_metadata_block(content: str) -> str:
