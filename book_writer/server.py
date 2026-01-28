@@ -29,6 +29,7 @@ from book_writer.metadata import (
     ensure_primary_genre,
     generate_book_genres,
     read_book_genres,
+    read_book_meta,
     write_book_meta,
 )
 from book_writer.outline import parse_outline_with_title
@@ -718,6 +719,58 @@ def _chapter_title_from_content(content: str, fallback: str) -> str:
     return fallback
 
 
+def _update_book_title(book_dir: Path, title: str) -> None:
+    meta = read_book_meta(book_dir)
+    meta["title"] = title
+    meta_path = book_dir / "meta.json"
+    meta_path.write_text(
+        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _chapter_number_from_filename(path: Path) -> int | None:
+    match = re.match(r"(\\d+)", path.stem)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _replace_chapter_title(content: str, title: str) -> str:
+    lines = content.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith("#"):
+            lines[index] = f"# {title}"
+            return "\n".join(lines).rstrip() + "\n"
+    return f"# {title}\n\n{content.rstrip()}\n"
+
+
+def _update_chapter_meta_title(
+    book_dir: Path, chapter_file: Path, chapter_number: int | None, title: str
+) -> None:
+    meta = read_book_meta(book_dir)
+    chapters = meta.get("chapters")
+    if not isinstance(chapters, list):
+        return
+    updated = False
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            continue
+        if chapter_number is not None and chapter.get("number") == chapter_number:
+            chapter["title"] = title
+            updated = True
+            break
+        if chapter.get("file") == chapter_file.name:
+            chapter["title"] = title
+            updated = True
+            break
+    if updated:
+        meta["chapters"] = chapters
+        meta_path = book_dir / "meta.json"
+        meta_path.write_text(
+            json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+
 def _find_chapter_file(book_dir: Path, chapter_value: str) -> Path:
     chapter_files = _book_chapter_files(book_dir)
     if chapter_value.isdigit():
@@ -779,6 +832,44 @@ def list_chapters(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
     return {"chapters": chapters}
+
+
+def rename_book_title_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    title = payload.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ApiError("title is required")
+    resolved_title = title.strip()
+    book_dir = Path(book_dir_value)
+    _update_book_title(book_dir, resolved_title)
+    return {"path": str(book_dir), "title": resolved_title}
+
+
+def rename_chapter_title_api(payload: dict[str, Any]) -> dict[str, Any]:
+    book_dir_value = payload.get("book_dir")
+    if not book_dir_value:
+        raise ApiError("book_dir is required")
+    chapter_value = payload.get("chapter")
+    if not chapter_value:
+        raise ApiError("chapter is required")
+    title = payload.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ApiError("title is required")
+    resolved_title = title.strip()
+    book_dir = Path(book_dir_value)
+    chapter_file = _find_chapter_file(book_dir, str(chapter_value))
+    content = chapter_file.read_text(encoding="utf-8")
+    updated_content = _replace_chapter_title(content, resolved_title)
+    chapter_file.write_text(updated_content, encoding="utf-8")
+    chapter_number = _chapter_number_from_filename(chapter_file)
+    _update_chapter_meta_title(book_dir, chapter_file, chapter_number, resolved_title)
+    return {
+        "path": str(chapter_file),
+        "title": resolved_title,
+        "chapter": chapter_value,
+    }
 
 
 def get_outline_content(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1349,6 +1440,8 @@ def _handle_api(handler: BaseHTTPRequestHandler) -> None:
             "/api/generate-chapter-covers": generate_chapter_covers_api,
             "/api/generate-outline": generate_outline_api,
             "/api/save-outline": save_outline_api,
+            "/api/rename-book-title": rename_book_title_api,
+            "/api/rename-chapter-title": rename_chapter_title_api,
             "/api/git-pull-restart": git_pull_restart_api,
         }
         handler_fn = routes.get(path)
