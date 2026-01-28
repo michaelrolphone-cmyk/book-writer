@@ -54,6 +54,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 **GUI API example commands**
 - Compile a book: `curl -X POST http://127.0.0.1:8080/api/compile-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
   - The compiler builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
+- Expand a book: `curl -X POST http://127.0.0.1:8080/api/expand-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","expand_passes":1}'`
 - Generate a book cover: `curl -X POST http://127.0.0.1:8080/api/generate-cover -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
 - Generate chapter covers: `curl -X POST http://127.0.0.1:8080/api/generate-chapter-covers -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","chapter_cover_dir":"chapter_covers"}'`
 ### CLI quick reference

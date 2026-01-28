@@ -389,6 +389,10 @@ class _MarkdownBlock:
 
 
 IMPLEMENTATION_DETAILS_PATTERN = re.compile(r"^implementation details$", re.IGNORECASE)
+TITLE_LABEL_PATTERN = re.compile(
+    r"^(?:book\s+title|title|book\s+name)\b\s*[:\-–]\s*(.+)$",
+    re.IGNORECASE,
+)
 
 
 def _strip_markdown(text: str) -> str:
@@ -398,6 +402,21 @@ def _strip_markdown(text: str) -> str:
     if stripped.startswith("*") and stripped.endswith("*"):
         stripped = stripped[1:-1].strip()
     return stripped
+
+
+def _normalize_book_title(title: str) -> str:
+    cleaned = title.strip()
+    if not cleaned:
+        return ""
+    if cleaned.startswith(("\"", "'")) and cleaned.endswith(("\"", "'")):
+        cleaned = cleaned[1:-1].strip()
+    while cleaned.startswith("#"):
+        cleaned = cleaned.lstrip("#").strip()
+    match = TITLE_LABEL_PATTERN.match(cleaned)
+    if match:
+        cleaned = match.group(1).strip()
+    cleaned = _strip_markdown(cleaned)
+    return cleaned
 
 
 def _is_implementation_details(title: str) -> bool:
@@ -788,13 +807,13 @@ def _render_cover_section(title: str, byline: str, cover_image: Path) -> str:
     byline_block = f"## By {byline_text}\n" if byline_text else ""
     cover_path = cover_image.as_posix()
     return (
-        "::: {.cover-page}\n"
+        ":::: {.cover-page}\n"
         f"![Cover image]({cover_path}){{.cover-image}}\n"
         "::: {.cover-text}\n"
         f"# {title_text}\n\n"
         f"{byline_block}"
         ":::\n"
-        ":::\n\n"
+        "::::\n\n"
     )
 
 
@@ -887,13 +906,19 @@ def build_book_markdown(
     synopsis: str = "",
     language: str = "en",
 ) -> str:
-    sections: list[str] = [_build_front_matter(title, byline, language)]
+    normalized_title = _normalize_book_title(title) or title.strip()
+    normalized_byline = byline.strip()
+    sections: list[str] = [
+        _build_front_matter(normalized_title, normalized_byline, language)
+    ]
     if cover_image is not None:
-        sections.append(_render_cover_section(title, byline, cover_image))
+        sections.append(
+            _render_cover_section(normalized_title, normalized_byline, cover_image)
+        )
         sections.append(_page_break())
-    sections.append(_render_title_page(title, byline))
+    sections.append(_render_title_page(normalized_title, normalized_byline))
     sections.append(_page_break())
-    sections.append(_render_copyright_page(title, byline))
+    sections.append(_render_copyright_page(normalized_title, normalized_byline))
     sections.append(_page_break())
     sections.append(_render_table_of_contents(chapters))
     sections.append(_page_break())
