@@ -9,8 +9,11 @@ from unittest.mock import Mock, patch
 from book_writer.tts import (
     TTSSynthesisError,
     TTSSettings,
+    _generate_chunk_audio,
     _load_qwen_tokenizer,
+    _sanitize_waveform,
     _synthesize_with_qwen3_tts,
+    _split_text_for_recovery,
     _write_mp3_from_waveform,
     sanitize_markdown_for_tts,
     split_text_for_tts,
@@ -103,6 +106,53 @@ class TestTTS(unittest.TestCase):
             chunks = split_text_for_tts_tokens(text, model_path="models", max_text_tokens=3)
 
         self.assertEqual(chunks, ["One two three", "four five six"])
+
+    def test_split_text_for_recovery_prefers_char_chunks(self) -> None:
+        long_sentence = "Sentence one " * 20 + "."
+        text = f"{long_sentence} {long_sentence}"
+
+        chunks = _split_text_for_recovery(text, model_path="models", max_text_tokens=10)
+
+        self.assertGreater(len(chunks), 1)
+
+    def test_sanitize_waveform_clamps_and_filters(self) -> None:
+        waveform = [float("nan"), 2.5, -3.2, 0.5]
+
+        sanitized = _sanitize_waveform(waveform)
+
+        self.assertEqual(list(sanitized), [0.0, 1.0, -1.0, 0.5])
+
+    def test_generate_chunk_audio_recovers_from_silence(self) -> None:
+        fake_model = Mock()
+        fake_model.generate_custom_voice.side_effect = [
+            ([[0.0, 0.0, 0.0]], 24000),
+            ([[0.1, 0.2]], 24000),
+            ([[0.3, 0.4]], 24000),
+        ]
+        settings = TTSSettings(
+            enabled=True,
+            model_path="models",
+            voice="Ryan",
+            language="English",
+            instruct=None,
+            device_map="cpu",
+            dtype="float32",
+            attn_implementation="sdpa",
+            max_text_tokens=100,
+            max_new_tokens=1024,
+            do_sample=False,
+        )
+        long_sentence = "Sentence one " * 20 + "."
+        long_text = f"{long_sentence} {long_sentence}"
+
+        chunks = list(
+            _generate_chunk_audio(long_text, fake_model, settings, "models", 0)
+        )
+
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(fake_model.generate_custom_voice.call_count, 3)
+        self.assertEqual(list(chunks[0][0]), [0.1, 0.2])
+        self.assertEqual(list(chunks[1][0]), [0.3, 0.4])
 
     def test_load_qwen_tokenizer_enables_mistral_regex_fix(self) -> None:
         fake_module = ModuleType("transformers")
@@ -283,7 +333,7 @@ class TestTTS(unittest.TestCase):
                     chunks = list(chunk_iter)
                     self.assertEqual(len(chunks), 1)
                     waveform, sample_rate = chunks[0]
-                    self.assertEqual(waveform, [0.1, 0.2])
+                    self.assertEqual(list(waveform), [0.1, 0.2])
                     self.assertEqual(sample_rate, 24000)
                     return sample_rate
 
