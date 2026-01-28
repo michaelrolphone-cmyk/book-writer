@@ -124,6 +124,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-book-only`: Only generate a full-book MP3 (`book.mp3`).
 - `--tts-unload-model`: Unload the Qwen3 model between chapters to reduce memory usage.
 - Narration input is sanitized to remove Markdown/HTML formatting (code blocks, tables, images, etc.) before Qwen3 TTS to reduce malformed audio.
+- Qwen3 tokenizer loading enables the Mistral regex fix when supported to prevent incorrect tokenization.
 - `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).
