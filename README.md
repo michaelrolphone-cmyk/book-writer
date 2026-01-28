@@ -137,17 +137,18 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
-- `book.md`: Compiled markdown containing cover/title pages, a copyright page, table of contents, chapter title pages, and chapters.
+- `book.md`: Compiled markdown containing cover/title pages, a copyright page, table of contents, chapter title pages, and chapters. The front matter uses `title-meta`/`author-meta` for metadata while keeping `title`/`author` empty so pandoc does not inject an extra title page during PDF/EPUB compilation.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
 - `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently.
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.
 - `back-cover-synopsis.md`: LM-generated synopsis.
-- `meta.json`: LM-generated metadata (including `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
+- `meta.json`: LM-generated metadata (including `title`, `author`, `chapters` with numbers/titles/filenames, `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 - `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
+- When `meta.json` chapter titles are edited, chapter markdown and related assets (audio/video/cover/summary/video_images) are renamed on the next metadata read using chapter numbers as the stable identifier.
 
 ### Generate multiple books from an outlines directory
 
