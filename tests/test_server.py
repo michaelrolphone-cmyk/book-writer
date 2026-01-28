@@ -22,11 +22,16 @@ def _write_chapter_summary(book_dir: Path, stem: str, text: str = "Summary") -> 
 
 
 def _write_book_meta(
-    book_dir: Path, genres: list[str], primary_genre: str | None = None
+    book_dir: Path,
+    genres: list[str],
+    primary_genre: str | None = None,
+    title: str | None = None,
 ) -> None:
     payload: dict[str, object] = {"genres": genres}
     if primary_genre:
         payload["primary_genre"] = primary_genre
+    if title:
+        payload["title"] = title
     (book_dir / "meta.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -215,6 +220,20 @@ class TestServerApi(unittest.TestCase):
         ) + server._estimate_page_count(second_content)
         self.assertEqual(result["books"][0]["page_count"], expected_pages)
 
+    def test_list_books_prefers_meta_title(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            books_dir = Path(tmpdir) / "books"
+            book_dir = books_dir / "sample"
+            book_dir.mkdir(parents=True)
+            (book_dir / "book.md").write_text("# Markdown Title\n", encoding="utf-8")
+            (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
+            _write_book_summary(book_dir, "Saved summary")
+            _write_book_meta(book_dir, ["Mystery"], title="Meta Title")
+
+            result = server.list_books({"books_dir": str(books_dir)})
+
+        self.assertEqual(result["books"][0]["title"], "Meta Title")
+
     def test_list_books_reads_genres_from_meta(self) -> None:
         with TemporaryDirectory() as tmpdir:
             books_dir = Path(tmpdir) / "books"
@@ -228,6 +247,21 @@ class TestServerApi(unittest.TestCase):
 
         self.assertEqual(result["books"][0]["genres"], ["Mystery", "Thriller"])
         self.assertEqual(result["books"][0]["primary_genre"], "Mystery")
+
+    def test_rename_book_title_updates_meta(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "books" / "sample"
+            book_dir.mkdir(parents=True)
+            _write_book_meta(book_dir, ["Mystery"], title="Old Title")
+
+            result = server.rename_book_title_api(
+                {"book_dir": str(book_dir), "title": "New Title"}
+            )
+
+            meta = json.loads((book_dir / "meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(result["title"], "New Title")
+        self.assertEqual(meta["title"], "New Title")
 
     def test_list_books_uses_existing_primary_genre(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -359,6 +393,31 @@ class TestServerApi(unittest.TestCase):
             result["chapters"][1]["page_count"],
             server._estimate_page_count(second_content),
         )
+
+    def test_rename_chapter_title_updates_file_and_meta(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            book_dir = Path(tmpdir) / "book"
+            book_dir.mkdir()
+            chapter_path = book_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Old Title\n\nContent", encoding="utf-8")
+            meta_payload = {
+                "chapters": [{"number": 1, "title": "Old Title", "file": "001-chapter-one.md"}]
+            }
+            (book_dir / "meta.json").write_text(
+                json.dumps(meta_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            result = server.rename_chapter_title_api(
+                {"book_dir": str(book_dir), "chapter": 1, "title": "New Title"}
+            )
+
+            updated_content = chapter_path.read_text(encoding="utf-8")
+            updated_meta = json.loads((book_dir / "meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(result["title"], "New Title")
+        self.assertTrue(updated_content.startswith("# New Title"))
+        self.assertEqual(updated_meta["chapters"][0]["title"], "New Title")
 
     def test_list_chapters_includes_media_urls(self) -> None:
         with TemporaryDirectory() as tmpdir:

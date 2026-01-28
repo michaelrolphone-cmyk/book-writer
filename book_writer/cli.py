@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from pathlib import Path
 
 from book_writer.cover import CoverSettings, parse_cover_command
+from book_writer.metadata import read_book_meta
 from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import DEFAULT_QWEN3_MODEL_PATH, TTSSettings
 from book_writer.video import (
@@ -442,6 +443,10 @@ def _prompt_for_expand_only(
 
 
 def _book_title(book_dir: Path, chapter_files: list[Path]) -> str:
+    meta = read_book_meta(book_dir)
+    meta_title = meta.get("title")
+    if isinstance(meta_title, str) and meta_title.strip():
+        return meta_title.strip()
     book_md = book_dir / "book.md"
     if book_md.exists():
         try:

@@ -1636,6 +1636,7 @@ def get_gui_html() -> str:
                   <button class="pill-button" id="bookWorkspaceChapterCovers">
                     Generate chapter covers
                   </button>
+                  <button class="pill-button ghost" id="bookWorkspaceRename">Rename book</button>
                 </div>
               </div>
               <div class="detail-section">
@@ -1706,6 +1707,7 @@ def get_gui_html() -> str:
               <button class="pill-button" id="chapterGenerateAudio">Generate audio</button>
               <button class="pill-button" id="chapterGenerateVideo">Generate video</button>
               <button class="pill-button" id="chapterGenerateCover">Generate cover</button>
+              <button class="pill-button ghost" id="chapterRename">Rename chapter</button>
             </div>
           </div>
           <div class="panel" id="chapterProgressPanel">
@@ -2175,6 +2177,7 @@ def get_gui_html() -> str:
       const chapterGenerateAudio = document.getElementById('chapterGenerateAudio');
       const chapterGenerateVideo = document.getElementById('chapterGenerateVideo');
       const chapterGenerateCover = document.getElementById('chapterGenerateCover');
+      const chapterRename = document.getElementById('chapterRename');
       const genreBack = document.getElementById('genreBack');
       const genreDetailHeading = document.getElementById('genreDetailHeading');
       const genreDetailSubheading = document.getElementById('genreDetailSubheading');
@@ -2223,6 +2226,7 @@ def get_gui_html() -> str:
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
       const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
       const bookWorkspaceChapterCovers = document.getElementById('bookWorkspaceChapterCovers');
+      const bookWorkspaceRename = document.getElementById('bookWorkspaceRename');
       const coverProgress = document.getElementById('coverProgress');
       const coverProgressLabel = document.getElementById('coverProgressLabel');
       const nowPlaying = document.getElementById('nowPlaying');
@@ -4453,6 +4457,41 @@ def get_gui_html() -> str:
         }
       });
 
+      if (chapterRename) {
+        chapterRename.addEventListener('click', async () => {
+          if (!currentChapter || !currentChapter.bookDir) {
+            log('Select a chapter before renaming.');
+            return;
+          }
+          const currentTitle = currentChapter.title || `Chapter ${currentChapter.index}`;
+          const updatedTitle = prompt('Enter a new chapter title', currentTitle);
+          if (!updatedTitle || !updatedTitle.trim()) {
+            return;
+          }
+          try {
+            await postJson('/api/rename-chapter-title', {
+              book_dir: currentChapter.bookDir,
+              chapter: currentChapter.index,
+              title: updatedTitle.trim(),
+            });
+            log('Chapter title updated.');
+            const chapters = await loadChapters(currentChapter.bookDir);
+            renderChapterShelf(currentChapter.bookDir, chapters);
+            const updated = chapters.find(
+              (entry) => String(entry.index) === String(currentChapter.index),
+            );
+            if (updated) {
+              currentChapter = { ...updated, bookDir: currentChapter.bookDir };
+              if (!chapterView.classList.contains('is-hidden')) {
+                await openChapterView(currentChapter.bookDir, currentChapter);
+              }
+            }
+          } catch (error) {
+            log(`Rename failed: ${error.message}`);
+          }
+        });
+      }
+
       outlineEditor.addEventListener('input', () => {
         updateOutlinePreview(outlineEditor.value);
       });
@@ -4612,6 +4651,30 @@ def get_gui_html() -> str:
       bookWorkspaceChapterCovers.addEventListener('click', () => {
         document.getElementById('generateChapterCovers').click();
       });
+
+      if (bookWorkspaceRename) {
+        bookWorkspaceRename.addEventListener('click', async () => {
+          if (!currentSelection.path || currentSelection.type !== 'book') {
+            log('Select a book before renaming.');
+            return;
+          }
+          const currentTitle = bookWorkspaceTitle.textContent || '';
+          const updatedTitle = prompt('Enter a new book title', currentTitle);
+          if (!updatedTitle || !updatedTitle.trim()) {
+            return;
+          }
+          try {
+            await postJson('/api/rename-book-title', {
+              book_dir: currentSelection.path,
+              title: updatedTitle.trim(),
+            });
+            log('Book title updated.');
+            await loadCatalog({ refreshMode: 'books' });
+          } catch (error) {
+            log(`Rename failed: ${error.message}`);
+          }
+        });
+      }
 
       loadCatalog();
       trackPlayback(bookAudio, () => bookWorkspaceTitle.textContent || 'Book audio');
