@@ -812,13 +812,13 @@ def _render_cover_section(title: str, byline: str, cover_image: Path) -> str:
     byline_block = f"## By {byline_text}\n" if byline_text else ""
     cover_path = cover_image.as_posix()
     return (
-        ":::: {.cover-page}\n"
+        "::: {.cover-page}\n"
         f"![Cover image]({cover_path}){{.cover-image}}\n"
         "::: {.cover-text}\n"
         f"# {title_text}\n\n"
         f"{byline_block}"
         ":::\n"
-        "::::\n\n"
+        ":::\n\n"
     )
 
 

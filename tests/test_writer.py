@@ -1213,9 +1213,9 @@ class TestWriter(unittest.TestCase):
             cover_image=Path("cover.png"),
         )
 
-        self.assertIn(":::: {.cover-page}", markdown)
+        self.assertIn("::: {.cover-page}", markdown)
         self.assertIn("::: {.cover-text}", markdown)
-        self.assertNotIn("::: {.cover-page}", markdown.splitlines())
+        self.assertNotIn(":::: {.cover-page}", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
         audiobook_text = build_audiobook_text(
