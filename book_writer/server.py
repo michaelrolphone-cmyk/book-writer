@@ -365,6 +365,20 @@ def _ensure_book_genres_async(
 def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
     tts_payload = payload.get("tts_settings") or {}
     defaults = TTSSettings()
+    max_text_tokens_raw = tts_payload.get(
+        "max_text_tokens", defaults.max_text_tokens
+    )
+    max_new_tokens_raw = tts_payload.get("max_new_tokens", defaults.max_new_tokens)
+    do_sample_raw = tts_payload.get("do_sample", defaults.do_sample)
+    try:
+        max_text_tokens = int(max_text_tokens_raw)
+    except (TypeError, ValueError):
+        max_text_tokens = defaults.max_text_tokens
+    try:
+        max_new_tokens = int(max_new_tokens_raw)
+    except (TypeError, ValueError):
+        max_new_tokens = defaults.max_new_tokens
+    do_sample = bool(do_sample_raw)
     return TTSSettings(
         enabled=bool(tts_payload.get("enabled", payload.get("tts", True))),
         voice=tts_payload.get("voice", defaults.voice),
@@ -379,6 +393,9 @@ def _parse_tts_settings(payload: dict[str, Any]) -> TTSSettings:
         rate=tts_payload.get("rate", defaults.rate),
         pitch=tts_payload.get("pitch", defaults.pitch),
         audio_dirname=tts_payload.get("audio_dirname", defaults.audio_dirname),
+        max_text_tokens=max_text_tokens,
+        max_new_tokens=max_new_tokens,
+        do_sample=do_sample,
         overwrite_audio=bool(tts_payload.get("overwrite_audio", False)),
         book_only=bool(tts_payload.get("book_only", False)),
         keep_model_loaded=bool(
