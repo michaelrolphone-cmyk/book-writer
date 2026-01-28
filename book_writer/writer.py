@@ -22,8 +22,11 @@ from book_writer.cover import (
     generate_chapter_cover,
 )
 from book_writer.metadata import (
+    ensure_book_chapters,
+    ensure_book_identity,
     generate_book_genres,
     read_book_language,
+    read_book_meta,
     write_book_meta,
 )
 from book_writer.outline import OutlineItem, outline_to_text, slugify
@@ -560,10 +563,12 @@ def _build_front_matter(title: str, byline: str, language: str) -> str:
     lines = ["---"]
     if title.strip():
         clean_title = _sanitize_markdown_for_latex(title.strip())
-        lines.append(f"title: {_yaml_quote(clean_title)}")
+        lines.append('title: ""')
+        lines.append(f"title-meta: {_yaml_quote(clean_title)}")
     if byline.strip():
         clean_byline = _sanitize_markdown_for_latex(byline.strip())
-        lines.append(f"author: {_yaml_quote(clean_byline)}")
+        lines.append('author: ""')
+        lines.append(f"author-meta: {_yaml_quote(clean_byline)}")
     if language.strip():
         lines.append(f"lang: {_yaml_quote(language.strip())}")
     lines.append("header-includes:")
@@ -1341,11 +1346,21 @@ def _read_book_metadata(
                 return ""
         return outline
 
+    meta = read_book_meta(output_dir)
+    if chapter_files:
+        _sync_chapter_assets_from_meta(output_dir, meta, chapter_files)
+        meta = read_book_meta(output_dir)
     book_md = output_dir / "book.md"
     if book_md.exists():
         content = book_md.read_text(encoding="utf-8")
-        title = "Untitled"
-        byline = "Marissa Bard"
+        title = ""
+        byline = ""
+        meta_title = meta.get("title")
+        meta_author = meta.get("author")
+        if isinstance(meta_title, str) and meta_title.strip():
+            title = meta_title.strip()
+        if isinstance(meta_author, str) and meta_author.strip():
+            byline = meta_author.strip()
         outline = ""
         lines = content.splitlines()
         if lines and lines[0].strip() == "---":
@@ -1356,18 +1371,39 @@ def _read_book_metadata(
                 if ":" in line:
                     key, value = line.split(":", 1)
                     front_matter[key.strip()] = value.strip().strip('"')
-            title = front_matter.get("title", title)
-            byline = front_matter.get("author", byline)
+            if not title:
+                title = (
+                    front_matter.get("title-meta")
+                    or front_matter.get("title")
+                    or title
+                )
+            if not byline:
+                byline = (
+                    front_matter.get("author-meta")
+                    or front_matter.get("author")
+                    or byline
+                )
         else:
-            for line in lines:
-                if line.startswith("# "):
-                    title = line[2:].strip()
-                    break
-            for line in lines:
-                if line.startswith("### By "):
-                    byline = line[len("### By ") :].strip()
-                    break
+            if not title:
+                for line in lines:
+                    if line.startswith("# "):
+                        title = line[2:].strip()
+                        break
+            if not byline:
+                for line in lines:
+                    if line.startswith("### By "):
+                        byline = line[len("### By ") :].strip()
+                        break
+        if not title:
+            title = "Untitled"
+        if not byline:
+            byline = "Marissa Bard"
         outline = outline_from_book_md(content)
+        ensure_book_identity(output_dir, title=title, author=byline)
+        if chapter_files:
+            ensure_book_chapters(
+                output_dir, _build_chapter_metadata(chapter_files)
+            )
         return ChapterContext(title=title, content=outline), byline
 
     outline = _derive_outline_from_chapters(chapter_files)
@@ -1376,6 +1412,8 @@ def _read_book_metadata(
         if line.startswith("# "):
             title = line[2:].strip()
             break
+    ensure_book_identity(output_dir, title=title, author="Marissa Bard")
+    ensure_book_chapters(output_dir, _build_chapter_metadata(chapter_files))
     return ChapterContext(title=title, content=outline), "Marissa Bard"
 
 
@@ -1389,11 +1427,126 @@ def _chapter_title_from_content(content: str, fallback: str) -> str:
     return fallback
 
 
+def _coerce_chapter_number(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _chapter_number_from_filename(path: Path) -> int | None:
+    match = re.match(r"(\\d+)", path.stem)
+    if not match:
+        return None
+    return _coerce_chapter_number(match.group(1))
+
+
+def _rename_asset(old_path: Path, new_path: Path) -> None:
+    if not old_path.exists() or new_path.exists():
+        return
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    old_path.rename(new_path)
+
+
+def _rename_chapter_assets(output_dir: Path, old_stem: str, new_stem: str) -> None:
+    asset_dirs = {
+        "audio": [".mp3"],
+        "video": [".mp4"],
+        "chapter_covers": [".png", ".jpg", ".jpeg", ".webp"],
+        "summaries/chapters": [".md"],
+    }
+    for dirname, suffixes in asset_dirs.items():
+        base_dir = output_dir / dirname
+        for suffix in suffixes:
+            _rename_asset(
+                base_dir / f"{old_stem}{suffix}",
+                base_dir / f"{new_stem}{suffix}",
+            )
+    old_images_dir = output_dir / "video_images" / old_stem
+    new_images_dir = output_dir / "video_images" / new_stem
+    if old_images_dir.exists() and not new_images_dir.exists():
+        new_images_dir.parent.mkdir(parents=True, exist_ok=True)
+        old_images_dir.rename(new_images_dir)
+
+
+def _sync_chapter_assets_from_meta(
+    output_dir: Path,
+    meta: dict[str, object],
+    chapter_files: List[Path],
+) -> bool:
+    chapters = meta.get("chapters")
+    if not isinstance(chapters, list) or not chapter_files:
+        return False
+    chapter_map: dict[int, Path] = {}
+    for path in _chapter_files(output_dir):
+        number = _chapter_number_from_filename(path)
+        if number is None or number in chapter_map:
+            continue
+        chapter_map[number] = path
+    meta_changed = False
+    renamed = False
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            continue
+        number = _coerce_chapter_number(chapter.get("number"))
+        title = chapter.get("title")
+        if number is None or not isinstance(title, str) or not title.strip():
+            continue
+        desired_stem = f"{number:03d}-{slugify(title)}"
+        desired_name = f"{desired_stem}.md"
+        current_path = None
+        file_name = chapter.get("file")
+        if isinstance(file_name, str):
+            candidate = output_dir / file_name
+            if candidate.exists():
+                current_path = candidate
+        if current_path is None:
+            current_path = chapter_map.get(number)
+        if current_path is None:
+            continue
+        target_path = output_dir / desired_name
+        if current_path.name != desired_name:
+            if not target_path.exists():
+                _rename_chapter_assets(output_dir, current_path.stem, desired_stem)
+                current_path.rename(target_path)
+                renamed = True
+            else:
+                current_path = target_path
+        if chapter.get("file") != desired_name:
+            chapter["file"] = desired_name
+            meta_changed = True
+    if meta_changed:
+        meta["chapters"] = chapters
+        meta_path = output_dir / "meta.json"
+        meta_path.write_text(
+            json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    if renamed:
+        chapter_files[:] = _chapter_files(output_dir)
+    return renamed or meta_changed
+
+
 def _read_cover_synopsis(output_dir: Path) -> str:
     synopsis_path = output_dir / "back-cover-synopsis.md"
     if synopsis_path.exists():
         return synopsis_path.read_text(encoding="utf-8").strip()
     return ""
+
+
+def _build_chapter_metadata(chapter_files: Sequence[Path]) -> list[dict[str, object]]:
+    chapter_metadata: list[dict[str, object]] = []
+    for index, chapter_file in enumerate(chapter_files, start=1):
+        content = chapter_file.read_text(encoding="utf-8")
+        title = _chapter_title_from_content(content, chapter_file.stem)
+        chapter_metadata.append(
+            {
+                "number": index,
+                "title": title,
+                "file": chapter_file.name,
+            }
+        )
+    return chapter_metadata
 
 
 def _split_markdown_paragraphs(content: str) -> list[str]:
@@ -1991,6 +2144,8 @@ def write_book(
     if verbose and nextsteps_sections:
         print("[write] Wrote nextsteps.md from implementation details.")
     book_title = book_title or items[0].title
+    ensure_book_identity(output_dir, title=book_title, author=byline)
+    ensure_book_chapters(output_dir, _build_chapter_metadata(written_files))
     outline_text = outline_to_text(items)
     generate_book_pdf(
         output_dir=output_dir,

@@ -229,6 +229,50 @@ def write_book_meta(
     meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def ensure_book_identity(
+    book_dir: Path, title: str | None = None, author: str | None = None
+) -> bool:
+    meta = read_book_meta(book_dir)
+    updated = False
+    if title and not meta.get("title"):
+        meta["title"] = title
+        updated = True
+    if author and not meta.get("author"):
+        meta["author"] = author
+        updated = True
+    if updated:
+        meta_path = _meta_path(book_dir)
+        meta_path.write_text(
+            json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    return updated
+
+
+def ensure_book_chapters(
+    book_dir: Path, chapters: Iterable[Mapping[str, object]]
+) -> bool:
+    normalized = [
+        {
+            "number": chapter.get("number"),
+            "title": chapter.get("title"),
+            "file": chapter.get("file"),
+        }
+        for chapter in chapters
+        if chapter.get("number") and chapter.get("title")
+    ]
+    if not normalized:
+        return False
+    meta = read_book_meta(book_dir)
+    if meta.get("chapters"):
+        return False
+    meta["chapters"] = normalized
+    meta_path = _meta_path(book_dir)
+    meta_path.write_text(
+        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return True
+
+
 def ensure_primary_genre(book_dir: Path, genres: Iterable[str]) -> str | None:
     resolved = resolve_primary_genre(genres)
     if not resolved:

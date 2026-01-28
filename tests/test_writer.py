@@ -16,6 +16,7 @@ from book_writer.writer import (
     ChapterLayout,
     LMStudioClient,
     _build_epub_cover_svg,
+    _read_book_metadata,
     build_audiobook_text,
     build_book_markdown,
     build_book_title_prompt,
@@ -1183,6 +1184,8 @@ class TestWriter(unittest.TestCase):
         )
 
         self.assertIn('lang: "en"', markdown)
+        self.assertIn('title-meta: "Book Title"', markdown)
+        self.assertIn('author-meta: "Marissa Bard"', markdown)
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
         self.assertIn("Copyright", markdown)
@@ -1197,7 +1200,7 @@ class TestWriter(unittest.TestCase):
             "Marissa Bard",
         )
 
-        self.assertIn('title: "Shards of Ink"', markdown)
+        self.assertIn('title-meta: "Shards of Ink"', markdown)
         self.assertIn("# Shards of Ink", markdown)
         self.assertNotIn("Title:", markdown)
         self.assertNotIn("# #", markdown)
@@ -1315,9 +1318,22 @@ class TestWriter(unittest.TestCase):
             )
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
+            meta = json.loads((output_dir / "meta.json").read_text(encoding="utf-8"))
 
         self.assertIn("# Custom Title", book_md)
         self.assertIn("### By Custom Byline", book_md)
+        self.assertEqual(meta["title"], "Custom Title")
+        self.assertEqual(meta["author"], "Custom Byline")
+        self.assertEqual(
+            meta["chapters"],
+            [
+                {
+                    "number": 1,
+                    "title": "Chapter One",
+                    "file": "001-chapter-one.md",
+                }
+            ],
+        )
         self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
@@ -1340,6 +1356,129 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(chapter_text[0], "# Chapter One")
         self.assertNotEqual(chapter_text[1].strip(), "# Chapter One")
         self.assertEqual(run_mock.call_count, 2)
+
+    def test_read_book_metadata_retrofits_meta_json_from_book_md(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            book_md = output_dir / "book.md"
+            book_md.write_text(
+                "---\n"
+                'title: ""\n'
+                'title-meta: "Retro Title"\n'
+                'author: ""\n'
+                'author-meta: "Retro Author"\n'
+                'lang: "en"\n'
+                "---\n"
+                "# Retro Title\n\n"
+                "### By Retro Author\n",
+                encoding="utf-8",
+            )
+
+            book_metadata, byline = _read_book_metadata(output_dir, [])
+
+            meta = json.loads((output_dir / "meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(book_metadata.title, "Retro Title")
+        self.assertEqual(byline, "Retro Author")
+        self.assertEqual(meta["title"], "Retro Title")
+        self.assertEqual(meta["author"], "Retro Author")
+
+    def test_read_book_metadata_retrofits_chapters_from_files(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text("# Chapter One\n\nText", encoding="utf-8")
+            chapter_files = [chapter_path]
+
+            _read_book_metadata(output_dir, chapter_files)
+
+            meta = json.loads((output_dir / "meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            meta["chapters"],
+            [
+                {
+                    "number": 1,
+                    "title": "Chapter One",
+                    "file": "001-chapter-one.md",
+                }
+            ],
+        )
+
+    def test_read_book_metadata_renames_chapter_assets_from_meta(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-old-title.md"
+            chapter_path.write_text("# Old Title\n\nText", encoding="utf-8")
+            (output_dir / "audio").mkdir(parents=True, exist_ok=True)
+            (output_dir / "video").mkdir(parents=True, exist_ok=True)
+            (output_dir / "chapter_covers").mkdir(parents=True, exist_ok=True)
+            (output_dir / "summaries" / "chapters").mkdir(
+                parents=True, exist_ok=True
+            )
+            (output_dir / "video_images" / "001-old-title").mkdir(
+                parents=True, exist_ok=True
+            )
+            (output_dir / "audio" / "001-old-title.mp3").write_text(
+                "audio", encoding="utf-8"
+            )
+            (output_dir / "video" / "001-old-title.mp4").write_text(
+                "video", encoding="utf-8"
+            )
+            (output_dir / "chapter_covers" / "001-old-title.png").write_text(
+                "cover", encoding="utf-8"
+            )
+            (output_dir / "summaries" / "chapters" / "001-old-title.md").write_text(
+                "summary", encoding="utf-8"
+            )
+            (output_dir / "video_images" / "001-old-title" / "frame.png").write_text(
+                "frame", encoding="utf-8"
+            )
+            (output_dir / "meta.json").write_text(
+                json.dumps(
+                    {
+                        "chapters": [
+                            {
+                                "number": 1,
+                                "title": "New Title",
+                                "file": "001-old-title.md",
+                            }
+                        ]
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            chapter_files = [chapter_path]
+            _read_book_metadata(output_dir, chapter_files)
+
+            meta = json.loads((output_dir / "meta.json").read_text(encoding="utf-8"))
+
+            self.assertTrue((output_dir / "001-new-title.md").exists())
+            self.assertTrue((output_dir / "audio" / "001-new-title.mp3").exists())
+            self.assertTrue((output_dir / "video" / "001-new-title.mp4").exists())
+            self.assertTrue(
+                (output_dir / "chapter_covers" / "001-new-title.png").exists()
+            )
+            self.assertTrue(
+                (output_dir / "summaries" / "chapters" / "001-new-title.md").exists()
+            )
+            self.assertTrue(
+                (output_dir / "video_images" / "001-new-title").exists()
+            )
+            self.assertEqual(
+                meta["chapters"],
+                [
+                    {
+                        "number": 1,
+                        "title": "New Title",
+                        "file": "001-new-title.md",
+                    }
+                ],
+            )
 
     @patch("book_writer.writer.subprocess.run")
     def test_write_book_strips_duplicate_bold_heading(self, run_mock: Mock) -> None:
