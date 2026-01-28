@@ -1186,12 +1186,12 @@ class TestWriter(unittest.TestCase):
         self.assertIn('lang: "en"', markdown)
         self.assertIn('title-meta: "Book Title"', markdown)
         self.assertIn('author-meta: "Marissa Bard"', markdown)
-        self.assertIn("# Book Title", markdown)
-        self.assertIn("### By Marissa Bard", markdown)
+        self.assertIn("<h1>Book Title</h1>", markdown)
+        self.assertIn("<h3>By Marissa Bard</h3>", markdown)
         self.assertIn("Copyright", markdown)
         self.assertIn("# Table of Contents", markdown)
         self.assertIn('class="page-break"', markdown)
-        self.assertIn("# Chapter One {#chapter-1}", markdown)
+        self.assertIn('<h1 id="chapter-1">Chapter One</h1>', markdown)
 
     def test_build_book_markdown_normalizes_title_markdown(self) -> None:
         markdown = build_book_markdown(
@@ -1201,11 +1201,11 @@ class TestWriter(unittest.TestCase):
         )
 
         self.assertIn('title-meta: "Shards of Ink"', markdown)
-        self.assertIn("# Shards of Ink", markdown)
+        self.assertIn("<h1>Shards of Ink</h1>", markdown)
         self.assertNotIn("Title:", markdown)
         self.assertNotIn("# #", markdown)
 
-    def test_build_book_markdown_nests_cover_divs(self) -> None:
+    def test_build_book_markdown_renders_cover_blocks(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
             [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
@@ -1213,9 +1213,11 @@ class TestWriter(unittest.TestCase):
             cover_image=Path("cover.png"),
         )
 
-        self.assertIn("::: {.cover-page}", markdown)
-        self.assertIn("::: {.cover-text}", markdown)
-        self.assertNotIn(":::: {.cover-page}", markdown)
+        self.assertIn("```{=html}", markdown)
+        self.assertIn('<div class="cover-page">', markdown)
+        self.assertIn('<div class="cover-text">', markdown)
+        self.assertIn("<h1>Book Title</h1>", markdown)
+        self.assertNotIn(":::", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
         audiobook_text = build_audiobook_text(
@@ -1748,11 +1750,14 @@ class TestWriter(unittest.TestCase):
             )
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
-            self.assertIn("### By Marissa Bard", book_md)
-            self.assertIn("![Cover image](cover.png){.cover-image}", book_md)
-            self.assertIn("::: {.cover-text}", book_md)
-            self.assertIn("# Chapter One", book_md)
-            self.assertIn("## By Marissa Bard", book_md)
+            self.assertIn("<h3>By Marissa Bard</h3>", book_md)
+            self.assertIn(
+                '<img src="cover.png" class="cover-image" alt="Cover image" />',
+                book_md,
+            )
+            self.assertNotIn(":::", book_md)
+            self.assertIn("<h1 id=\"chapter-1\">Chapter One</h1>", book_md)
+            self.assertIn("<h2>By Marissa Bard</h2>", book_md)
             self.assertNotIn("# Outline", book_md)
             self.assertIn(
                 '<img src="chapter_covers/001-chapter-one.png" class="chapter-cover"',
