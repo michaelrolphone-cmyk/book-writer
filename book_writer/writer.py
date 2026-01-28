@@ -979,8 +979,9 @@ def build_book_markdown(
             _render_cover_section(normalized_title, normalized_byline, cover_image)
         )
         sections.append(_page_break())
-    sections.append(_render_title_page(normalized_title, normalized_byline))
-    sections.append(_page_break())
+    else:
+        sections.append(_render_title_page(normalized_title, normalized_byline))
+        sections.append(_page_break())
     sections.append(_render_copyright_page(normalized_title, normalized_byline))
     sections.append(_page_break())
     sections.append(_render_table_of_contents(chapters))

@@ -1217,6 +1217,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn('<div class="cover-page">', markdown)
         self.assertIn('<div class="cover-text">', markdown)
         self.assertIn("<h1>Book Title</h1>", markdown)
+        self.assertNotIn('<div class="title-page">', markdown)
         self.assertNotIn(":::", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
@@ -1322,8 +1323,8 @@ class TestWriter(unittest.TestCase):
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
             meta = json.loads((output_dir / "meta.json").read_text(encoding="utf-8"))
 
-        self.assertIn("# Custom Title", book_md)
-        self.assertIn("### By Custom Byline", book_md)
+        self.assertIn("<h1>Custom Title</h1>", book_md)
+        self.assertIn("<h3>By Custom Byline</h3>", book_md)
         self.assertEqual(meta["title"], "Custom Title")
         self.assertEqual(meta["author"], "Custom Byline")
         self.assertEqual(
@@ -1750,7 +1751,6 @@ class TestWriter(unittest.TestCase):
             )
 
             book_md = (output_dir / "book.md").read_text(encoding="utf-8")
-            self.assertIn("<h3>By Marissa Bard</h3>", book_md)
             self.assertIn(
                 '<img src="cover.png" class="cover-image" alt="Cover image" />',
                 book_md,
