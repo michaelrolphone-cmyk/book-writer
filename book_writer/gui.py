@@ -554,10 +554,113 @@ def get_gui_html() -> str:
         width: 100%;
       }
 
+      .cover-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+      }
+
+      .cover-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
       .cover-header .cover-title {
         font-size: 20px;
         font-weight: 600;
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      }
+
+      .edit-link {
+        border: none;
+        background: transparent;
+        color: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 0;
+        cursor: pointer;
+        opacity: 0.85;
+      }
+
+      .edit-link:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+
+      .cover-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .icon-button {
+        border: none;
+        background: rgba(8, 12, 20, 0.35);
+        color: inherit;
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.18),
+          -6px -6px 12px rgba(255, 255, 255, 0.25);
+        cursor: pointer;
+      }
+
+      .icon-button svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .icon-button-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+      }
+
+      .dropdown {
+        position: relative;
+      }
+
+      .dropdown summary {
+        list-style: none;
+      }
+
+      .dropdown summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 220px;
+        padding: 12px;
+        border-radius: 18px;
+        background: var(--bg);
+        box-shadow: 12px 12px 24px var(--shadow-dark), -12px -12px 24px var(--shadow-light);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 10;
+      }
+
+      .dropdown-menu .pill-button {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .dropdown:not([open]) .dropdown-menu {
+        display: none;
       }
 
       .workspace-cover {
@@ -1608,7 +1711,44 @@ def get_gui_html() -> str:
             <div class="workspace-view is-hidden" id="bookWorkspace">
               <div class="cover-header workspace-cover" id="bookWorkspaceCoverHeader">
                 <div class="cover-header-content">
-                  <span class="cover-title" id="bookWorkspaceTitle">Book title</span>
+                  <div class="cover-header-top">
+                    <div class="cover-title-row">
+                      <span class="cover-title" id="bookWorkspaceTitle">Book title</span>
+                      <button class="edit-link" id="bookWorkspaceRename" type="button">Edit</button>
+                    </div>
+                    <div class="cover-header-actions" id="bookWorkspaceDownloads">
+                      <button
+                        class="icon-button is-hidden"
+                        id="bookWorkspacePdf"
+                        type="button"
+                        aria-label="Open PDF"
+                        title="Open PDF"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M12 3a1 1 0 0 1 1 1v9.17l2.59-2.58a1 1 0 1 1 1.41 1.42l-4.3 4.29a1 1 0 0 1-1.4 0l-4.3-4.29a1 1 0 1 1 1.41-1.42L11 13.17V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"
+                          />
+                        </svg>
+                        <span class="icon-button-label">PDF</span>
+                      </button>
+                      <button
+                        class="icon-button is-hidden"
+                        id="bookWorkspaceEpub"
+                        type="button"
+                        aria-label="Open EPUB"
+                        title="Open EPUB"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M12 3a1 1 0 0 1 1 1v9.17l2.59-2.58a1 1 0 1 1 1.41 1.42l-4.3 4.29a1 1 0 0 1-1.4 0l-4.3-4.29a1 1 0 1 1 1.41-1.42L11 13.17V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"
+                          />
+                        </svg>
+                        <span class="icon-button-label">EPUB</span>
+                      </button>
+                    </div>
+                  </div>
                   <div class="media-block hidden" id="bookAudioBlock">
                     <label>Full book audio</label>
                     <audio controls id="bookAudio"></audio>
@@ -1625,18 +1765,20 @@ def get_gui_html() -> str:
               <div class="detail-section">
                 <h4>Book actions</h4>
                 <div class="workspace-actions">
-                  <button class="pill-button" id="bookWorkspaceReader">Open reader</button>
+                  <button class="pill-button is-hidden" id="bookWorkspaceReader">Open reader</button>
                   <button class="pill-button" id="bookWorkspaceExpand">Expand chapters</button>
                   <button class="pill-button" id="bookWorkspaceCompile">Compile PDF</button>
-                  <button class="pill-button is-hidden" id="bookWorkspacePdf">Open PDF</button>
-                  <button class="pill-button is-hidden" id="bookWorkspaceEpub">Open EPUB</button>
-                  <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
-                  <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
-                  <button class="pill-button" id="bookWorkspaceCover">Generate cover</button>
-                  <button class="pill-button" id="bookWorkspaceChapterCovers">
-                    Generate chapter covers
-                  </button>
-                  <button class="pill-button ghost" id="bookWorkspaceRename">Rename book</button>
+                  <details class="dropdown" id="bookWorkspaceGenerateMenu">
+                    <summary class="pill-button">Generate</summary>
+                    <div class="dropdown-menu">
+                      <button class="pill-button" id="bookWorkspaceAudio">Generate audio</button>
+                      <button class="pill-button" id="bookWorkspaceVideo">Generate video</button>
+                      <button class="pill-button" id="bookWorkspaceCover">Generate cover</button>
+                      <button class="pill-button" id="bookWorkspaceChapterCovers">
+                        Generate chapter covers
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </div>
               <div class="detail-section">
