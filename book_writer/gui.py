@@ -372,6 +372,8 @@ def get_gui_html() -> str:
 
       .book-card.book-card-book {
         height: 432px;
+        max-width: 300px;
+        width: 100%;
       }
 
       .book-card.book-card-book .card-description {
@@ -702,9 +704,14 @@ def get_gui_html() -> str:
       }
 
       .chapter-card .book-cover {
-        height: 110px;
+        height: 130px;
         font-size: 14px;
         padding: 16px;
+      }
+
+      .chapter-card .book-cover-title {
+        -webkit-line-clamp: 3;
+        max-height: calc(1.2em * 3);
       }
 
       .book-card.cover-filled .meta-line {
