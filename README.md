@@ -53,7 +53,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API example commands**
 - Compile a book: `curl -X POST http://127.0.0.1:8080/api/compile-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
-  - The compiler builds the PDF/EPUB table of contents from chapter files and omits outline sections in `book.md`.
+  - The compiler builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
 - Generate a book cover: `curl -X POST http://127.0.0.1:8080/api/generate-cover -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
 - Generate chapter covers: `curl -X POST http://127.0.0.1:8080/api/generate-chapter-covers -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","chapter_cover_dir":"chapter_covers"}'`
 ### CLI quick reference
@@ -64,7 +64,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - Expand a completed book: `python -m book_writer --expand-book books/my-book --expand-passes 2`
 - Generate cover assets: `python -m book_writer --cover-book books/my-book --cover`
 - Compile an existing book: `python -m book_writer --prompt` (choose **Modify existing books** → **Generate compiled book.pdf and book.epub**)
-  - Compilation builds the PDF/EPUB table of contents from chapter files and omits outline sections in `book.md`.
+  - Compilation builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
 
 ### Launch the GUI server
 
@@ -136,7 +136,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 
 **Outputs** (written under `output/`)
 - Numbered chapter/section markdown files (e.g., `001-chapter-one.md`).
-- `book.md`: Compiled markdown containing cover/title pages, chapter title pages, and chapters.
+- `book.md`: Compiled markdown containing cover/title pages, a copyright page, table of contents, chapter title pages, and chapters.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
 - `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently.
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.

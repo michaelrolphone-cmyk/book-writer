@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import json
 import mimetypes
 import re
@@ -621,6 +622,10 @@ def _ensure_epub_css(output_dir: Path) -> Path:
                 ".cover-text h2 {",
                 "  margin: 0;",
                 "}",
+                ".copyright-page {",
+                "  text-align: center;",
+                "  font-size: 0.9em;",
+                "}",
                 ".chapter-title-page {",
                 "  position: relative;",
                 "  width: 100%;",
@@ -804,7 +809,7 @@ def _render_title_page(title: str, byline: str) -> str:
     )
 
 
-def _render_chapter_title_page(chapter: ChapterLayout) -> str:
+def _render_chapter_title_page(chapter: ChapterLayout, chapter_id: str) -> str:
     title_text = _sanitize_markdown_for_latex(chapter.title)
     image_block = ""
     latex_background_block = ""
@@ -830,7 +835,7 @@ def _render_chapter_title_page(chapter: ChapterLayout) -> str:
     return (
         "::: {.chapter-title-page}\n"
         f"{latex_background_block}"
-        f"# {title_text}\n"
+        f"# {title_text} {{#{chapter_id}}}\n"
         f"{image_block}"
         ":::\n\n"
     )
@@ -844,6 +849,33 @@ def _render_chapter_content(chapter: ChapterLayout) -> str:
 def _render_back_cover(synopsis: str) -> str:
     synopsis_text = _sanitize_markdown_for_latex(synopsis.strip())
     return f"# Back Cover\n\n{synopsis_text}\n\n"
+
+
+def _render_copyright_page(title: str, byline: str) -> str:
+    year = datetime.date.today().year
+    holder = _sanitize_markdown_for_latex(byline or title)
+    holder_line = f"{holder}\n" if holder else ""
+    return (
+        "::: {.copyright-page}\n"
+        f"Copyright © {year}\n"
+        f"{holder_line}"
+        "All rights reserved.\n\n"
+        "No part of this book may be reproduced or transmitted in any form or "
+        "by any means, electronic or mechanical, including photocopying, "
+        "recording, or any information storage and retrieval system, without "
+        "permission in writing from the publisher.\n"
+        ":::\n\n"
+    )
+
+
+def _render_table_of_contents(chapters: list[ChapterLayout]) -> str:
+    lines = ["# Table of Contents\n\n"]
+    for index, chapter in enumerate(chapters, start=1):
+        chapter_id = f"chapter-{index}"
+        title_text = _sanitize_markdown_for_latex(chapter.title)
+        lines.append(f"- [{title_text}](#{chapter_id})\n")
+    lines.append("\n")
+    return "".join(lines)
 
 
 def build_book_markdown(
@@ -861,8 +893,14 @@ def build_book_markdown(
         sections.append(_page_break())
     sections.append(_render_title_page(title, byline))
     sections.append(_page_break())
+    sections.append(_render_copyright_page(title, byline))
+    sections.append(_page_break())
+    sections.append(_render_table_of_contents(chapters))
+    sections.append(_page_break())
     for index, chapter in enumerate(chapters):
-        sections.append(_render_chapter_title_page(chapter))
+        sections.append(
+            _render_chapter_title_page(chapter, chapter_id=f"chapter-{index + 1}")
+        )
         sections.append(_page_break())
         chapter_body = _render_chapter_content(chapter)
         if chapter_body:
@@ -1034,14 +1072,14 @@ def generate_book_pdf(
     pdf_path = output_dir / "book.pdf"
     epub_path = output_dir / "book.epub"
     epub_css = _ensure_epub_css(output_dir)
-    epub_args = ["--toc", "--css", epub_css.name]
+    epub_args = ["--css", epub_css.name]
     if cover_image_path is not None:
         epub_args.extend(["--epub-cover-image", cover_image_path.as_posix()])
     try:
         run_pandoc(
             markdown_path=markdown_path,
             output_path=pdf_path,
-            extra_args=("--toc", "--pdf-engine=xelatex"),
+            extra_args=("--pdf-engine=xelatex",),
         )
         run_pandoc(
             markdown_path=markdown_path,

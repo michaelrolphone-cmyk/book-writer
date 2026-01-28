@@ -1,3 +1,4 @@
+import datetime
 import json
 import unittest
 from pathlib import Path
@@ -1174,7 +1175,7 @@ class TestWriter(unittest.TestCase):
         self.assertIn("Outline:", prompt)
         self.assertIn("Book content:", prompt)
 
-    def test_build_book_markdown_includes_title_and_chapters(self) -> None:
+    def test_build_book_markdown_includes_front_matter_and_chapters(self) -> None:
         markdown = build_book_markdown(
             "Book Title",
             [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
@@ -1184,8 +1185,10 @@ class TestWriter(unittest.TestCase):
         self.assertIn('lang: "en"', markdown)
         self.assertIn("# Book Title", markdown)
         self.assertIn("### By Marissa Bard", markdown)
+        self.assertIn("Copyright", markdown)
+        self.assertIn("# Table of Contents", markdown)
         self.assertIn('class="page-break"', markdown)
-        self.assertIn("# Chapter One", markdown)
+        self.assertIn("# Chapter One {#chapter-1}", markdown)
 
     def test_build_audiobook_text_includes_title_byline_and_chapters(self) -> None:
         audiobook_text = build_audiobook_text(
@@ -1214,6 +1217,19 @@ class TestWriter(unittest.TestCase):
         self.assertNotIn("🌙", markdown)
         self.assertIn("Book  Title", markdown)
         self.assertIn("Secret  emoji", markdown)
+
+    def test_build_book_markdown_includes_copyright_page(self) -> None:
+        markdown = build_book_markdown(
+            "Book Title",
+            [ChapterLayout(title="Chapter One", content="# Chapter One\n\nText")],
+            "Marissa Bard",
+        )
+
+        current_year = datetime.date.today().year
+        self.assertIn(f"Copyright © {current_year}", markdown)
+        self.assertIn("Marissa Bard", markdown)
+        self.assertIn("# Table of Contents", markdown)
+        self.assertIn("- [Chapter One](#chapter-1)", markdown)
 
     def test_build_book_markdown_respects_language(self) -> None:
         markdown = build_book_markdown(
@@ -1592,7 +1608,6 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
-                        "--toc",
                         "--pdf-engine=xelatex",
                         "-o",
                         "book.pdf",
@@ -1606,7 +1621,6 @@ class TestWriter(unittest.TestCase):
                         "book.md",
                         "--from",
                         "markdown+yaml_metadata_block+fenced_divs+link_attributes",
-                        "--toc",
                         "--css",
                         "epub.css",
                         "--epub-cover-image",
@@ -1698,6 +1712,7 @@ class TestWriter(unittest.TestCase):
 
         self.assertIn(".cover-page", css_text)
         self.assertIn(".cover-text", css_text)
+        self.assertIn(".copyright-page", css_text)
         self.assertIn(".chapter-title-page", css_text)
         self.assertIn("  width: 100%;", css_text)
         self.assertIn(".chapter-title-page .chapter-cover", css_text)
