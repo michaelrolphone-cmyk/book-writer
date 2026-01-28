@@ -77,6 +77,24 @@ python -m book_writer --gui --gui-host 127.0.0.1 --gui-port 8080
 Open `http://127.0.0.1:8080` in your browser after the server starts. You can also launch the GUI from the interactive CLI by running `python -m book_writer --prompt` and choosing **Launch GUI server** from the first menu.
 Run `python -m book_writer --help` for the full CLI command reference.
 
+### CLI commands
+
+Use these common CLI entry points to run the workflow without the interactive prompt.
+
+```bash
+# Generate a new book from an outline
+python -m book_writer --outline OUTLINE.md --output-dir output
+
+# Expand an existing book in place
+python -m book_writer --expand-book output/My_Book --expand-passes 2
+
+# Compile a finished book (PDF/EPUB depending on your setup)
+python -m book_writer --compile-book output/My_Book
+
+# Generate audio narration for an existing book
+python -m book_writer --generate-audio output/My_Book --tts-overwrite
+```
+
 ### Generate a single book from an outline
 
 ```bash
@@ -302,6 +320,10 @@ Most POST endpoints accept these optional fields to align with CLI behavior:
   - `paragraph_images` object: `enabled`, `image_dirname`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `overwrite`, `command`
 - `cover_settings` object:
   - `enabled`, `prompt`, `negative_prompt`, `model_path`, `module_path`, `steps`, `guidance_scale`, `seed`, `width`, `height`, `output_name`, `overwrite`, `command`
+
+### API endpoints
+
+The GUI server exposes JSON endpoints under the same host/port used for the GUI (for example `http://127.0.0.1:8080`).
 
 ### GET endpoints
 
