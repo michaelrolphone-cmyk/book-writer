@@ -153,7 +153,7 @@ class TestWriter(unittest.TestCase):
         text = "We measure \\frac{d\\Psi}{dt} over time."
         cleaned = _sanitize_markdown_for_latex(text)
         self.assertIn(
-            "\\textbackslash{}frac{d\\textbackslash{}Psi}{dt}",
+            "\\textbackslash{}frac\\{d\\textbackslash{}Psi\\}\\{dt\\}",
             cleaned,
         )
 
@@ -175,6 +175,13 @@ class TestWriter(unittest.TestCase):
             "\\textbackslash{}Office\\textbackslash{}text.",
             cleaned,
         )
+
+    def test_sanitize_markdown_for_latex_escapes_ampersands(self) -> None:
+        text = "Velvet Shadows & Steel Hearts"
+
+        cleaned = _sanitize_markdown_for_latex(text)
+
+        self.assertIn("Velvet Shadows \\& Steel Hearts", cleaned)
 
     def test_truncate_cover_text_returns_stripped_input(self) -> None:
         text = "  Short synopsis.  "
