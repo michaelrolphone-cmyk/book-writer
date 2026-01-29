@@ -28,8 +28,11 @@ from book_writer.writer import (
     build_prompt,
     build_synopsis_prompt,
     _base_prompt,
+    _append_journey_steps,
     _ensure_epub_css,
     _expand_prompt_text,
+    _chunk_markdown_text,
+    _merge_taxonomy,
     _parse_json_response,
     _sanitize_markdown_for_latex,
     _truncate_prompt_input,
@@ -231,6 +234,59 @@ class TestWriter(unittest.TestCase):
         truncated = _truncate_prompt_input(text, 100)
 
         self.assertEqual(truncated, text)
+
+    def test_chunk_markdown_text_respects_limit(self) -> None:
+        text = "# Heading\n\n" + ("A" * 1200)
+
+        chunks = _chunk_markdown_text(text, 500)
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(chunk) <= 500 for chunk in chunks))
+
+    def test_merge_taxonomy_adds_new_items(self) -> None:
+        existing = {
+            "title": "Sample",
+            "taxonomy": {
+                "people": [{"id": "person:aria", "name": "Aria", "summary": ""}],
+                "places": [],
+                "events": [],
+                "motivations": [],
+                "loyalties": [],
+                "personalities": [],
+            },
+        }
+        update = {
+            "title": "Sample",
+            "taxonomy": {
+                "people": [
+                    {"id": "person:aria", "summary": "Explorer."},
+                    {"id": "person:bryn", "name": "Bryn"},
+                ],
+                "places": [{"id": "place:harbor", "name": "Harbor"}],
+                "events": [],
+                "motivations": [],
+                "loyalties": [],
+                "personalities": [],
+            },
+        }
+
+        merged = _merge_taxonomy(existing, update)
+
+        people = {person["id"]: person for person in merged["taxonomy"]["people"]}
+        self.assertEqual(people["person:aria"]["summary"], "Explorer.")
+        self.assertIn("person:bryn", people)
+        self.assertEqual(len(merged["taxonomy"]["places"]), 1)
+
+    def test_append_journey_steps_renumbers(self) -> None:
+        existing = [{"step": 1, "label": "Start"}]
+        new_steps = [
+            {"step": 99, "label": "Middle"},
+            {"step": 100, "label": "End"},
+        ]
+
+        updated = _append_journey_steps(existing, new_steps)
+
+        self.assertEqual([step["step"] for step in updated], [1, 2, 3])
 
     def test_truncate_cover_text_returns_stripped_input(self) -> None:
         text = "  Short synopsis.  "

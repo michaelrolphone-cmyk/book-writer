@@ -326,7 +326,18 @@ def build_outline_revision_prompt(outline_text: str, revision_prompt: str) -> st
 
 MAX_TAXONOMY_OUTLINE_CHARS = 4000
 MAX_TAXONOMY_CONTENT_CHARS = 6000
+MAX_TAXONOMY_OUTLINE_CHUNK_CHARS = 1500
+MAX_TAXONOMY_CONTENT_CHUNK_CHARS = 2000
+MAX_JOURNEY_TAXONOMY_CHARS = 2500
 TRUNCATION_MARKER = "\n\n...[truncated]...\n\n"
+TAXONOMY_KEYS = (
+    "people",
+    "places",
+    "events",
+    "motivations",
+    "loyalties",
+    "personalities",
+)
 
 
 def _truncate_prompt_input(text: str, max_chars: int) -> str:
@@ -398,6 +409,219 @@ def build_journey_prompt(
         f"Outline:\n{outline_excerpt}\n\n"
         f"Book content:\n{content_excerpt}"
     )
+
+
+def _chunk_markdown_text(text: str, max_chars: int) -> List[str]:
+    cleaned = text.strip()
+    if not cleaned:
+        return [""]
+    if max_chars <= 0 or len(cleaned) <= max_chars:
+        return [cleaned]
+
+    blocks = _split_markdown_blocks(cleaned)
+    chunks: List[str] = []
+    buffer: List[str] = []
+    buffer_length = 0
+
+    def flush() -> None:
+        nonlocal buffer, buffer_length
+        if buffer:
+            chunks.append("\n\n".join(buffer).strip())
+            buffer = []
+            buffer_length = 0
+
+    for block in blocks:
+        block_text = block.text.strip()
+        if not block_text:
+            continue
+        if len(block_text) > max_chars:
+            flush()
+            for start in range(0, len(block_text), max_chars):
+                chunk = block_text[start : start + max_chars].strip()
+                if chunk:
+                    chunks.append(chunk)
+            continue
+        projected = buffer_length + len(block_text) + (2 if buffer else 0)
+        if buffer and projected > max_chars:
+            flush()
+        if buffer:
+            buffer_length += 2
+        buffer.append(block_text)
+        buffer_length += len(block_text)
+
+    flush()
+    return chunks or [""]
+
+
+def _build_taxonomy_prompt_for_chunk(
+    title: str,
+    outline_text: str,
+    content_chunk: str,
+    chunk_index: int,
+    total_chunks: int,
+) -> str:
+    outline_excerpt = _truncate_prompt_input(
+        outline_text, MAX_TAXONOMY_OUTLINE_CHUNK_CHARS
+    )
+    content_excerpt = _truncate_prompt_input(
+        content_chunk, MAX_TAXONOMY_CONTENT_CHUNK_CHARS
+    )
+    return (
+        "Create a taxonomy tree for the book as JSON. "
+        "Capture people, places, events, motivations, loyalties, and personalities. "
+        "Use stable string IDs (e.g., person:aria, place:rose-bay) so journey steps "
+        "can reference them. Return only JSON using this schema:\n"
+        "{\n"
+        '  "title": "...",\n'
+        '  "taxonomy": {\n'
+        '    "people": [{"id": "person:...", "name": "...", "summary": "...", '
+        '"motivations": ["motivation:..."], "loyalties": ["loyalty:..."], '
+        '"personalities": ["personality:..."]}],\n'
+        '    "places": [{"id": "place:...", "name": "...", "summary": "..."}],\n'
+        '    "events": [{"id": "event:...", "name": "...", "summary": "...", '
+        '"participants": ["person:..."], "locations": ["place:..."]}],\n'
+        '    "motivations": [{"id": "motivation:...", "name": "...", "summary": "..."}],\n'
+        '    "loyalties": [{"id": "loyalty:...", "name": "...", "summary": "..."}],\n'
+        '    "personalities": [{"id": "personality:...", "name": "...", "summary": "..."}]\n'
+        "  }\n"
+        "}\n\n"
+        f"Book title: {title}\n\n"
+        f"Book chunk {chunk_index} of {total_chunks}.\n\n"
+        f"Outline:\n{outline_excerpt}\n\n"
+        f"Book content (chunk):\n{content_excerpt}"
+    )
+
+
+def _build_journey_prompt_for_chunk(
+    title: str,
+    taxonomy: dict,
+    outline_text: str,
+    content_chunk: str,
+    previous_steps: list[dict],
+    chunk_index: int,
+    total_chunks: int,
+) -> str:
+    taxonomy_json = json.dumps(taxonomy, indent=2, sort_keys=True)
+    taxonomy_excerpt = _truncate_prompt_input(
+        taxonomy_json, MAX_JOURNEY_TAXONOMY_CHARS
+    )
+    outline_excerpt = _truncate_prompt_input(
+        outline_text, MAX_TAXONOMY_OUTLINE_CHUNK_CHARS
+    )
+    content_excerpt = _truncate_prompt_input(
+        content_chunk, MAX_TAXONOMY_CONTENT_CHUNK_CHARS
+    )
+    journey_context = ""
+    if previous_steps:
+        summaries = [
+            f"Step {step.get('step')}: {step.get('label')} - {step.get('summary')}"
+            for step in previous_steps[-5:]
+        ]
+        journey_context = (
+            "Previous journey steps:\n"
+            + _truncate_prompt_input("\n".join(summaries), 800)
+            + "\n\n"
+        )
+    return (
+        "Create a journey sequence as JSON that follows the thematic progression "
+        "of the book. Reference taxonomy node IDs in each step. Return only JSON "
+        "using this schema:\n"
+        "{\n"
+        '  "title": "...",\n'
+        '  "journey": [\n'
+        '    {"step": 1, "label": "...", "nodes": ["person:...", "event:..."], '
+        '"summary": "..."}\n'
+        "  ]\n"
+        "}\n\n"
+        f"Book title: {title}\n\n"
+        f"Book chunk {chunk_index} of {total_chunks}.\n\n"
+        f"{journey_context}"
+        f"Taxonomy:\n{taxonomy_excerpt}\n\n"
+        f"Outline:\n{outline_excerpt}\n\n"
+        f"Book content (chunk):\n{content_excerpt}"
+    )
+
+
+def _empty_taxonomy(title: str) -> dict:
+    return {
+        "title": title,
+        "taxonomy": {key: [] for key in TAXONOMY_KEYS},
+    }
+
+
+def _coerce_taxonomy(taxonomy: dict, title: str) -> dict:
+    base = _empty_taxonomy(title)
+    if isinstance(taxonomy, dict):
+        if taxonomy.get("title"):
+            base["title"] = taxonomy["title"]
+        taxonomy_block = taxonomy.get("taxonomy", {})
+        if isinstance(taxonomy_block, dict):
+            for key in TAXONOMY_KEYS:
+                items = taxonomy_block.get(key, [])
+                if isinstance(items, list):
+                    base["taxonomy"][key] = [
+                        item for item in items if isinstance(item, dict)
+                    ]
+    return base
+
+
+def _merge_taxonomy(existing: dict, update: dict) -> dict:
+    merged = _coerce_taxonomy(existing, existing.get("title", ""))
+    incoming = _coerce_taxonomy(update, update.get("title", ""))
+    if incoming.get("title"):
+        merged["title"] = incoming["title"]
+
+    for key in TAXONOMY_KEYS:
+        existing_items = merged["taxonomy"].get(key, [])
+        incoming_items = incoming["taxonomy"].get(key, [])
+        combined: list[dict] = []
+        seen: dict[str, dict] = {}
+
+        for item in existing_items:
+            item_id = item.get("id")
+            if item_id:
+                item_copy = dict(item)
+                seen[item_id] = item_copy
+                combined.append(item_copy)
+            else:
+                combined.append(item)
+
+        for item in incoming_items:
+            item_id = item.get("id")
+            if item_id and item_id in seen:
+                existing_item = seen[item_id]
+                for field, value in item.items():
+                    if field not in existing_item or existing_item[field] in (
+                        None,
+                        "",
+                        [],
+                        {},
+                    ):
+                        existing_item[field] = value
+            else:
+                item_copy = dict(item)
+                if item_id:
+                    seen[item_id] = item_copy
+                combined.append(item_copy)
+
+        merged["taxonomy"][key] = combined
+
+    return merged
+
+
+def _append_journey_steps(
+    existing_steps: list[dict], new_steps: list[dict]
+) -> list[dict]:
+    if not isinstance(new_steps, list):
+        return existing_steps
+    updated = list(existing_steps)
+    for step in new_steps:
+        if not isinstance(step, dict):
+            continue
+        step_copy = dict(step)
+        step_copy["step"] = len(updated) + 1
+        updated.append(step_copy)
+    return updated
 
 
 def generate_outline(
@@ -607,19 +831,37 @@ def _write_taxonomy_and_journey(
     outline_text: str,
     content: str,
 ) -> tuple[Path, Path]:
-    taxonomy_prompt = build_taxonomy_prompt(title, outline_text, content)
-    taxonomy_text = client.generate(taxonomy_prompt)
-    taxonomy = _parse_json_response(taxonomy_text, "taxonomy")
+    content_chunks = _chunk_markdown_text(content, MAX_TAXONOMY_CONTENT_CHUNK_CHARS)
+    taxonomy = _empty_taxonomy(title)
+    for index, chunk in enumerate(content_chunks, start=1):
+        taxonomy_prompt = _build_taxonomy_prompt_for_chunk(
+            title, outline_text, chunk, index, len(content_chunks)
+        )
+        taxonomy_text = client.generate(taxonomy_prompt)
+        chunk_taxonomy = _parse_json_response(taxonomy_text, "taxonomy")
+        taxonomy = _merge_taxonomy(taxonomy, chunk_taxonomy)
     taxonomy_path = output_dir / "taxonomy.json"
     taxonomy_path.write_text(
         json.dumps(taxonomy, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    journey_prompt = build_journey_prompt(
-        title, taxonomy, outline_text, content
-    )
-    journey_text = client.generate(journey_prompt)
-    journey = _parse_json_response(journey_text, "journey")
+    journey_steps: list[dict] = []
+    for index, chunk in enumerate(content_chunks, start=1):
+        journey_prompt = _build_journey_prompt_for_chunk(
+            title,
+            taxonomy,
+            outline_text,
+            chunk,
+            journey_steps,
+            index,
+            len(content_chunks),
+        )
+        journey_text = client.generate(journey_prompt)
+        journey_chunk = _parse_json_response(journey_text, "journey")
+        journey_steps = _append_journey_steps(
+            journey_steps, journey_chunk.get("journey", [])
+        )
+    journey = {"title": taxonomy.get("title", title), "journey": journey_steps}
     journey_path = output_dir / "journey.json"
     journey_path.write_text(
         json.dumps(journey, indent=2, sort_keys=True) + "\n",
