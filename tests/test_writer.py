@@ -31,6 +31,7 @@ from book_writer.writer import (
     _ensure_epub_css,
     _expand_prompt_text,
     _sanitize_markdown_for_latex,
+    _truncate_prompt_input,
     compile_book,
     expand_book,
     expand_chapter_content,
@@ -198,6 +199,23 @@ class TestWriter(unittest.TestCase):
         cleaned = _sanitize_markdown_for_latex(text)
 
         self.assertIn("Velvet Shadows \\& Steel Hearts", cleaned)
+
+    def test_truncate_prompt_input_adds_marker_when_over_limit(self) -> None:
+        text = "A" * 50 + "B" * 50
+
+        truncated = _truncate_prompt_input(text, 40)
+
+        self.assertIn("...[truncated]...", truncated)
+        self.assertEqual(len(truncated), 40)
+        self.assertTrue(truncated.startswith("A"))
+        self.assertTrue(truncated.endswith("B"))
+
+    def test_truncate_prompt_input_returns_full_text_when_under_limit(self) -> None:
+        text = "Short prompt."
+
+        truncated = _truncate_prompt_input(text, 100)
+
+        self.assertEqual(truncated, text)
 
     def test_truncate_cover_text_returns_stripped_input(self) -> None:
         text = "  Short synopsis.  "
