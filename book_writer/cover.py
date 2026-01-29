@@ -39,7 +39,7 @@ DEFAULT_COVER_COMMAND = [
     "{negative_prompt}",
     "--resource-path",
     "{model_path}",
-    "--steps",
+    "--step-count",
     "{steps}",
     "--guidance-scale",
     "{guidance_scale}",
