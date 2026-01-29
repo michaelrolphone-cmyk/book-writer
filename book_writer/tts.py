@@ -886,7 +886,7 @@ def merge_chapter_audio(
         filter_inputs.append(f"[{label}]")
     filter_complex = (
         ";".join(filter_steps)
-        + f"{''.join(filter_inputs)}concat=n={input_count}:v=0:a=1[outa]"
+        + f";{''.join(filter_inputs)}concat=n={input_count}:v=0:a=1[outa]"
     )
     command = [
         "ffmpeg",

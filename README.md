@@ -99,6 +99,9 @@ python -m book_writer --compile-book output/My_Book
 
 # Generate audio narration for an existing book
 python -m book_writer --generate-audio output/My_Book --tts-overwrite
+
+# Merge existing chapter MP3s into a single audiobook
+python -m book_writer --generate-audio output/My_Book --tts-book-only
 ```
 
 ### Generate a single book from an outline
