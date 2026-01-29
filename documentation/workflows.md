@@ -31,7 +31,7 @@ This document captures the primary workflows for turning outlines into full book
 
 1. Load the existing book directory and chapter files.
 2. Expand each paragraph/section using previous and next context.
-3. Regenerate `book.md`, `book.pdf`, and `book.epub`.
+3. Regenerate `book.md`, `book.pdf`, and the title-cased EPUB.
 4. Regenerate audio/video assets when enabled.
 
 ### Batch generation

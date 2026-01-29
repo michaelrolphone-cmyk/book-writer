@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 from urllib.error import HTTPError
 
+from book_writer.filenames import book_audio_filename, epub_filename
 from book_writer.outline import OutlineItem
 from book_writer.tts import TTSSynthesisError, TTSSettings
 from book_writer.video import ParagraphImageSettings, VideoSettings
@@ -291,7 +292,7 @@ class TestWriter(unittest.TestCase):
         print_mock.assert_any_call(
             "[write] Step 1/1: Generating chapter 'Chapter One'."
         )
-        print_mock.assert_any_call("[write] Generated book.pdf and book.epub from chapters.")
+        print_mock.assert_any_call("[write] Generated book.pdf and EPUB from chapters.")
         self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
@@ -400,7 +401,9 @@ class TestWriter(unittest.TestCase):
         )
         merge_mock.assert_called_once_with(
             [output_dir / tts_settings.audio_dirname / f"{files[0].stem}.mp3"],
-            output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_dir
+            / tts_settings.audio_dirname
+            / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         synthesize_text_mock.assert_called_once_with(
@@ -423,7 +426,7 @@ class TestWriter(unittest.TestCase):
     ) -> None:
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
-        merge_mock.return_value = Path("book.mp3")
+        merge_mock.return_value = Path(book_audio_filename("Chapter One"))
         synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -443,7 +446,9 @@ class TestWriter(unittest.TestCase):
         )
         merge_mock.assert_called_once_with(
             [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
-            output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_dir
+            / tts_settings.audio_dirname
+            / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         synthesize_text_mock.assert_called_once_with(
@@ -548,7 +553,7 @@ class TestWriter(unittest.TestCase):
     ) -> None:
         tts_settings = TTSSettings(enabled=True, overwrite_audio=True)
         synthesize_chapter_mock.return_value = Path("chapter.mp3")
-        merge_mock.return_value = Path("book.mp3")
+        merge_mock.return_value = Path(book_audio_filename("Chapter One"))
         synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
@@ -562,7 +567,9 @@ class TestWriter(unittest.TestCase):
             (audio_dir / "001-chapter-one.mp3").write_text(
                 "existing", encoding="utf-8"
             )
-            (audio_dir / "book.mp3").write_text("existing", encoding="utf-8")
+            (audio_dir / book_audio_filename("Chapter One")).write_text(
+                "existing", encoding="utf-8"
+            )
             (audio_dir / "back-cover-synopsis.mp3").write_text(
                 "existing", encoding="utf-8"
             )
@@ -577,7 +584,7 @@ class TestWriter(unittest.TestCase):
         )
         merge_mock.assert_called_once_with(
             [audio_dir / "001-chapter-one.mp3"],
-            audio_dir / "book.mp3",
+            audio_dir / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         synthesize_text_mock.assert_called_once_with(
@@ -597,7 +604,7 @@ class TestWriter(unittest.TestCase):
         synthesize_text_mock: Mock,
     ) -> None:
         tts_settings = TTSSettings(enabled=True, book_only=True)
-        merge_mock.return_value = Path("book.mp3")
+        merge_mock.return_value = Path(book_audio_filename("Chapter One"))
         synthesize_text_mock.return_value = Path("back-cover-synopsis.mp3")
 
         with TemporaryDirectory() as tmpdir:
@@ -613,7 +620,9 @@ class TestWriter(unittest.TestCase):
         synthesize_chapter_mock.assert_not_called()
         merge_mock.assert_called_once_with(
             [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
-            output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_dir
+            / tts_settings.audio_dirname
+            / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         synthesize_text_mock.assert_not_called()
@@ -825,7 +834,9 @@ class TestWriter(unittest.TestCase):
                 output_dir / tts_settings.audio_dirname / f"{files[0].stem}.mp3",
                 output_dir / tts_settings.audio_dirname / f"{files[1].stem}.mp3",
             ],
-            output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_dir
+            / tts_settings.audio_dirname
+            / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         synthesize_text_mock.assert_called_once_with(
@@ -891,7 +902,7 @@ class TestWriter(unittest.TestCase):
         )
         merge_mock.assert_called_once_with(
             [output_dir / "audio" / "001-chapter-one.mp3"],
-            output_dir / "audio" / "book.mp3",
+            output_dir / "audio" / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         self.assertEqual(run_mock.call_count, 2)
@@ -1688,7 +1699,9 @@ class TestWriter(unittest.TestCase):
         )
         merge_mock.assert_called_once_with(
             [output_dir / tts_settings.audio_dirname / "001-chapter-one.mp3"],
-            output_dir / tts_settings.audio_dirname / "book.mp3",
+            output_dir
+            / tts_settings.audio_dirname
+            / book_audio_filename("Chapter One"),
             gap_seconds=1.6,
         )
         self.assertEqual(run_mock.call_count, 2)
@@ -1786,7 +1799,7 @@ class TestWriter(unittest.TestCase):
                         "--epub-cover-image",
                         "cover.png",
                         "-o",
-                        "book.epub",
+                        epub_filename("Chapter One"),
                     ],
                     check=True,
                     cwd=output_dir,

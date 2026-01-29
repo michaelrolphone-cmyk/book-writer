@@ -1743,8 +1743,8 @@ def get_gui_html() -> str:
                         class="icon-button is-hidden"
                         id="bookWorkspaceEpub"
                         type="button"
-                        aria-label="Open EPUB"
-                        title="Open EPUB"
+                        aria-label="Download EPUB"
+                        title="Download EPUB"
                       >
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path
@@ -1753,6 +1753,21 @@ def get_gui_html() -> str:
                           />
                         </svg>
                         <span class="icon-button-label">EPUB</span>
+                      </button>
+                      <button
+                        class="icon-button is-hidden"
+                        id="bookWorkspaceMp3"
+                        type="button"
+                        aria-label="Download audiobook MP3"
+                        title="Download audiobook MP3"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            fill="currentColor"
+                            d="M12 3a1 1 0 0 1 1 1v9.17l2.59-2.58a1 1 0 1 1 1.41 1.42l-4.3 4.29a1 1 0 0 1-1.4 0l-4.3-4.29a1 1 0 1 1 1.41-1.42L11 13.17V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"
+                          />
+                        </svg>
+                        <span class="icon-button-label">MP3</span>
                       </button>
                     </div>
                   </div>
@@ -2371,6 +2386,7 @@ def get_gui_html() -> str:
       const bookWorkspaceCompile = document.getElementById('bookWorkspaceCompile');
       const bookWorkspacePdf = document.getElementById('bookWorkspacePdf');
       const bookWorkspaceEpub = document.getElementById('bookWorkspaceEpub');
+      const bookWorkspaceMp3 = document.getElementById('bookWorkspaceMp3');
       const bookWorkspaceAudio = document.getElementById('bookWorkspaceAudio');
       const bookWorkspaceVideo = document.getElementById('bookWorkspaceVideo');
       const bookWorkspaceCover = document.getElementById('bookWorkspaceCover');
@@ -3589,6 +3605,7 @@ def get_gui_html() -> str:
           setCoverHeader(bookWorkspaceCoverHeader, resolvedBookTitle, entry.cover_url);
           toggleBookPdfButton(entry);
           toggleBookEpubButton(entry);
+          toggleBookMp3Button(entry);
           const bookContent = await loadBookContent(entry.path);
           if (bookContent) {
             setSummaryText(detailSummary, bookContent.summary || entry.summary || '');
@@ -3712,6 +3729,29 @@ def get_gui_html() -> str:
         element.classList.toggle('has-image', Boolean(coverUrl));
       };
 
+      const buildTitleFilename = (title, extension) => {
+        const words = String(title || '').match(/[A-Za-z0-9]+/g) || [];
+        const base = words
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join('');
+        const filename = base || 'Untitled';
+        return extension ? `${filename}.${extension}` : filename;
+      };
+
+      const downloadMedia = (url, filename) => {
+        if (!url) return;
+        const link = document.createElement('a');
+        link.href = url;
+        if (filename) {
+          link.download = filename;
+        }
+        link.rel = 'noopener';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+
       const toggleBookPdfButton = (entry) => {
         if (!bookWorkspacePdf) return;
         const pdfUrl = entry?.book_pdf_url || '';
@@ -3738,6 +3778,20 @@ def get_gui_html() -> str:
         bookWorkspaceEpub.dataset.epubUrl = '';
         bookWorkspaceEpub.classList.add('is-hidden');
         bookWorkspaceEpub.disabled = true;
+      };
+
+      const toggleBookMp3Button = (entry) => {
+        if (!bookWorkspaceMp3) return;
+        const audioUrl = entry?.book_audio_url || '';
+        if (audioUrl && entry?.has_audio) {
+          bookWorkspaceMp3.dataset.audioUrl = audioUrl;
+          bookWorkspaceMp3.classList.remove('is-hidden');
+          bookWorkspaceMp3.disabled = false;
+          return;
+        }
+        bookWorkspaceMp3.dataset.audioUrl = '';
+        bookWorkspaceMp3.classList.add('is-hidden');
+        bookWorkspaceMp3.disabled = true;
       };
 
       const parseOptionalNumber = (value) => {
@@ -4227,7 +4281,20 @@ def get_gui_html() -> str:
             log('Compile a book before opening the EPUB.');
             return;
           }
-          window.open(epubUrl, '_blank', 'noopener');
+          const title = bookWorkspaceTitle?.textContent || '';
+          downloadMedia(epubUrl, buildTitleFilename(title, 'epub'));
+        });
+      }
+
+      if (bookWorkspaceMp3) {
+        bookWorkspaceMp3.addEventListener('click', () => {
+          const audioUrl = bookWorkspaceMp3.dataset.audioUrl || '';
+          if (!audioUrl) {
+            log('Generate audio before downloading the audiobook.');
+            return;
+          }
+          const title = bookWorkspaceTitle?.textContent || '';
+          downloadMedia(audioUrl, buildTitleFilename(title, 'mp3'));
         });
       }
 

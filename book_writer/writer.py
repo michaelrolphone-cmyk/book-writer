@@ -21,6 +21,7 @@ from book_writer.cover import (
     generate_book_cover,
     generate_chapter_cover,
 )
+from book_writer.filenames import book_audio_filename, epub_filename
 from book_writer.metadata import (
     ensure_book_chapters,
     ensure_book_identity,
@@ -1213,7 +1214,7 @@ def generate_book_pdf(
     markdown_path = output_dir / "book.md"
     markdown_path.write_text(book_markdown, encoding="utf-8")
     pdf_path = output_dir / "book.pdf"
-    epub_path = output_dir / "book.epub"
+    epub_path = output_dir / epub_filename(title)
     epub_css = _ensure_epub_css(output_dir)
     epub_args = ["--css", epub_css.name]
     if cover_image_path is not None:
@@ -1262,6 +1263,7 @@ def generate_book_audio(
     chapter_files = _chapter_files(output_dir)
     if not chapter_files:
         raise ValueError(f"No chapter markdown files found in {output_dir}.")
+    book_metadata, _ = _read_book_metadata(output_dir, chapter_files)
     created: List[Path] = []
     audio_dir = output_dir / tts_settings.audio_dirname
     if not tts_settings.book_only:
@@ -1281,7 +1283,7 @@ def generate_book_audio(
     chapter_audio_paths = [
         audio_dir / f"{chapter_file.stem}.mp3" for chapter_file in chapter_files
     ]
-    book_audio_path = audio_dir / "book.mp3"
+    book_audio_path = audio_dir / book_audio_filename(book_metadata.title)
     if tts_settings.overwrite_audio or not book_audio_path.exists():
         try:
             generated = merge_chapter_audio(
@@ -2016,7 +2018,7 @@ def expand_book(
         byline=byline,
     )
     if verbose:
-        print("[expand] Generated book.pdf and book.epub from expanded chapters.")
+        print("[expand] Generated book.pdf and EPUB from expanded chapters.")
     if tts_settings.enabled:
         chapter_audio_paths = [
             output_dir / tts_settings.audio_dirname / f"{path.stem}.mp3"
@@ -2025,7 +2027,9 @@ def expand_book(
         try:
             merge_chapter_audio(
                 chapter_audio_paths,
-                output_dir / tts_settings.audio_dirname / "book.mp3",
+                output_dir
+                / tts_settings.audio_dirname
+                / book_audio_filename(book_metadata.title),
                 gap_seconds=1.6,
             )
         except TTSSynthesisError as error:
@@ -2033,7 +2037,7 @@ def expand_book(
                 f"Failed to generate full audiobook audio: {error}"
             ) from error
         if verbose:
-            print("[expand] Wrote book.mp3 for full audiobook.")
+            print("[expand] Wrote full audiobook MP3.")
     _write_nextsteps(output_dir, nextsteps_sections)
     if verbose and nextsteps_sections:
         print("[expand] Wrote nextsteps.md from implementation details.")
@@ -2259,7 +2263,7 @@ def write_book(
         byline=byline,
     )
     if verbose:
-        print("[write] Generated book.pdf and book.epub from chapters.")
+        print("[write] Generated book.pdf and EPUB from chapters.")
     if tts_settings.enabled:
         chapter_audio_paths = [
             output_dir / tts_settings.audio_dirname / f"{path.stem}.mp3"
@@ -2268,7 +2272,9 @@ def write_book(
         try:
             merge_chapter_audio(
                 chapter_audio_paths,
-                output_dir / tts_settings.audio_dirname / "book.mp3",
+                output_dir
+                / tts_settings.audio_dirname
+                / book_audio_filename(book_title),
                 gap_seconds=1.6,
             )
         except TTSSynthesisError as error:
@@ -2276,7 +2282,7 @@ def write_book(
                 f"Failed to generate full audiobook audio: {error}"
             ) from error
         if verbose:
-            print("[write] Wrote book.mp3 for full audiobook.")
+            print("[write] Wrote full audiobook MP3.")
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
