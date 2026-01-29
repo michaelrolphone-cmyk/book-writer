@@ -164,7 +164,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--cover-height`: Output height for the cover image (must be `1600`).
 - `--cover-output-name`: Output filename for the cover image (default `cover.png`).
 - `--cover-overwrite`: Overwrite any existing cover image.
-- `--cover-command`: Custom command template for cover generation (uses placeholders like `{prompt}` and `{output_path}`); the default Swift command uses `--step-count` for the inference steps (use a custom command with `--steps` if your local `StableDiffusionSample` expects the legacy flag).
+- `--cover-command`: Custom command template for cover generation (uses placeholders like `{prompt}` and `{output_path}`); the default Swift command uses `--step-count` for the inference steps and does not pass width/height flags. If you supply a Swift `StableDiffusionSample` command that includes `--width`/`--height`, the CLI will strip them when the tool help output does not list those options (use a custom command with `--steps`, `--width`, or `--height` if your local build supports them).
 - `--byline`: Byline shown on the book title page (default `Marissa Bard`).
 - `--tone`: Tone for chapter generation and expansion (default `instructive self help guide`).
 - `--author`: Author persona to load from the `authors/` folder (omit to use `PROMPT.md`).
