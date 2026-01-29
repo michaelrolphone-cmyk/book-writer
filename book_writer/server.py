@@ -24,6 +24,7 @@ from book_writer.cli import (
     _select_chapter_files,
 )
 from book_writer.cover import CoverSettings, parse_cover_command
+from book_writer.filenames import book_audio_filename, epub_filename
 from book_writer.gui import get_gui_html
 from book_writer.metadata import (
     ensure_primary_genre,
@@ -678,6 +679,9 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
     books = _book_directories(books_dir, audio_dir, video_dir)
     entries: list[dict[str, Any]] = []
     for book in books:
+        title_for_media = book.title or book.path.name
+        epub_name = epub_filename(title_for_media, fallback=book.path.name)
+        audio_name = book_audio_filename(title_for_media, fallback=book.path.name)
         synopsis = _read_book_synopsis(book.path)
         genres = _ensure_book_genres_async(book.path, synopsis, payload)
         primary_genre = ensure_primary_genre(book.path, genres) if genres else None
@@ -708,8 +712,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 ),
                 "book_audio_url": (
-                    _build_media_url(book.path, Path(audio_dir) / "book.mp3")
-                    if (book.path / audio_dir / "book.mp3").exists()
+                    _build_media_url(book.path, Path(audio_dir) / audio_name)
+                    if (book.path / audio_dir / audio_name).exists()
                     else None
                 ),
                 "book_pdf_url": (
@@ -718,8 +722,8 @@ def list_books(payload: dict[str, Any]) -> dict[str, Any]:
                     else None
                 ),
                 "book_epub_url": (
-                    _build_media_url(book.path, Path("book.epub"))
-                    if (book.path / "book.epub").exists()
+                    _build_media_url(book.path, Path(epub_name))
+                    if (book.path / epub_name).exists()
                     else None
                 ),
                 "progress": progress,
@@ -997,9 +1001,11 @@ def get_book_progress(payload: dict[str, Any]) -> dict[str, Any]:
     chapter_files = _book_chapter_files(book_dir)
     chapter_count = len(chapter_files)
 
+    title = _read_book_title(book_dir)
+    book_audio_name = book_audio_filename(title, fallback=book_dir.name)
     cover_exists = (book_dir / "cover.png").exists()
     book_summary_exists = bool(_read_summary(_book_summary_path(book_dir)))
-    book_audio_exists = (book_dir / audio_dirname / "book.mp3").exists()
+    book_audio_exists = (book_dir / audio_dirname / book_audio_name).exists()
 
     totals = {
         "images": {"complete": 0, "total": chapter_count + 1},
@@ -1081,7 +1087,7 @@ def get_book_progress(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "book_dir": str(book_dir),
-        "title": _read_book_title(book_dir),
+        "title": title,
         "completion": {
             "complete": overall_complete,
             "total": overall_total,
@@ -1109,9 +1115,11 @@ def _summarize_book_progress(
     chapter_files = _book_chapter_files(book_dir)
     chapter_count = len(chapter_files)
 
+    title = _read_book_title(book_dir)
+    book_audio_name = book_audio_filename(title, fallback=book_dir.name)
     cover_exists = (book_dir / "cover.png").exists()
     book_summary_exists = bool(_read_summary(_book_summary_path(book_dir)))
-    book_audio_exists = (book_dir / audio_dirname / "book.mp3").exists()
+    book_audio_exists = (book_dir / audio_dirname / book_audio_name).exists()
 
     totals = {
         "images": {"complete": 0, "total": chapter_count + 1},

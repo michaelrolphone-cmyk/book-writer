@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 from book_writer import server
+from book_writer.filenames import book_audio_filename, epub_filename
 
 
 def _write_book_summary(book_dir: Path, text: str = "Summary") -> None:
@@ -336,7 +337,9 @@ class TestServerApi(unittest.TestCase):
             audio_dir = book_dir / "audio"
             audio_dir.mkdir(parents=True)
             (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
-            (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+            (audio_dir / book_audio_filename("Chapter One")).write_text(
+                "audio", encoding="utf-8"
+            )
             _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books(
@@ -353,7 +356,9 @@ class TestServerApi(unittest.TestCase):
             book_dir.mkdir(parents=True)
             (book_dir / "001-chapter-one.md").write_text("# Chapter One", encoding="utf-8")
             (book_dir / "book.pdf").write_text("pdf", encoding="utf-8")
-            (book_dir / "book.epub").write_text("epub", encoding="utf-8")
+            (book_dir / epub_filename("Chapter One")).write_text(
+                "epub", encoding="utf-8"
+            )
             _write_book_summary(book_dir, "Saved summary")
 
             result = server.list_books({"books_dir": str(books_dir)})
@@ -362,7 +367,7 @@ class TestServerApi(unittest.TestCase):
             f"/media?book_dir={quote(str(book_dir))}&path={quote('book.pdf')}"
         )
         expected_epub_url = (
-            f"/media?book_dir={quote(str(book_dir))}&path={quote('book.epub')}"
+            f"/media?book_dir={quote(str(book_dir))}&path={quote(epub_filename('Chapter One'))}"
         )
         self.assertEqual(result["books"][0]["book_pdf_url"], expected_url)
         self.assertEqual(result["books"][0]["book_epub_url"], expected_epub_url)
@@ -570,7 +575,9 @@ class TestServerApi(unittest.TestCase):
             cover_dir.mkdir()
             summaries_dir.mkdir(parents=True)
             (book_dir / "cover.png").write_text("cover", encoding="utf-8")
-            (audio_dir / "book.mp3").write_text("audio", encoding="utf-8")
+            (audio_dir / book_audio_filename("Chapter One")).write_text(
+                "audio", encoding="utf-8"
+            )
             _write_book_summary(book_dir, "Summary")
             first = book_dir / "001-chapter-one.md"
             second = book_dir / "002-chapter-two.md"

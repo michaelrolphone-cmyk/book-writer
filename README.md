@@ -6,7 +6,7 @@ Generate full-length books from Markdown outlines using LM Studio, and expand co
 
 - Python 3.12+
 - [LM Studio](https://lmstudio.ai/) running a compatible model and exposing the OpenAI-compatible API (default: `http://localhost:1234`).
-- [`pandoc`](https://pandoc.org/) for compiling PDFs/EPUBs (required for `book.pdf` and `book.epub` generation). PDF output also requires a LaTeX engine such as `pdflatex`.
+- [`pandoc`](https://pandoc.org/) for compiling PDFs/EPUBs (required for `book.pdf` and title-cased EPUB generation such as `MyBook.epub`). PDF output also requires a LaTeX engine such as `pdflatex`.
 - Optional LaTeX `background.sty` (from the `background` package) to render chapter cover backgrounds; if unavailable, PDF compilation skips background artwork.
 - [`ffmpeg`](https://ffmpeg.org/) for converting TTS audio to MP3 and for generating chapter MP4 videos when `--video` is enabled.
 - [`qwen_tts`](https://github.com/QwenLM/Qwen3-TTS) with compatible model weights, plus `torch` and `soundfile`, for local Qwen3 narration.
@@ -35,7 +35,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `python -m book_writer --generate-audio books/my-book --tts-overwrite` (generate chapter audio)
 - `python -m book_writer --cover-book books/my-book --cover` (generate a new cover)
 - `python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir chapter_covers` (generate chapter covers)
-- `python -m book_writer --prompt` (interactive outline and book workflow, including **Modify existing books → Generate compiled book.pdf and book.epub**)
+- `python -m book_writer --prompt` (interactive outline and book workflow, including **Modify existing books → Generate compiled book.pdf and EPUB**)
 - `python -m book_writer --help` (full CLI option list)
 
 **GUI API endpoints**
@@ -54,12 +54,12 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `POST /api/generate-outline`, `POST /api/save-outline`
 - `POST /api/rename-book-title`, `POST /api/rename-chapter-title` (update book or chapter titles used in the GUI)
 - `POST /api/git-pull-restart` (pull latest code and restart GUI server)
-- `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf`/`book.epub` files when requested by `path=book.pdf` or `path=book.epub`)
+- `GET /media` (chapter audio/video/cover assets, plus compiled `book.pdf`/`<TitleCase>.epub` files when requested by `path=book.pdf` or `path=<TitleCase>.epub`)
 
 **GUI API example commands**
 - Compile a book: `curl -X POST http://127.0.0.1:8080/api/compile-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
   - The compiler builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
-- Download compiled PDF/EPUB assets: `curl -L "http://127.0.0.1:8080/media?path=book.pdf" -o book.pdf` (swap `book.epub` for the EPUB file)
+- Download compiled PDF/EPUB assets: `curl -L "http://127.0.0.1:8080/media?path=book.pdf" -o book.pdf` (swap `MyBook.epub` for the EPUB file)
 - Expand a book: `curl -X POST http://127.0.0.1:8080/api/expand-book -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","expand_passes":1}'`
 - Generate a book cover: `curl -X POST http://127.0.0.1:8080/api/generate-cover -H "Content-Type: application/json" -d '{"book_dir":"books/my-book"}'`
 - Generate chapter covers: `curl -X POST http://127.0.0.1:8080/api/generate-chapter-covers -H "Content-Type: application/json" -d '{"book_dir":"books/my-book","chapter_cover_dir":"chapter_covers"}'`
@@ -71,7 +71,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - Batch-generate from outlines: `python -m book_writer --outlines-dir outlines --books-dir books`
 - Expand a completed book: `python -m book_writer --expand-book books/my-book --expand-passes 2`
 - Generate cover assets: `python -m book_writer --cover-book books/my-book --cover`
-- Compile an existing book: `python -m book_writer --prompt` (choose **Modify existing books** → **Generate compiled book.pdf and book.epub**)
+- Compile an existing book: `python -m book_writer --prompt` (choose **Modify existing books** → **Generate compiled book.pdf and EPUB**)
   - Compilation builds the PDF/EPUB table of contents from chapter files, inserts a copyright page before the TOC, and omits outline sections in `book.md`.
 
 ### Launch the GUI server
@@ -131,7 +131,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `--tts-max-new-tokens`: Maximum generated tokens per Qwen3 TTS chunk (default `2048`).
 - `--tts-do-sample`: Enable sampling for Qwen3 TTS generation (default deterministic).
 - `--tts-overwrite`: Overwrite existing audio files.
-- `--tts-book-only`: Only generate a full-book MP3 (`book.mp3`) by concatenating chapter MP3s (1.6s pause between chapters); requires existing chapter MP3s.
+- `--tts-book-only`: Only generate a full-book MP3 (`<TitleCase>.mp3`) by concatenating chapter MP3s (1.6s pause between chapters); requires existing chapter MP3s.
 - `--tts-unload-model`: Unload the Qwen3 model between chapters to reduce memory usage.
 - Narration input is sanitized to remove Markdown/HTML formatting (code blocks, tables, images, etc.) before Qwen3 TTS to reduce malformed audio.
 - Qwen3 tokenizer loading enables the Mistral regex fix when supported to prevent incorrect tokenization.
@@ -177,14 +177,14 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - Thematic breaks written as a standalone `---` line inside chapters are rewritten to `* * *` in `book.md` to avoid pandoc misinterpreting mid-book metadata blocks.
 - Book, chapter, and byline text is sanitized for LaTeX output (escaping characters like `&`, `%`, and `_`) to prevent pandoc/LaTeX compilation errors.
 - `book.pdf`: Generated from `book.md` via pandoc, incorporating cover art, chapter cover pages, and a table of contents plus back-cover synopsis when available.
-- `book.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently.
+- `<TitleCase>.epub`: Generated from `book.md` via pandoc for ebook readers (includes EPUB metadata, a navigable NCX table of contents, and default CSS with relative margins). The EPUB cover image is set from `cover.png` so reader apps display the cover consistently. `<TitleCase>` is the book title with each word capitalized and spaces removed.
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `meta.json`: LM-generated metadata (including `title`, `author`, `chapters` with numbers/titles/filenames, `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).
-- `audio/book.mp3`: Full-book narration merged from chapter MP3s with a 1.6-second pause between chapters.
+- `audio/<TitleCase>.mp3`: Full-book narration merged from chapter MP3s with a 1.6-second pause between chapters.
 - `video/*.mp4`: Chapter video files (when `--video` is enabled).
 - `video_images/*/*.png`: Generated paragraph images (when `--video-paragraph-images` is enabled).
 - When `meta.json` chapter titles are edited, chapter markdown and related assets (audio/video/cover/summary/video_images) are renamed on the next metadata read using chapter numbers as the stable identifier.
@@ -199,7 +199,7 @@ python -m book_writer --outlines-dir outlines --books-dir books --completed-outl
 - `outlines/`: Directory containing one or more outline markdown files.
 
 **Outputs**
-- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `book.epub`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
+- Each outline generates a subdirectory in `books/` containing chapter files, `book.md`, `book.pdf`, `<TitleCase>.epub`, `back-cover-synopsis.md`, `cover.png`, and `chapter_covers/` when enabled.
 - Processed outline files are moved into `completed_outlines/`.
 - Chapter audio files are stored under each book's `audio/` directory when `--tts` is enabled.
 
@@ -226,11 +226,11 @@ python -m book_writer --expand-book books/my-book --expand-passes 2
 
 **Behavior**
 - Each paragraph/section in every chapter is expanded using the previous and next paragraph context.
-- After expansion completes, `book.pdf` and `book.epub` are regenerated from updated content.
+- After expansion completes, `book.pdf` and the title-cased EPUB are regenerated from updated content.
 
 **Outputs**
 - Updated chapter markdown files written in-place.
-- Updated `book.md` and regenerated `book.pdf`/`book.epub`.
+- Updated `book.md` and regenerated `book.pdf`/title-cased EPUB.
 - Regenerated `audio/*.mp3` files when `--tts` is enabled.
 - Regenerated `video/*.mp4` files when `--video` is enabled.
 - Updated `cover.png` and `chapter_covers/` when cover generation is enabled.
@@ -252,7 +252,7 @@ python -m book_writer --chapter-covers-book books/my-book --chapter-cover-dir ch
 - All cover-related settings listed in **Generate a single book from an outline** also apply.
 
 **PDF compilation**
-- `book.pdf` and `book.epub` use `cover.png` as the front cover, with EPUB compilation referencing the same image for cover metadata to satisfy common reader requirements. Chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) power full-bleed chapter title pages with overlaid titles, and `back-cover-synopsis.md` is used for the back cover when those assets are present.
+- `book.pdf` and the title-cased EPUB use `cover.png` as the front cover, with EPUB compilation referencing the same image for cover metadata to satisfy common reader requirements. Chapter cover images from `chapter_covers/` (matching chapter file stems with `.png`, `.jpg`, `.jpeg`, or `.webp` extensions) power full-bleed chapter title pages with overlaid titles, and `back-cover-synopsis.md` is used for the back cover when those assets are present.
 
 **Note**
 - Cover synopsis and chapter content are truncated to 6,000 characters before summarization to avoid exceeding model context limits during cover prompt generation.
@@ -367,7 +367,7 @@ The GUI server exposes JSON endpoints under the same host/port used for the GUI 
   - Returns `{ book_dir, title, summary, synopsis }`.
 - `GET /api/book-progress?book_dir=/path/to/book&audio_dirname=audio&video_dirname=video&chapter_cover_dir=chapter_covers`
   - Returns `{ book_dir, title, completion, book, chapters, totals }` for images/summaries/audio/video completion by book and chapter, including an overall percent.
-- `GET /media?book_dir=/path/to/book&path=audio/book.mp3`
+- `GET /media?book_dir=/path/to/book&path=audio/<TitleCase>.mp3`
   - Streams static assets (audio/video/images) referenced by `*_url` fields.
 
 ### POST endpoints

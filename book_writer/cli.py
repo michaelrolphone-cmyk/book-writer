@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from pathlib import Path
 
 from book_writer.cover import CoverSettings, parse_cover_command
+from book_writer.filenames import epub_filename
 from book_writer.metadata import read_book_meta
 from book_writer.outline import parse_outline, parse_outline_with_title
 from book_writer.tts import DEFAULT_QWEN3_MODEL_PATH, TTSSettings
@@ -498,9 +499,8 @@ def _summarize_book_status(book_dir: Path, tts_audio_dir: str, video_dir: str) -
             has_video = any(path.suffix == ".mp4" for path in video_dir_path.iterdir())
         except OSError:
             has_video = False
-    has_compilation = (book_dir / "book.pdf").exists() or (
-        book_dir / "book.epub"
-    ).exists()
+    epub_path = book_dir / epub_filename(title, fallback=book_dir.name)
+    has_compilation = (book_dir / "book.pdf").exists() or epub_path.exists()
     has_cover = (book_dir / "cover.png").exists()
     return BookInfo(
         path=book_dir,
@@ -880,7 +880,7 @@ def _prompt_for_book_tasks(args: argparse.Namespace) -> BookTaskSelection:
     default_module_path = CoverSettings().module_path
     task_choices = [
         questionary.Choice("Expand selected books", value="expand"),
-        questionary.Choice("Generate compiled book.pdf and book.epub", value="compile"),
+        questionary.Choice("Generate compiled book.pdf and EPUB", value="compile"),
         questionary.Choice("Generate audio narration", value="audio"),
         questionary.Choice("Generate videos", value="video"),
         questionary.Choice("Generate book cover", value="cover"),
