@@ -146,7 +146,7 @@ class TestCover(unittest.TestCase):
         called_kwargs = run_mock.call_args.kwargs
         self.assertIn("StableDiffusionSample", called_args)
         self.assertIn("--output-path", called_args)
-        self.assertIn("--steps", called_args)
+        self.assertIn("--step-count", called_args)
         self.assertIn("--guidance-scale", called_args)
         self.assertIn("--width", called_args)
         self.assertIn("--height", called_args)
