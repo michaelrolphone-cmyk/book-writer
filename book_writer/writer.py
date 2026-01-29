@@ -324,11 +324,30 @@ def build_outline_revision_prompt(outline_text: str, revision_prompt: str) -> st
     )
 
 
+MAX_TAXONOMY_OUTLINE_CHARS = 4000
+MAX_TAXONOMY_CONTENT_CHARS = 6000
+TRUNCATION_MARKER = "\n\n...[truncated]...\n\n"
+
+
+def _truncate_prompt_input(text: str, max_chars: int) -> str:
+    cleaned = text.strip()
+    if max_chars <= 0 or len(cleaned) <= max_chars:
+        return cleaned
+    if max_chars <= len(TRUNCATION_MARKER):
+        return cleaned[:max_chars]
+    remaining = max_chars - len(TRUNCATION_MARKER)
+    head_chars = remaining // 2
+    tail_chars = remaining - head_chars
+    return f"{cleaned[:head_chars]}{TRUNCATION_MARKER}{cleaned[-tail_chars:]}"
+
+
 def build_taxonomy_prompt(
     title: str,
     outline_text: str,
     content: str,
 ) -> str:
+    outline_excerpt = _truncate_prompt_input(outline_text, MAX_TAXONOMY_OUTLINE_CHARS)
+    content_excerpt = _truncate_prompt_input(content, MAX_TAXONOMY_CONTENT_CHARS)
     return (
         "Create a taxonomy tree for the book as JSON. "
         "Capture people, places, events, motivations, loyalties, and personalities. "
@@ -349,8 +368,8 @@ def build_taxonomy_prompt(
         "  }\n"
         "}\n\n"
         f"Book title: {title}\n\n"
-        f"Outline:\n{outline_text}\n\n"
-        f"Book content:\n{content}"
+        f"Outline:\n{outline_excerpt}\n\n"
+        f"Book content:\n{content_excerpt}"
     )
 
 
@@ -361,6 +380,8 @@ def build_journey_prompt(
     content: str,
 ) -> str:
     taxonomy_json = json.dumps(taxonomy, indent=2, sort_keys=True)
+    outline_excerpt = _truncate_prompt_input(outline_text, MAX_TAXONOMY_OUTLINE_CHARS)
+    content_excerpt = _truncate_prompt_input(content, MAX_TAXONOMY_CONTENT_CHARS)
     return (
         "Create a journey sequence as JSON that follows the thematic progression "
         "of the book. Reference taxonomy node IDs in each step. Return only JSON "
@@ -374,8 +395,8 @@ def build_journey_prompt(
         "}\n\n"
         f"Book title: {title}\n\n"
         f"Taxonomy:\n{taxonomy_json}\n\n"
-        f"Outline:\n{outline_text}\n\n"
-        f"Book content:\n{content}"
+        f"Outline:\n{outline_excerpt}\n\n"
+        f"Book content:\n{content_excerpt}"
     )
 
 
