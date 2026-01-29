@@ -47,6 +47,21 @@ from book_writer.writer import (
     _truncate_cover_text,
 )
 
+TAXONOMY_RESPONSE = json.dumps(
+    {
+        "title": "Sample Book",
+        "taxonomy": {
+            "people": [],
+            "places": [],
+            "events": [],
+            "motivations": [],
+            "loyalties": [],
+            "personalities": [],
+        },
+    }
+)
+JOURNEY_RESPONSE = json.dumps({"title": "Sample Book", "journey": []})
+
 
 class TestWriter(unittest.TestCase):
     def test_base_prompt_uses_author_persona(self) -> None:
@@ -224,6 +239,8 @@ class TestWriter(unittest.TestCase):
             "Section content",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -248,6 +265,40 @@ class TestWriter(unittest.TestCase):
         self.assertNotIn("--epub-cover-image", epub_call.args[0])
 
     @patch("book_writer.writer.subprocess.run")
+    def test_write_book_writes_taxonomy_and_journey(
+        self, run_mock: Mock
+    ) -> None:
+        items = [OutlineItem(title="Chapter One", level=1)]
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Chapter content",
+            "Chapter summary",
+            "Synopsis text",
+            "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "output"
+            write_book(items, output_dir, client)
+
+            taxonomy_path = output_dir / "taxonomy.json"
+            journey_path = output_dir / "journey.json"
+            self.assertTrue(taxonomy_path.exists())
+            self.assertTrue(journey_path.exists())
+            self.assertEqual(
+                json.loads(taxonomy_path.read_text(encoding="utf-8")),
+                json.loads(TAXONOMY_RESPONSE),
+            )
+            self.assertEqual(
+                json.loads(journey_path.read_text(encoding="utf-8")),
+                json.loads(JOURNEY_RESPONSE),
+            )
+
+        self.assertEqual(run_mock.call_count, 2)
+
+    @patch("book_writer.writer.subprocess.run")
     def test_write_book_clears_existing_chapters(
         self, run_mock: Mock
     ) -> None:
@@ -258,6 +309,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -282,6 +335,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -314,6 +369,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -335,7 +392,14 @@ class TestWriter(unittest.TestCase):
             def __init__(self) -> None:
                 self.base_prompt = "BASE PROMPT"
                 self._responses = iter(
-                    ["Chapter content", "Chapter summary", "Synopsis text", "Mystery"]
+                    [
+                        "Chapter content",
+                        "Chapter summary",
+                        "Synopsis text",
+                        "Mystery",
+                        TAXONOMY_RESPONSE,
+                        JOURNEY_RESPONSE,
+                    ]
                 )
 
             def render_prompt(self, prompt: str) -> str:
@@ -383,6 +447,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
@@ -802,6 +868,8 @@ class TestWriter(unittest.TestCase):
             "Section content",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
         tts_settings = TTSSettings(enabled=True)
         synthesize_chapter_mock.return_value = None
@@ -870,6 +938,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
         video_settings = VideoSettings(enabled=True, background_video=Path("bg.mp4"))
 
@@ -923,6 +993,8 @@ class TestWriter(unittest.TestCase):
             "Chapter two summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -946,6 +1018,8 @@ class TestWriter(unittest.TestCase):
             "Chapter two summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -999,6 +1073,8 @@ class TestWriter(unittest.TestCase):
             "New chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1046,6 +1122,8 @@ class TestWriter(unittest.TestCase):
             "New chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1092,6 +1170,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1122,13 +1202,15 @@ class TestWriter(unittest.TestCase):
             "Section content",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "output"
             write_book(items, output_dir, client)
 
-        synopsis_prompt = client.generate.call_args_list[-2][0][0]
+        synopsis_prompt = client.generate.call_args_list[3][0][0]
         self.assertIn("Outline:\n- Chapter One\n  - Section A", synopsis_prompt)
         self.assertEqual(run_mock.call_count, 2)
 
@@ -1318,6 +1400,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1358,6 +1442,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1502,6 +1588,8 @@ class TestWriter(unittest.TestCase):
             "Chapter summary",
             "Synopsis text",
             "Mystery",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -1569,7 +1657,11 @@ class TestWriter(unittest.TestCase):
         self, run_mock: Mock
     ) -> None:
         client = MagicMock()
-        client.generate.return_value = "Expanded paragraph."
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -1597,9 +1689,49 @@ class TestWriter(unittest.TestCase):
         self.assertEqual(run_mock.call_count, 2)
 
     @patch("book_writer.writer.subprocess.run")
+    def test_expand_book_writes_taxonomy_and_journey(
+        self, run_mock: Mock
+    ) -> None:
+        client = MagicMock()
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            chapter_path = output_dir / "001-chapter-one.md"
+            chapter_path.write_text(
+                "# Chapter One\n\nOriginal paragraph.", encoding="utf-8"
+            )
+
+            expand_book(output_dir, client)
+
+            taxonomy_path = output_dir / "taxonomy.json"
+            journey_path = output_dir / "journey.json"
+            self.assertTrue(taxonomy_path.exists())
+            self.assertTrue(journey_path.exists())
+            self.assertEqual(
+                json.loads(taxonomy_path.read_text(encoding="utf-8")),
+                json.loads(TAXONOMY_RESPONSE),
+            )
+            self.assertEqual(
+                json.loads(journey_path.read_text(encoding="utf-8")),
+                json.loads(JOURNEY_RESPONSE),
+            )
+
+        self.assertEqual(run_mock.call_count, 2)
+
+    @patch("book_writer.writer.subprocess.run")
     def test_expand_book_runs_multiple_passes(self, run_mock: Mock) -> None:
         client = MagicMock()
-        client.generate.side_effect = ["Expanded once.", "Expanded twice."]
+        client.generate.side_effect = [
+            "Expanded once.",
+            "Expanded twice.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -1621,7 +1753,11 @@ class TestWriter(unittest.TestCase):
         self, run_mock: Mock
     ) -> None:
         client = MagicMock()
-        client.generate.return_value = "Expanded paragraph."
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -1649,7 +1785,11 @@ class TestWriter(unittest.TestCase):
     @patch("book_writer.writer.subprocess.run")
     def test_expand_book_logs_verbose_steps(self, run_mock: Mock) -> None:
         client = MagicMock()
-        client.generate.return_value = "Expanded paragraph."
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -1679,7 +1819,11 @@ class TestWriter(unittest.TestCase):
         merge_mock: Mock,
     ) -> None:
         client = MagicMock()
-        client.generate.return_value = "Expanded paragraph."
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
         tts_settings = TTSSettings(enabled=True)
 
         with TemporaryDirectory() as tmpdir:
@@ -1712,7 +1856,11 @@ class TestWriter(unittest.TestCase):
         self, run_mock: Mock, synthesize_mock: Mock
     ) -> None:
         client = MagicMock()
-        client.generate.return_value = "Expanded paragraph."
+        client.generate.side_effect = [
+            "Expanded paragraph.",
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
+        ]
 
         with TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

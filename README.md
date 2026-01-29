@@ -181,6 +181,8 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `epub.css`: Default stylesheet applied to EPUB output to keep typography and margins compliant with ebook readers, including full-page chapter cover styling and explicit page breaks.
 - `back-cover-synopsis.md`: LM-generated synopsis.
 - `meta.json`: LM-generated metadata (including `title`, `author`, `chapters` with numbers/titles/filenames, `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
+- `taxonomy.json`: Taxonomy tree capturing people, places, events, motivations, loyalties, and personalities.
+- `journey.json`: Thematic journey sequence mapping taxonomic node IDs across the book.
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).

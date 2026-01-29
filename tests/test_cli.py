@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 from dataclasses import dataclass
@@ -9,6 +10,21 @@ from unittest.mock import MagicMock, patch
 from book_writer import cli
 from book_writer.cli import write_books_from_outlines
 from book_writer.writer import save_book_progress
+
+TAXONOMY_RESPONSE = json.dumps(
+    {
+        "title": "Sample Book",
+        "taxonomy": {
+            "people": [],
+            "places": [],
+            "events": [],
+            "motivations": [],
+            "loyalties": [],
+            "personalities": [],
+        },
+    }
+)
+JOURNEY_RESPONSE = json.dumps({"title": "Sample Book", "journey": []})
 
 
 @dataclass
@@ -78,11 +94,15 @@ class TestWriteBooksFromOutlines(unittest.TestCase):
             "Context for book one",
             "Synopsis for book one",
             '{"genres": ["Sci-Fi"]}',
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
             "Title for book two",
             "Content for book two",
             "Context for book two",
             "Synopsis for book two",
             '{"genres": ["Fantasy"]}',
+            TAXONOMY_RESPONSE,
+            JOURNEY_RESPONSE,
         ]
 
         with TemporaryDirectory() as tmpdir:

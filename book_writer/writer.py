@@ -324,6 +324,61 @@ def build_outline_revision_prompt(outline_text: str, revision_prompt: str) -> st
     )
 
 
+def build_taxonomy_prompt(
+    title: str,
+    outline_text: str,
+    content: str,
+) -> str:
+    return (
+        "Create a taxonomy tree for the book as JSON. "
+        "Capture people, places, events, motivations, loyalties, and personalities. "
+        "Use stable string IDs (e.g., person:aria, place:rose-bay) so journey steps "
+        "can reference them. Return only JSON using this schema:\n"
+        "{\n"
+        '  "title": "...",\n'
+        '  "taxonomy": {\n'
+        '    "people": [{"id": "person:...", "name": "...", "summary": "...", '
+        '"motivations": ["motivation:..."], "loyalties": ["loyalty:..."], '
+        '"personalities": ["personality:..."]}],\n'
+        '    "places": [{"id": "place:...", "name": "...", "summary": "..."}],\n'
+        '    "events": [{"id": "event:...", "name": "...", "summary": "...", '
+        '"participants": ["person:..."], "locations": ["place:..."]}],\n'
+        '    "motivations": [{"id": "motivation:...", "name": "...", "summary": "..."}],\n'
+        '    "loyalties": [{"id": "loyalty:...", "name": "...", "summary": "..."}],\n'
+        '    "personalities": [{"id": "personality:...", "name": "...", "summary": "..."}]\n'
+        "  }\n"
+        "}\n\n"
+        f"Book title: {title}\n\n"
+        f"Outline:\n{outline_text}\n\n"
+        f"Book content:\n{content}"
+    )
+
+
+def build_journey_prompt(
+    title: str,
+    taxonomy: dict,
+    outline_text: str,
+    content: str,
+) -> str:
+    taxonomy_json = json.dumps(taxonomy, indent=2, sort_keys=True)
+    return (
+        "Create a journey sequence as JSON that follows the thematic progression "
+        "of the book. Reference taxonomy node IDs in each step. Return only JSON "
+        "using this schema:\n"
+        "{\n"
+        '  "title": "...",\n'
+        '  "journey": [\n'
+        '    {"step": 1, "label": "...", "nodes": ["person:...", "event:..."], '
+        '"summary": "..."}\n'
+        "  ]\n"
+        "}\n\n"
+        f"Book title: {title}\n\n"
+        f"Taxonomy:\n{taxonomy_json}\n\n"
+        f"Outline:\n{outline_text}\n\n"
+        f"Book content:\n{content}"
+    )
+
+
 def generate_outline(
     prompt: str,
     client: LMStudioClient,
@@ -488,6 +543,44 @@ def _write_nextsteps(output_dir: Path, sections: list[str]) -> None:
         return
     nextsteps_path = output_dir / "nextsteps.md"
     nextsteps_path.write_text(nextsteps_content + "\n", encoding="utf-8")
+
+
+def _parse_json_response(response: str, label: str) -> dict:
+    try:
+        parsed = json.loads(response)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Failed to parse {label} JSON.") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label} JSON must be an object.")
+    return parsed
+
+
+def _write_taxonomy_and_journey(
+    output_dir: Path,
+    client: LMStudioClient,
+    title: str,
+    outline_text: str,
+    content: str,
+) -> tuple[Path, Path]:
+    taxonomy_prompt = build_taxonomy_prompt(title, outline_text, content)
+    taxonomy_text = client.generate(taxonomy_prompt)
+    taxonomy = _parse_json_response(taxonomy_text, "taxonomy")
+    taxonomy_path = output_dir / "taxonomy.json"
+    taxonomy_path.write_text(
+        json.dumps(taxonomy, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    journey_prompt = build_journey_prompt(
+        title, taxonomy, outline_text, content
+    )
+    journey_text = client.generate(journey_prompt)
+    journey = _parse_json_response(journey_text, "journey")
+    journey_path = output_dir / "journey.json"
+    journey_path.write_text(
+        json.dumps(journey, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return taxonomy_path, journey_path
 
 
 def _split_markdown_blocks(content: str) -> List[_MarkdownBlock]:
@@ -2019,6 +2112,21 @@ def expand_book(
     )
     if verbose:
         print("[expand] Generated book.pdf and EPUB from expanded chapters.")
+    outline_text = book_metadata.content
+    if not outline_text:
+        outline_text = _derive_outline_from_chapters(all_chapter_files)
+    book_content = "\n\n".join(
+        path.read_text(encoding="utf-8") for path in all_chapter_files
+    )
+    _write_taxonomy_and_journey(
+        output_dir=output_dir,
+        client=client,
+        title=book_metadata.title,
+        outline_text=outline_text,
+        content=book_content,
+    )
+    if verbose:
+        print("[expand] Wrote taxonomy.json and journey.json.")
     if tts_settings.enabled:
         chapter_audio_paths = [
             output_dir / tts_settings.audio_dirname / f"{path.stem}.mp3"
@@ -2283,12 +2391,13 @@ def write_book(
             ) from error
         if verbose:
             print("[write] Wrote full audiobook MP3.")
+    book_content = "\n\n".join(
+        path.read_text(encoding="utf-8") for path in written_files
+    )
     synopsis_prompt = build_synopsis_prompt(
         title=book_title,
         outline_text=outline_text,
-        content="\n\n".join(
-            path.read_text(encoding="utf-8") for path in written_files
-        ),
+        content=book_content,
     )
     synopsis = client.generate(synopsis_prompt)
     synopsis_path = output_dir / "back-cover-synopsis.md"
@@ -2309,6 +2418,15 @@ def write_book(
         write_book_meta(output_dir, genres)
         if verbose:
             print("[write] Wrote meta.json with genres.")
+    _write_taxonomy_and_journey(
+        output_dir=output_dir,
+        client=client,
+        title=book_title,
+        outline_text=outline_text,
+        content=book_content,
+    )
+    if verbose:
+        print("[write] Wrote taxonomy.json and journey.json.")
     if cover_settings.enabled:
         cover_synopsis = _summarize_cover_text(
             client, synopsis, "book synopsis"
