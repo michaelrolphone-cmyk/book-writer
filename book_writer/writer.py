@@ -567,13 +567,37 @@ def _write_nextsteps(output_dir: Path, sections: list[str]) -> None:
 
 
 def _parse_json_response(response: str, label: str) -> dict:
-    try:
-        parsed = json.loads(response)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Failed to parse {label} JSON.") from exc
-    if not isinstance(parsed, dict):
-        raise ValueError(f"{label} JSON must be an object.")
-    return parsed
+    if not response.strip():
+        raise ValueError(f"Failed to parse {label} JSON.")
+    candidates = [response.strip()]
+    fenced_match = re.search(
+        r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL
+    )
+    if fenced_match:
+        candidates.append(fenced_match.group(1).strip())
+    start_index = response.find("{")
+    if start_index != -1:
+        decoder = json.JSONDecoder()
+        try:
+            parsed, end_index = decoder.raw_decode(response[start_index:])
+        except json.JSONDecodeError:
+            parsed = None
+        else:
+            if isinstance(parsed, dict):
+                return parsed
+            candidates.append(response[start_index : start_index + end_index].strip())
+    end_index = response.rfind("}")
+    if start_index != -1 and end_index != -1 and end_index > start_index:
+        candidates.append(response[start_index : end_index + 1].strip())
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{label} JSON must be an object.")
+        return parsed
+    raise ValueError(f"Failed to parse {label} JSON.")
 
 
 def _write_taxonomy_and_journey(
