@@ -574,6 +574,7 @@ class TestTTS(unittest.TestCase):
         filter_index = command.index("-filter_complex")
         filter_complex = command[filter_index + 1]
         self.assertIn("aresample=22050:async=1", filter_complex)
+        self.assertIn(";[a0][a1][a2]concat=n=3", filter_complex)
         self.assertIn("concat=n=3", filter_complex)
 
     def test_merge_chapter_audio_requires_files(self) -> None:
