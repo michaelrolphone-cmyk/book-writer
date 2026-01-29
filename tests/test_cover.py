@@ -1,4 +1,5 @@
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -148,8 +149,8 @@ class TestCover(unittest.TestCase):
         self.assertIn("--output-path", called_args)
         self.assertIn("--step-count", called_args)
         self.assertIn("--guidance-scale", called_args)
-        self.assertIn("--width", called_args)
-        self.assertIn("--height", called_args)
+        self.assertNotIn("--width", called_args)
+        self.assertNotIn("--height", called_args)
         self.assertIn("--negative-prompt", called_args)
         negative_prompt = next(
             arg for arg in called_args if "typography" in arg
@@ -228,6 +229,51 @@ class TestCover(unittest.TestCase):
         expected_dir = (Path(tmpdir) / "relative-output").resolve()
         self.assertIn(str(expected_dir), called_args)
         self.assertEqual(result, expected_dir / settings.output_name)
+
+    @patch("book_writer.cover.subprocess.run")
+    def test_generate_book_cover_strips_unsupported_size_flags(
+        self, run_mock: Mock
+    ) -> None:
+        settings = CoverSettings(
+            enabled=True,
+            module_path=Path("/tmp/coreml"),
+            model_path=Path("/tmp/resource"),
+            command=[
+                "swift",
+                "run",
+                "StableDiffusionSample",
+                "{prompt}",
+                "--resource-path",
+                "{model_path}",
+                "--width",
+                "{width}",
+                "--height",
+                "{height}",
+                "--output-path",
+                "{output_dir}",
+            ],
+        )
+        help_result = subprocess.CompletedProcess(
+            args=["swift", "run", "StableDiffusionSample", "--help"],
+            returncode=0,
+            stdout="Usage: stable-diffusion-sample [<options>] <prompt>\n",
+            stderr="",
+        )
+        run_mock.side_effect = [help_result, None]
+
+        with TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            generate_book_cover(
+                output_dir=output_dir,
+                title="My Book",
+                synopsis="Synopsis text",
+                settings=settings,
+            )
+
+        self.assertEqual(run_mock.call_count, 2)
+        called_args = run_mock.call_args_list[1].args[0]
+        self.assertNotIn("--width", called_args)
+        self.assertNotIn("--height", called_args)
 
     @patch("book_writer.cover.subprocess.run")
     def test_generate_chapter_cover_runs_command(self, run_mock: Mock) -> None:

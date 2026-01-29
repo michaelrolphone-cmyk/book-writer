@@ -43,10 +43,6 @@ DEFAULT_COVER_COMMAND = [
     "{steps}",
     "--guidance-scale",
     "{guidance_scale}",
-    "--width",
-    "{width}",
-    "--height",
-    "{height}",
     "{seed_flag}",
     "{seed}",
     "--output-path",
@@ -162,6 +158,48 @@ def _resolve_command(
     )
 
 
+def _strip_size_flags(command: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    skip_next = False
+    for token in command:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in {"--width", "--height"}:
+            skip_next = True
+            continue
+        cleaned.append(token)
+    return cleaned
+
+
+def _maybe_strip_swift_size_flags(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    cwd: Optional[str],
+) -> list[str]:
+    if "--width" not in command and "--height" not in command:
+        return command
+    if command[:3] != ["swift", "run", "StableDiffusionSample"]:
+        return command
+    help_command = ["swift", "run", "StableDiffusionSample", "--help"]
+    try:
+        result = subprocess.run(
+            help_command,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=cwd,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return command
+    help_text = f"{result.stdout or ''}{result.stderr or ''}"
+    if "--width" in help_text or "--height" in help_text:
+        return command
+    return _strip_size_flags(command)
+
+
 def _build_cover_env(module_path: Optional[Path]) -> dict[str, str]:
     env = os.environ.copy()
     if module_path:
@@ -232,12 +270,15 @@ def generate_book_cover(
         output_path,
         output_dir,
     )
+    env = _build_cover_env(settings.module_path)
+    cwd = str(settings.module_path) if settings.module_path else None
+    command = _maybe_strip_swift_size_flags(command, env=env, cwd=cwd)
     try:
         subprocess.run(
             command,
             check=True,
-            env=_build_cover_env(settings.module_path),
-            cwd=str(settings.module_path) if settings.module_path else None,
+            env=env,
+            cwd=cwd,
         )
     except FileNotFoundError as exc:
         message = (
@@ -300,12 +341,15 @@ def generate_chapter_cover(
         output_path,
         output_dir,
     )
+    env = _build_cover_env(settings.module_path)
+    cwd = str(settings.module_path) if settings.module_path else None
+    command = _maybe_strip_swift_size_flags(command, env=env, cwd=cwd)
     try:
         subprocess.run(
             command,
             check=True,
-            env=_build_cover_env(settings.module_path),
-            cwd=str(settings.module_path) if settings.module_path else None,
+            env=env,
+            cwd=cwd,
         )
     except FileNotFoundError as exc:
         message = (
