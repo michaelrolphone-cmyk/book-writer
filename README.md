@@ -133,6 +133,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - Narration input is sanitized to remove Markdown/HTML formatting (code blocks, tables, images, etc.) before Qwen3 TTS to reduce malformed audio.
 - Qwen3 tokenizer loading enables the Mistral regex fix when supported to prevent incorrect tokenization.
 - If Qwen3 returns near-silent audio for a chunk, the narration retries with smaller chunks and skips the chapter if silence persists.
+- Full-book narration uses the first chapter's sample rate for silence gaps and resamples chapters to keep ffmpeg concatenation stable.
 - `--video`: Generate MP4 chapter videos by looping a background MP4 with the chapter MP3 narration.
 - `--background-video`: Path to a local MP4 file used as the looping video background.
 - `--video-dir`: Directory name for storing chapter video files (default `video`).

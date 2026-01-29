@@ -857,6 +857,7 @@ def merge_chapter_audio(
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    target_sample_rate = _probe_audio_sample_rate(chapter_audio_paths[0])
     inputs: list[str] = []
     input_count = 0
     for index, audio_path in enumerate(chapter_audio_paths):
@@ -870,13 +871,23 @@ def merge_chapter_audio(
                     "-t",
                     str(gap_seconds),
                     "-i",
-                    "anullsrc=channel_layout=mono:sample_rate=44100",
+                    f"anullsrc=channel_layout=mono:sample_rate={target_sample_rate}",
                 ]
             )
             input_count += 1
 
-    filter_inputs = "".join(f"[{idx}:a]" for idx in range(input_count))
-    filter_complex = f"{filter_inputs}concat=n={input_count}:v=0:a=1[outa]"
+    filter_steps = []
+    filter_inputs = []
+    for idx in range(input_count):
+        label = f"a{idx}"
+        filter_steps.append(
+            f"[{idx}:a]aresample={target_sample_rate}:async=1,asetpts=N/SR/TB[{label}]"
+        )
+        filter_inputs.append(f"[{label}]")
+    filter_complex = (
+        ";".join(filter_steps)
+        + f"{''.join(filter_inputs)}concat=n={input_count}:v=0:a=1[outa]"
+    )
     command = [
         "ffmpeg",
         "-y",
@@ -885,6 +896,10 @@ def merge_chapter_audio(
         filter_complex,
         "-map",
         "[outa]",
+        "-ac",
+        "1",
+        "-ar",
+        str(target_sample_rate),
         "-codec:a",
         "libmp3lame",
         str(output_path),
@@ -907,3 +922,41 @@ def merge_chapter_audio(
             f"stderr: {result.stderr.strip()}"
         )
     return output_path
+
+
+def _probe_audio_sample_rate(audio_path: Path) -> int:
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=sample_rate",
+        "-of",
+        "default=nw=1:nk=1",
+        str(audio_path),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise TTSSynthesisError(
+            "ffmpeg is required to merge chapter audio into a single MP3. "
+            "Install ffmpeg and try again."
+        ) from error
+    if result.returncode != 0:
+        raise TTSSynthesisError(
+            "ffmpeg failed to probe chapter audio sample rate. "
+            f"stderr: {result.stderr.strip()}"
+        )
+    try:
+        return int(result.stdout.strip())
+    except ValueError as error:
+        raise TTSSynthesisError(
+            "ffmpeg returned an invalid chapter audio sample rate."
+        ) from error
