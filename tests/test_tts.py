@@ -11,6 +11,7 @@ from book_writer.tts import (
     TTSSettings,
     _generate_chunk_audio,
     _load_qwen_tokenizer,
+    _probe_audio_sample_rate,
     _sanitize_waveform,
     _synthesize_with_qwen3_tts,
     normalize_tts_engine,
@@ -541,7 +542,12 @@ class TestTTS(unittest.TestCase):
 
     @patch("book_writer.tts.subprocess.run")
     def test_merge_chapter_audio_builds_ffmpeg_concat(self, run_mock: Mock) -> None:
-        run_mock.return_value = Mock(returncode=0, stderr="")
+        def run_side_effect(command, **_kwargs):
+            if command[0] == "ffprobe":
+                return Mock(returncode=0, stdout="22050\n", stderr="")
+            return Mock(returncode=0, stderr="")
+
+        run_mock.side_effect = run_side_effect
 
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -556,14 +562,19 @@ class TestTTS(unittest.TestCase):
             )
 
         self.assertEqual(merged, output_path)
-        run_mock.assert_called_once()
-        command = run_mock.call_args.args[0]
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(run_mock.call_args_list[0].args[0][0], "ffprobe")
+        command = run_mock.call_args_list[1].args[0]
         self.assertEqual(command[0], "ffmpeg")
         self.assertIn(str(chapter_one), command)
         self.assertIn(str(chapter_two), command)
-        self.assertIn("anullsrc=channel_layout=mono:sample_rate=44100", command)
+        self.assertIn("anullsrc=channel_layout=mono:sample_rate=22050", command)
+        self.assertIn("-ar", command)
+        self.assertIn("22050", command)
         filter_index = command.index("-filter_complex")
-        self.assertIn("concat=n=3", command[filter_index + 1])
+        filter_complex = command[filter_index + 1]
+        self.assertIn("aresample=22050:async=1", filter_complex)
+        self.assertIn("concat=n=3", filter_complex)
 
     def test_merge_chapter_audio_requires_files(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -577,6 +588,19 @@ class TestTTS(unittest.TestCase):
                 merge_chapter_audio([existing, missing], output_path)
 
         self.assertIn("Missing chapter audio files", str(context.exception))
+
+    @patch("book_writer.tts.subprocess.run")
+    def test_probe_audio_sample_rate_rejects_invalid_output(
+        self, run_mock: Mock
+    ) -> None:
+        run_mock.return_value = Mock(returncode=0, stdout="bad", stderr="")
+
+        with TemporaryDirectory() as tmpdir:
+            audio_path = Path(tmpdir) / "audio.mp3"
+            audio_path.write_bytes(b"data")
+
+            with self.assertRaises(TTSSynthesisError):
+                _probe_audio_sample_rate(audio_path)
 
 if __name__ == "__main__":
     unittest.main()
