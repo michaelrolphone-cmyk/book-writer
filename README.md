@@ -183,7 +183,7 @@ python -m book_writer --outline OUTLINE.md --output-dir output
 - `meta.json`: LM-generated metadata (including `title`, `author`, `chapters` with numbers/titles/filenames, `genres`, `primary_genre`, and an optional `language` field used for EPUB metadata).
 - `taxonomy.json`: Taxonomy tree capturing people, places, events, motivations, loyalties, and personalities.
 - `journey.json`: Thematic journey sequence mapping taxonomic node IDs across the book.
-- Taxonomy/journey generation truncates oversized outline and book content prompts to stay within model context limits.
+- Taxonomy/journey generation truncates oversized outline and book content prompts to stay within model context limits, and the JSON parser tolerates Markdown code fences or extra text around the returned JSON.
 - `cover.png`: Generated cover image (when `--cover` is enabled).
 - `chapter_covers/*.png`: Per-chapter cover images (when chapter covers are generated).
 - `audio/*.mp3`: Chapter narration files (when `--tts` is enabled).

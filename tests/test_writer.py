@@ -30,6 +30,7 @@ from book_writer.writer import (
     _base_prompt,
     _ensure_epub_css,
     _expand_prompt_text,
+    _parse_json_response,
     _sanitize_markdown_for_latex,
     _truncate_prompt_input,
     compile_book,
@@ -165,6 +166,20 @@ class TestWriter(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_parse_json_response_handles_code_fences(self) -> None:
+        response = f"```json\n{TAXONOMY_RESPONSE}\n```"
+
+        parsed = _parse_json_response(response, "taxonomy")
+
+        self.assertEqual(parsed, json.loads(TAXONOMY_RESPONSE))
+
+    def test_parse_json_response_handles_preface_text(self) -> None:
+        response = f"Here is the taxonomy:\n{TAXONOMY_RESPONSE}\nThanks!"
+
+        parsed = _parse_json_response(response, "taxonomy")
+
+        self.assertEqual(parsed, json.loads(TAXONOMY_RESPONSE))
 
     def test_sanitize_markdown_for_latex_escapes_commands_outside_math(self) -> None:
         text = "We measure \\frac{d\\Psi}{dt} over time."
