@@ -39,6 +39,8 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 - `python -m book_writer --help` (full CLI option list)
 
 **GUI API endpoints**
+
+> Integration note: this release does not add or remove CLI commands or GUI API endpoints; existing command and endpoint contracts listed below remain valid. It updates internal Survey Sketch behavior only (points are passed through unchanged, canvas drawing uses x as easting and y as northing, and map viewport sync converts state plain points to lat/lon for pan/zoom).
 - `GET /` (GUI HTML)
 - `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url`/`book_epub_url` for the GUI Open PDF/EPUB actions; titles prefer `meta.json` when available)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)

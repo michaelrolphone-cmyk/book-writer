@@ -2825,6 +2825,78 @@ def get_gui_html() -> str:
         return card.querySelector('audio');
       };
 
+      const createSurveySketchTransformLayer = (transform = {}) => ({
+        offsetX: Number.isFinite(Number(transform.offsetX)) ? Number(transform.offsetX) : 0,
+        offsetY: Number.isFinite(Number(transform.offsetY)) ? Number(transform.offsetY) : 0,
+        scale: Number.isFinite(Number(transform.scale)) ? Number(transform.scale) : 1,
+      });
+
+      const toSurveySketchCanvasPoint = (point = {}) => ({
+        x: point.x,
+        y: point.y,
+      });
+
+      const handoffPointforgeToSurveySketch = (points, transform = {}) => ({
+        points: Array.isArray(points) ? points : [],
+        transformLayer: createSurveySketchTransformLayer(transform),
+      });
+
+      const statePlainToLatLon = (point, options = {}) => {
+        if (!point) return null;
+        const x = Number(point.x);
+        const y = Number(point.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        const converter = options.converter || window.proj4;
+        const fromProjection = options.fromProjection || 'EPSG:2263';
+        const toProjection = options.toProjection || 'EPSG:4326';
+        if (typeof converter !== 'function') {
+          return null;
+        }
+        try {
+          const [lon, lat] = converter(fromProjection, toProjection, [x, y]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+          return { lat, lon };
+        } catch (_error) {
+          return null;
+        }
+      };
+
+      const buildMapViewportFromStatePlainPoints = (points, options = {}) => {
+        if (!Array.isArray(points) || !points.length) return null;
+        const latLonPoints = points
+          .map((point) => statePlainToLatLon(point, options))
+          .filter((point) => point && Number.isFinite(point.lat) && Number.isFinite(point.lon));
+        if (!latLonPoints.length) return null;
+        const latitudes = latLonPoints.map((point) => point.lat);
+        const longitudes = latLonPoints.map((point) => point.lon);
+        const minLat = Math.min(...latitudes);
+        const maxLat = Math.max(...latitudes);
+        const minLon = Math.min(...longitudes);
+        const maxLon = Math.max(...longitudes);
+        return {
+          center: {
+            lat: (minLat + maxLat) / 2,
+            lon: (minLon + maxLon) / 2,
+          },
+          bounds: [
+            [minLat, minLon],
+            [maxLat, maxLon],
+          ],
+        };
+      };
+
+      const syncSurveySketchMapViewport = (map, points, options = {}) => {
+        if (!map) return null;
+        const viewport = buildMapViewportFromStatePlainPoints(points, options);
+        if (!viewport) return null;
+        if (typeof map.fitBounds === 'function') {
+          map.fitBounds(viewport.bounds, options.fitOptions || { padding: [24, 24] });
+        } else if (typeof map.setView === 'function') {
+          map.setView([viewport.center.lat, viewport.center.lon], options.zoom || map.getZoom?.());
+        }
+        return viewport;
+      };
+
       const restoreChapterAudioToDetail = () => {
         if (!chapterViewAudioBlock.contains(chapterViewAudio)) {
           chapterViewAudioBlock.replaceChildren(chapterViewAudio);
