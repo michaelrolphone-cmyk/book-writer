@@ -114,6 +114,8 @@ class TestGui(unittest.TestCase):
         self.assertIn("const createSurveySketchTransformLayer = (transform = {}) => ({", html)
         self.assertIn("const createSurveySketchCanvasExtent = (extent = {}) => ({", html)
         self.assertIn("const surveySketchCanvasToStatePlain = (point, options = {}) => {", html)
+        self.assertIn("const localX = (x + transformLayer.offsetX) / scale;", html)
+        self.assertIn("const localY = (y + transformLayer.offsetY) / scale;", html)
         self.assertIn("options.pointSpace === 'canvas' ? surveySketchCanvasToStatePlain(point, options) : point;", html)
         self.assertIn("const toSurveySketchCanvasPoint = (point = {}) => ({", html)
         self.assertIn("x: point.x,", html)
