@@ -40,7 +40,7 @@ The CLI commands and GUI API endpoints are summarized in the quick reference bel
 
 **GUI API endpoints**
 
-> Integration note: this release does not add or remove CLI commands or GUI API endpoints; existing command and endpoint contracts listed below remain valid. It updates internal Survey Sketch behavior only by adding canvas-extent-aware coordinate conversion before lat/lon projection, so map viewport sync tracks pan/zoom scale and offset more accurately.
+> Integration note: this release does not add or remove CLI commands or GUI API endpoints; existing command and endpoint contracts listed below remain valid. It updates internal Survey Sketch behavior by correcting the canvas pan offset sign during canvas→state-plain conversion (plus the existing canvas-extent-aware projection path), so map viewport sync moves in the same direction as sketch panning and tracks pan/zoom scale and offset more accurately.
 - `GET /` (GUI HTML)
 - `GET /api/books` (book catalog, including `genres`, `primary_genre`, `folder_created` timestamps for newest sorting, overall `progress` completion totals, and `book_pdf_url`/`book_epub_url` for the GUI Open PDF/EPUB actions; titles prefer `meta.json` when available)
 - `GET /api/outlines`, `GET /api/completed-outlines` (catalogs)

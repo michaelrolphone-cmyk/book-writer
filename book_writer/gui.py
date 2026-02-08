@@ -2870,8 +2870,8 @@ def get_gui_html() -> str:
         );
         const canvasExtent = createSurveySketchCanvasExtent(options.canvasExtent || {});
         const scale = transformLayer.scale || 1;
-        const localX = (x - transformLayer.offsetX) / scale;
-        const localY = (y - transformLayer.offsetY) / scale;
+        const localX = (x + transformLayer.offsetX) / scale;
+        const localY = (y + transformLayer.offsetY) / scale;
         const hasStateBounds =
           Number.isFinite(canvasExtent.statePlainMinX) &&
           Number.isFinite(canvasExtent.statePlainMaxX) &&
