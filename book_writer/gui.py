@@ -2836,6 +2836,8 @@ def get_gui_html() -> str:
         originY: Number.isFinite(Number(extent.originY)) ? Number(extent.originY) : 0,
         width: Number.isFinite(Number(extent.width)) ? Number(extent.width) : null,
         height: Number.isFinite(Number(extent.height)) ? Number(extent.height) : null,
+        invertX: extent.invertX !== undefined ? Boolean(extent.invertX) : true,
+        invertY: extent.invertY !== undefined ? Boolean(extent.invertY) : true,
         statePlainMinX: Number.isFinite(Number(extent.statePlainMinX))
           ? Number(extent.statePlainMinX)
           : null,
@@ -2888,12 +2890,14 @@ def get_gui_html() -> str:
         const ratioY = (localY - canvasExtent.originY) / canvasExtent.height;
         const boundedRatioX = Math.max(0, Math.min(1, ratioX));
         const boundedRatioY = Math.max(0, Math.min(1, ratioY));
+        const mappedRatioX = canvasExtent.invertX ? 1 - boundedRatioX : boundedRatioX;
+        const mappedRatioY = canvasExtent.invertY ? 1 - boundedRatioY : boundedRatioY;
         const stateX =
           canvasExtent.statePlainMinX +
-          boundedRatioX * (canvasExtent.statePlainMaxX - canvasExtent.statePlainMinX);
+          mappedRatioX * (canvasExtent.statePlainMaxX - canvasExtent.statePlainMinX);
         const stateY =
           canvasExtent.statePlainMinY +
-          boundedRatioY * (canvasExtent.statePlainMaxY - canvasExtent.statePlainMinY);
+          mappedRatioY * (canvasExtent.statePlainMaxY - canvasExtent.statePlainMinY);
         return {
           x: stateX,
           y: stateY,
