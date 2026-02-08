@@ -2831,6 +2831,25 @@ def get_gui_html() -> str:
         scale: Number.isFinite(Number(transform.scale)) ? Number(transform.scale) : 1,
       });
 
+      const createSurveySketchCanvasExtent = (extent = {}) => ({
+        originX: Number.isFinite(Number(extent.originX)) ? Number(extent.originX) : 0,
+        originY: Number.isFinite(Number(extent.originY)) ? Number(extent.originY) : 0,
+        width: Number.isFinite(Number(extent.width)) ? Number(extent.width) : null,
+        height: Number.isFinite(Number(extent.height)) ? Number(extent.height) : null,
+        statePlainMinX: Number.isFinite(Number(extent.statePlainMinX))
+          ? Number(extent.statePlainMinX)
+          : null,
+        statePlainMaxX: Number.isFinite(Number(extent.statePlainMaxX))
+          ? Number(extent.statePlainMaxX)
+          : null,
+        statePlainMinY: Number.isFinite(Number(extent.statePlainMinY))
+          ? Number(extent.statePlainMinY)
+          : null,
+        statePlainMaxY: Number.isFinite(Number(extent.statePlainMaxY))
+          ? Number(extent.statePlainMaxY)
+          : null,
+      });
+
       const toSurveySketchCanvasPoint = (point = {}) => ({
         x: point.x,
         y: point.y,
@@ -2841,10 +2860,53 @@ def get_gui_html() -> str:
         transformLayer: createSurveySketchTransformLayer(transform),
       });
 
-      const statePlainToLatLon = (point, options = {}) => {
+      const surveySketchCanvasToStatePlain = (point, options = {}) => {
         if (!point) return null;
         const x = Number(point.x);
         const y = Number(point.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        const transformLayer = createSurveySketchTransformLayer(
+          options.transformLayer || options.transform || {},
+        );
+        const canvasExtent = createSurveySketchCanvasExtent(options.canvasExtent || {});
+        const scale = transformLayer.scale || 1;
+        const localX = (x - transformLayer.offsetX) / scale;
+        const localY = (y - transformLayer.offsetY) / scale;
+        const hasStateBounds =
+          Number.isFinite(canvasExtent.statePlainMinX) &&
+          Number.isFinite(canvasExtent.statePlainMaxX) &&
+          Number.isFinite(canvasExtent.statePlainMinY) &&
+          Number.isFinite(canvasExtent.statePlainMaxY) &&
+          Number.isFinite(canvasExtent.width) &&
+          Number.isFinite(canvasExtent.height) &&
+          canvasExtent.width > 0 &&
+          canvasExtent.height > 0;
+        if (!hasStateBounds) {
+          return { x: localX, y: localY };
+        }
+        const ratioX = (localX - canvasExtent.originX) / canvasExtent.width;
+        const ratioY = (localY - canvasExtent.originY) / canvasExtent.height;
+        const boundedRatioX = Math.max(0, Math.min(1, ratioX));
+        const boundedRatioY = Math.max(0, Math.min(1, ratioY));
+        const stateX =
+          canvasExtent.statePlainMinX +
+          boundedRatioX * (canvasExtent.statePlainMaxX - canvasExtent.statePlainMinX);
+        const stateY =
+          canvasExtent.statePlainMinY +
+          boundedRatioY * (canvasExtent.statePlainMaxY - canvasExtent.statePlainMinY);
+        return {
+          x: stateX,
+          y: stateY,
+        };
+      };
+
+      const statePlainToLatLon = (point, options = {}) => {
+        if (!point) return null;
+        const sourcePoint =
+          options.pointSpace === 'canvas' ? surveySketchCanvasToStatePlain(point, options) : point;
+        if (!sourcePoint) return null;
+        const x = Number(sourcePoint.x);
+        const y = Number(sourcePoint.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
         const converter = options.converter || window.proj4;
         const fromProjection = options.fromProjection || 'EPSG:2263';
